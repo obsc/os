@@ -10,6 +10,7 @@
  */
 #ifndef __MINITHREAD_PUBLIC_H_
 #define __MINITHREAD_PUBLIC_H_
+
 #include "inttypes.h"
 #include "defs.h"
 
@@ -70,7 +71,6 @@ extern void minithread_initialize_stack(stack_pointer_t *stacktop,
                                         arg_t  final_arg);
 
 
-/* TODO: this needs to be documented */
 extern void minithread_trampoline(proc_t interrupt, void * arg);
 
 /* SYNCHRONIZATION PRIMITIVES */

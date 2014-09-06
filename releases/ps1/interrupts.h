@@ -1,5 +1,3 @@
-#include "defs.h"
-
 /*
  * Provides a clean, virtualized interface to interrupts.
  *
@@ -13,6 +11,11 @@
  *
  * YOU SHOULD NOT [NEED TO] MODIFY THIS FILE.
  */
+
+#ifndef __INTERRUPTS_H__
+#define __INTERRUPTS_H__ 1
+
+#include "defs.h"
 
 /*
  * a global variable to maintain time.
@@ -80,4 +83,6 @@ extern interrupt_level_t set_interrupt_level(interrupt_level_t newlevel);
  * automatically on every clock tick.
  */
 extern void minithread_clock_init(interrupt_handler_t h);
+
+#endif /* __INTERRUPTS_H__ */
 

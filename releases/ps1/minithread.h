@@ -1,8 +1,3 @@
-#ifndef __MINITHREAD_H__
-#define __MINITHREAD_H__
-
-#include "machineprimitives.h"
-
 /*
  * minithread.h:
  *  Definitions for minithreads.
@@ -12,6 +7,11 @@
  *  Your procedures must take the exact arguments that are specified
  *  in the comments.  See minithread.c for prototypes.
  */
+
+#ifndef __MINITHREAD_H__
+#define __MINITHREAD_H__
+
+#include "machineprimitives.h"
 
 
 /*

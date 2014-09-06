@@ -1,11 +1,11 @@
-#ifndef __SYNCH_H__
-#define __SYNCH_H__
-
 /*
  * Definitions for high-level synchronization primitives.
  *
  *  You must implement the procedures and types defined in this interface.
  */
+#ifndef __SYNCH_H__
+#define __SYNCH_H__
+
 
 typedef struct semaphore *semaphore_t;
 
