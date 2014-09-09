@@ -42,7 +42,7 @@ queue_prepend(queue_t queue, void* item) {
 
     n->data = item;
     n->next = queue->head;
-    if (queue->head == NULL) {
+    if ( !(queue->head) ) {
         queue->tail = n;
     }
 
@@ -80,6 +80,19 @@ queue_append(queue_t queue, void* item) {
  */
 int
 queue_dequeue(queue_t queue, void** item) {
+    node_t n = queue->head;
+    queue->head = n->next;
+
+    if ( !(queue->head) ) {
+        queue->tail = NULL;
+    }
+
+    *item = n->data;
+    free(n);
+
+    if ( n == NULL ) {
+        return -1;
+    }
     return 0;
 }
 
