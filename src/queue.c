@@ -6,12 +6,27 @@
 #include <stdlib.h>
 #include <stdio.h>
 
+struct node
+{
+    void   *data;
+    node_t next;
+};
+
+struct queue
+{
+    node_t head;
+    node_t tail;
+};
+
 /*
  * Return an empty queue.
  */
 queue_t
 queue_new() {
-    return (queue_t)0;
+    queue_t q = (queue_t) malloc (sizeof(struct queue));
+    q->head = NULL;
+    q->tail = NULL;
+    return q;
 }
 
 /*
@@ -20,6 +35,18 @@ queue_new() {
  */
 int
 queue_prepend(queue_t queue, void* item) {
+    node_t n = (node_t) malloc (sizeof(struct node));
+    if (n == NULL) {
+        return -1;
+    }
+
+    n->data = item;
+    n->next = queue->head;
+    if (queue->head == NULL) {
+        queue->tail = n;
+    }
+
+    queue->head = n;
     return 0;
 }
 
@@ -29,6 +56,21 @@ queue_prepend(queue_t queue, void* item) {
  */
 int
 queue_append(queue_t queue, void* item) {
+    node_t n = (node_t) malloc (sizeof(struct node));
+    if (n == NULL) {
+        return -1;
+    }
+
+    n->data = item;
+    n->next = NULL;
+
+    if (queue->head) {
+        queue->tail->next = n;
+    } else {
+        queue->head = n;
+    }
+
+    queue->tail = n;
     return 0;
 }
 
