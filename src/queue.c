@@ -35,7 +35,12 @@ queue_new() {
  */
 int
 queue_prepend(queue_t queue, void* item) {
-    node_t n = (node_t) malloc (sizeof(struct node));
+    node_t n;
+    if ( !(queue) ) {
+        return -1;
+    }
+
+    n = (node_t) malloc (sizeof(struct node));
     if (n == NULL) {
         return -1;
     }
@@ -56,7 +61,12 @@ queue_prepend(queue_t queue, void* item) {
  */
 int
 queue_append(queue_t queue, void* item) {
-    node_t n = (node_t) malloc (sizeof(struct node));
+    node_t n;
+    if ( !(queue) ) {
+        return -1;
+    }
+
+    n = (node_t) malloc (sizeof(struct node));
     if (n == NULL) {
         return -1;
     }
@@ -80,7 +90,12 @@ queue_append(queue_t queue, void* item) {
  */
 int
 queue_dequeue(queue_t queue, void** item) {
-    node_t n = queue->head;
+    node_t n;
+    if ( !(queue) ) {
+        return -1;
+    }
+
+    n = queue->head;
     queue->head = n->next;
 
     if ( !(queue->head) ) {
@@ -104,6 +119,18 @@ queue_dequeue(queue_t queue, void** item) {
  */
 int
 queue_iterate(queue_t queue, func_t f, void* item) {
+    node_t n;
+    if ( !(queue) || !(f) ) {
+        return -1;
+    }
+
+    n = queue->head;
+    while (n) {
+        f(n->data, item);
+
+        n = n->next;
+    }
+
     return 0;
 }
 
