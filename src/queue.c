@@ -96,6 +96,11 @@ queue_dequeue(queue_t queue, void** item) {
     }
 
     n = queue->head;
+    if ( n == NULL ) {
+        *item = NULL;
+        return -1;
+    }
+
     queue->head = n->next;
 
     if ( !(queue->head) ) {
@@ -105,9 +110,6 @@ queue_dequeue(queue_t queue, void** item) {
     *item = n->data;
     free(n);
 
-    if ( n == NULL ) {
-        return -1;
-    }
     return 0;
 }
 
