@@ -6,12 +6,20 @@
 #include <stdlib.h>
 #include <stdio.h>
 
+#define checkNull(q) if( !(q) ) { return -1; }
+
+/*
+ * Struct representing a node in the queue
+ */
 struct node
 {
-    void   *data;
-    node_t next;
+    void  *data; // Pointer to some data
+    node_t next; // Pointer to next node
 };
 
+/*
+ * Struct representing a queue backed by a singly-linked list
+ */
 struct queue
 {
     node_t head;
@@ -36,9 +44,7 @@ queue_new() {
 int
 queue_prepend(queue_t queue, void* item) {
     node_t n = NULL;
-    if ( !(queue) ) {
-        return -1;
-    }
+    checkNull(queue);
 
     n = (node_t) malloc (sizeof(struct node));
     if (n == NULL) {
@@ -62,9 +68,7 @@ queue_prepend(queue_t queue, void* item) {
 int
 queue_append(queue_t queue, void* item) {
     node_t n = NULL;
-    if ( !(queue) ) {
-        return -1;
-    }
+    checkNull(queue);
 
     n = (node_t) malloc (sizeof(struct node));
     if (n == NULL) {
@@ -91,9 +95,7 @@ queue_append(queue_t queue, void* item) {
 int
 queue_dequeue(queue_t queue, void** item) {
     node_t n = NULL;
-    if ( !(queue) ) {
-        return -1;
-    }
+    checkNull(queue);
 
     n = queue->head;
     if ( n == NULL ) {
@@ -143,9 +145,7 @@ int
 queue_free (queue_t queue) {
     node_t n = NULL;
     node_t temp = NULL;
-    if ( !(queue) ) {
-        return -1;
-    }
+    checkNull(queue);
 
     n = queue->head;
     while (n) {
@@ -171,9 +171,7 @@ increment(void *data, void *acc) {
 int
 queue_length(queue_t queue) {
     int len = 0;
-    if ( !(queue) ) {
-        return -1;
-    }
+    checkNull(queue);
 
     queue_iterate(queue, &increment, &len);
 
@@ -189,9 +187,7 @@ int
 queue_delete(queue_t queue, void* item) {
     node_t prev = NULL;
     node_t n = NULL;
-    if ( !(queue) ) {
-        return -1;
-    }
+    checkNull(queue);
 
     n = queue->head;
     while (n) {
