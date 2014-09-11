@@ -1,0 +1,29 @@
+minithread_fork = minithread_create followed by minithread_start
+
+minithread_create is malloc + setting some fields
+
+we have to keep track of a global "currently" running thread struct for minithread_self
+
+minithread_t must have a field with id
+
+minithread_id = minithread_self followed by accessing field
+
+status = new, runnable, waiting, runnning, zombie
+
+minithread_fork = runnable
+
+minithread_create = new
+
+minithread_start = new/waiting -> runnable
+
+minithread_stop = running -> waiting
+
+minithread_yield = running -> runnable
+
+
+minithread_t = {
+  id: int (0,1..)
+  status: enum (see above)
+  stackbase: stackpointer
+  stacktop: stackpointer
+}
