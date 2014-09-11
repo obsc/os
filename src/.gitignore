@@ -3,6 +3,7 @@ test2
 test3
 buffer
 sieve
+queuetest
 .depend
 *.o
 
