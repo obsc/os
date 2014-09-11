@@ -46,13 +46,13 @@ queue_prepend(queue_t queue, void* item) {
     node_t n = NULL;
     checkNull(queue);
 
+    // Mallocs a new node
     n = (node_t) malloc (sizeof(struct node));
-    if (n == NULL) {
-        return -1;
-    }
+    checkNull(n);
 
     n->data = item;
     n->next = queue->head;
+    // Checks if the queue is empty
     if ( !(queue->head) ) {
         queue->tail = n;
     }
@@ -70,17 +70,16 @@ queue_append(queue_t queue, void* item) {
     node_t n = NULL;
     checkNull(queue);
 
+    // Mallocs a new node
     n = (node_t) malloc (sizeof(struct node));
-    if (n == NULL) {
-        return -1;
-    }
+    checkNull(n);
 
     n->data = item;
     n->next = NULL;
-
+    // Checks if theres an element in the queue
     if (queue->head) {
         queue->tail->next = n;
-    } else {
+    } else { // Queue is empty
         queue->head = n;
     }
 
@@ -98,6 +97,7 @@ queue_dequeue(queue_t queue, void** item) {
     checkNull(queue);
 
     n = queue->head;
+    // Checks if queue is empty
     if ( n == NULL ) {
         *item = NULL;
         return -1;
@@ -105,10 +105,12 @@ queue_dequeue(queue_t queue, void** item) {
 
     queue->head = n->next;
 
+    // Checks if the queue had 1 element
     if ( !(queue->head) ) {
         queue->tail = NULL;
     }
 
+    // Frees node
     *item = n->data;
     free(n);
 
@@ -124,13 +126,15 @@ queue_dequeue(queue_t queue, void** item) {
 int
 queue_iterate(queue_t queue, func_t f, void* item) {
     node_t n = NULL;
+    // Checks if either queue or function is null
     if ( !(queue) || !(f) ) {
         return -1;
     }
 
     n = queue->head;
+    // Iterates over queue
     while (n) {
-        f(n->data, item);
+        f(n->data, item); // Applies function
 
         n = n->next;
     }
@@ -144,22 +148,25 @@ queue_iterate(queue_t queue, func_t f, void* item) {
 int
 queue_free (queue_t queue) {
     node_t n = NULL;
-    node_t temp = NULL;
+    node_t temp = NULL; // Used to keep track of next after freeing
     checkNull(queue);
 
     n = queue->head;
+    // Iterates over queue
     while (n) {
         temp = n->next;
-        free(n);
+        free(n); // Frees each node
 
         n = temp;
     }
 
-    free(queue);
+    free(queue); // Frees entire queue
 
     return 0;
 }
 
+
+// Used to increment an integer by 1
 void
 increment(void *data, void *acc) {
     *(int *)acc += 1;
@@ -173,6 +180,7 @@ queue_length(queue_t queue) {
     int len = 0;
     checkNull(queue);
 
+    // +1 for each element in the queue
     queue_iterate(queue, &increment, &len);
 
     return len;
@@ -190,24 +198,31 @@ queue_delete(queue_t queue, void* item) {
     checkNull(queue);
 
     n = queue->head;
+    // Iterates over the queue
     while (n) {
+        // Found the item
         if (n->data == item) {
+            // Item found as first in queue
             if (n == queue->head) {
                 queue->head = n->next;
+                // Checks if queue only has 1 item
                 if (n == queue->tail) {
                     queue->tail = NULL;
                 }
             }
 
+            // Item found last in queue (must have >= 2 items)
             else if (n == queue->tail) {
                 queue->tail = prev;
                 queue->tail->next = NULL;
             }
 
+            // Item found in middle of queue (must have >= 3 items)
             else {
                 prev->next = n->next;
             }
 
+            // Frees the node
             free(n);
             return 0;
         }
@@ -216,5 +231,6 @@ queue_delete(queue_t queue, void* item) {
         n = n->next;
     }
 
+    // Could not find item
     return -1;
 }
