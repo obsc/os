@@ -35,7 +35,7 @@ queue_new() {
  */
 int
 queue_prepend(queue_t queue, void* item) {
-    node_t n;
+    node_t n = NULL;
     if ( !(queue) ) {
         return -1;
     }
@@ -61,7 +61,7 @@ queue_prepend(queue_t queue, void* item) {
  */
 int
 queue_append(queue_t queue, void* item) {
-    node_t n;
+    node_t n = NULL;
     if ( !(queue) ) {
         return -1;
     }
@@ -90,7 +90,7 @@ queue_append(queue_t queue, void* item) {
  */
 int
 queue_dequeue(queue_t queue, void** item) {
-    node_t n;
+    node_t n = NULL;
     if ( !(queue) ) {
         return -1;
     }
@@ -121,7 +121,7 @@ queue_dequeue(queue_t queue, void** item) {
  */
 int
 queue_iterate(queue_t queue, func_t f, void* item) {
-    node_t n;
+    node_t n = NULL;
     if ( !(queue) || !(f) ) {
         return -1;
     }
@@ -141,7 +141,28 @@ queue_iterate(queue_t queue, func_t f, void* item) {
  */
 int
 queue_free (queue_t queue) {
+    node_t n = NULL;
+    node_t temp = NULL;
+    if ( !(queue) ) {
+        return -1;
+    }
+
+    n = queue->head;
+    while (n) {
+        temp = n->next;
+        free(n);
+
+        n = temp;
+    }
+
+    free(queue);
+
     return 0;
+}
+
+void
+increment(void *data, void *acc) {
+    *(int *)acc += 1;
 }
 
 /*
@@ -149,7 +170,14 @@ queue_free (queue_t queue) {
  */
 int
 queue_length(queue_t queue) {
-    return 0;
+    int len = 0;
+    if ( !(queue) ) {
+        return -1;
+    }
+
+    queue_iterate(queue, &increment, &len);
+
+    return len;
 }
 
 
@@ -159,5 +187,38 @@ queue_length(queue_t queue) {
  */
 int
 queue_delete(queue_t queue, void* item) {
-    return 0;
+    node_t prev = NULL;
+    node_t n = NULL;
+    if ( !(queue) ) {
+        return -1;
+    }
+
+    n = queue->head;
+    while (n) {
+        if (n->data == item) {
+            if (n == queue->head) {
+                queue->head = n->next;
+                if (n == queue->tail) {
+                    queue->tail = NULL;
+                }
+            }
+
+            else if (n == queue->tail) {
+                queue->tail = prev;
+                queue->tail->next = NULL;
+            }
+
+            else {
+                prev->next = n->next;
+            }
+
+            free(n);
+            return 0;
+        }
+
+        prev = n;
+        n = n->next;
+    }
+
+    return -1;
 }
