@@ -99,6 +99,7 @@ int
 queue_dequeue(queue_t queue, void** item) {
     node_t n = NULL;
     checkNull(queue);
+    checkNull(item);
 
     // Checks if queue is empty
     if ( queue->length == 0 ) {
