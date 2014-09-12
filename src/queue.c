@@ -24,6 +24,7 @@ struct queue
 {
     node_t head;
     node_t tail;
+    int length;
 };
 
 /*
@@ -34,6 +35,7 @@ queue_new() {
     queue_t q = (queue_t) malloc (sizeof(struct queue));
     q->head = NULL;
     q->tail = NULL;
+    q->length = 0;
     return q;
 }
 
@@ -53,11 +55,12 @@ queue_prepend(queue_t queue, void* item) {
     n->data = item;
     n->next = queue->head;
     // Checks if the queue is empty
-    if ( !(queue->head) ) {
+    if ( queue->length == 0 ) {
         queue->tail = n;
     }
 
     queue->head = n;
+    queue->length++;
     return 0;
 }
 
@@ -76,14 +79,15 @@ queue_append(queue_t queue, void* item) {
 
     n->data = item;
     n->next = NULL;
-    // Checks if theres an element in the queue
-    if (queue->head) {
-        queue->tail->next = n;
-    } else { // Queue is empty
+    // Checks if queue is empty
+    if ( queue->length == 0) {
         queue->head = n;
+    } else {
+        queue->tail->next = n;
     }
 
     queue->tail = n;
+    queue->length++;
     return 0;
 }
 
@@ -96,17 +100,17 @@ queue_dequeue(queue_t queue, void** item) {
     node_t n = NULL;
     checkNull(queue);
 
-    n = queue->head;
     // Checks if queue is empty
-    if ( n == NULL ) {
+    if ( queue->length == 0 ) {
         *item = NULL;
         return -1;
     }
 
+    n = queue->head;
     queue->head = n->next;
 
     // Checks if the queue had 1 element
-    if ( !(queue->head) ) {
+    if ( queue->length == 1 ) {
         queue->tail = NULL;
     }
 
@@ -114,6 +118,7 @@ queue_dequeue(queue_t queue, void** item) {
     *item = n->data;
     free(n);
 
+    queue->length--;
     return 0;
 }
 
@@ -165,25 +170,13 @@ queue_free (queue_t queue) {
     return 0;
 }
 
-
-// Used to increment an integer by 1
-void
-increment(void *data, void *acc) {
-    *(int *)acc += 1;
-}
-
 /*
  * Return the number of items in the queue.
  */
 int
 queue_length(queue_t queue) {
-    int len = 0;
     checkNull(queue);
-
-    // +1 for each element in the queue
-    queue_iterate(queue, &increment, &len);
-
-    return len;
+    return queue->length;
 }
 
 
@@ -224,6 +217,7 @@ queue_delete(queue_t queue, void* item) {
 
             // Frees the node
             free(n);
+            queue->length--;
             return 0;
         }
 
