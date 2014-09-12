@@ -20,8 +20,43 @@ void test_dequeue() {
 
 }
 
-void test_iterate() {
+void length_helper(void *x, void *a) {
+    *(int *)a += 1;
+}
 
+void sum_helper(void *x, void *a) {
+    *(int *)a += *(int *)x;
+}
+
+void test_iterate() {
+    queue_t q1;
+    int i0 = 0;
+    int i1 = 1;
+    int i2 = 2;
+    int i3 = 5;
+    // Testing null queue
+    assert(queue_iterate(NULL, length_helper, &i0) == -1);
+    q1 = queue_new();
+    // Testing null function
+    assert(queue_iterate(q1, NULL, &i0) == -1);
+    // Empty queue
+    i0 = 0;
+    assert(queue_iterate(q1, length_helper, &i0) == 0);
+    assert(i0 == 0);
+    i0 = 0;
+    assert(queue_iterate(q1, sum_helper, &i0) == 0);
+    assert(i0 == 0);
+    // Filled queue
+    assert(queue_append(q1, &i1) == 0);
+    assert(queue_append(q1, &i2) == 0);
+    assert(queue_append(q1, &i3) == 0);
+    i0 = 0;
+    assert(queue_iterate(q1, length_helper, &i0) == 0);
+    assert(i0 = 3);
+    i0 = 0;
+    assert(queue_iterate(q1, sum_helper, &i0) == 0);
+    assert(i0 == 8);
+    assert(queue_free(q1) == 0);
 }
 
 /*
