@@ -133,9 +133,8 @@ int
 queue_iterate(queue_t queue, func_t f, void* item) {
     node_t n = NULL;
     // Checks if either queue or function is null
-    if ( !(queue) || !(f) ) {
-        return -1;
-    }
+    checkNull(queue);
+    checkNull(f);
 
     n = queue->head;
     // Iterates over queue
