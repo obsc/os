@@ -5,11 +5,18 @@
 #include <assert.h>
 
 void test_new() {
-
+    queue_t q;
+    q = queue_new();
+    assert(queue_length(q) == 0);
 }
 
 void test_prepend() {
-
+    queue_t q;
+    int x = 5;
+    void* item1 = (void *) &x;
+    q = queue_new();
+    queue_prepend(q, item1);
+    assert(queue_length(q) == 1);
 }
 
 void test_append() {
