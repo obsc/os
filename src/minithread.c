@@ -38,6 +38,8 @@ int cur_id;
 
 /* Schedules and context switch to the next thread using FCFS, or the idle thread if no threads left */
 
+// TODO: comment this
+// TODO: write garbage collector
 void
 minithread_next() {
     void *next;
@@ -63,7 +65,7 @@ int
 minithread_exit(int *i) {
     current_thread->status = ZOMBIE;
     queue_append(zombie_queue, current_thread);
-    //minithread_next();
+    minithread_next();
     return 0;
 }
 
@@ -111,13 +113,13 @@ minithread_start(minithread_t t) {
 void
 minithread_yield() {
     minithread_start(current_thread);
-    //minithread_next();
+    minithread_next();
 }
 
 void
 minithread_stop() {
     current_thread->status = WAITING;
-    //minithread_next();
+    minithread_next();
 }
 
 int
@@ -145,15 +147,13 @@ idle(int* arg) {
 void
 minithread_system_initialize(proc_t mainproc, arg_t mainarg) {
     stack_pointer_t trash;
-    minithread_t first;
+    // Initialize globals
     ready_queue = queue_new();
     zombie_queue = queue_new();
     cur_id = 0;
+    // Initialize threads
     idle_thread = minithread_create(idle, NULL);
-    first = minithread_fork(mainproc, mainarg);
-    minithread_switch(trash, &(first->top));
+    current_thread = minithread_fork(mainproc, mainarg);
+    minithread_switch(&trash, &(current_thread->top));
 }
-
-
-
 
