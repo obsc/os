@@ -43,6 +43,9 @@ int next_id() {
 
 int
 minithread_exit(int *i) {
+    current_thread->status = ZOMBIE;
+    queue_append(zombie_queue, current_thread);
+    //minithread_next();
     return 0;
 }
 
@@ -78,16 +81,25 @@ minithread_id() {
     return current_thread->id;
 }
 
+/* Does not start ready or zombie queues */
 void
 minithread_start(minithread_t t) {
+    if (t->status != READY && t->status != ZOMBIE) {
+        t->status = READY;
+        queue_append(ready_queue, t);
+    }
 }
 
 void
 minithread_yield() {
+    minithread_start(current_thread);
+    //minithread_next();
 }
 
 void
 minithread_stop() {
+    current_thread->status = WAITING;
+    //minithread_next();
 }
 
 /*
