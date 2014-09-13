@@ -8,6 +8,7 @@ void test_new() {
     queue_t q;
     q = queue_new();
     assert(queue_length(q) == 0);
+    assert(queue_free(q) == 0);
 }
 
 void test_prepend() {
@@ -15,6 +16,9 @@ void test_prepend() {
     int x1 = 5;
     int x2 = 6;
     void *value = NULL;
+    // Testing null queue
+    assert(queue_prepend(NULL, &x1) == -1);
+    // Testing queue
     q = queue_new();
     assert(queue_prepend(q, &x1) == 0);
     assert(queue_length(q) == 1);
@@ -25,6 +29,7 @@ void test_prepend() {
     assert(queue_dequeue(q, (&value)) == 0);
     assert(*((int*) value) == x1);
     assert(queue_length(q) == 0);
+    assert(queue_free(q) == 0);
 }
 
 void test_append() {
@@ -32,6 +37,9 @@ void test_append() {
     int x1 = 5;
     int x2 = 6;
     void *value = NULL;
+    // Testing null queue
+    assert(queue_append(NULL, &x1) == -1);
+    // Testing queue
     q = queue_new();
     assert(queue_append(q, &x1) == 0);
     assert(queue_length(q) == 1);
@@ -42,7 +50,7 @@ void test_append() {
     assert(queue_dequeue(q, (&value)) == 0);
     assert(*((int*) value) == x2);
     assert(queue_length(q) == 0);
-
+    assert(queue_free(q) == 0);
 }
 
 void test_dequeue() {
@@ -51,10 +59,17 @@ void test_dequeue() {
     int x2 = 6;
     int x3 = 7;
     void *value = NULL;
+    // Testing null queue
+    assert(queue_dequeue(NULL, &value) == -1);
+    assert(value == NULL);
+    // Testing empty queue
     q = queue_new();
-    assert(queue_append(q, &x1) == 0);
+    assert(queue_dequeue(q, &value) == -1);
+    assert(value == NULL);
+    // Testing queue
     assert(queue_append(q, &x2) == 0);
     assert(queue_append(q, &x3) == 0);
+    assert(queue_prepend(q, &x1) == 0);
     assert(queue_dequeue(q, (&value)) == 0);
     assert(*((int*) value) == x1);
     assert(queue_length(q) == 2);
@@ -62,9 +77,10 @@ void test_dequeue() {
     assert(*((int*) value) == x2);
     assert(queue_length(q) == 1);
     assert(queue_dequeue(q, &value) == 0);
-    assert(queue_length(q) == 0);
     assert(*((int*) value) == x3);
+    assert(queue_length(q) == 0);
     assert(queue_dequeue(q, &value) == -1);
+    assert(queue_free(q) == 0);
 }
 
 void length_helper(void *x, void *a) {
