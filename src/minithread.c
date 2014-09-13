@@ -41,16 +41,31 @@ int next_id() {
     return cur_id++;
 }
 
+int
+minithread_exit(int *i) {
+    return 0;
+}
+
 /* minithread functions */
 
 minithread_t
 minithread_fork(proc_t proc, arg_t arg) {
-    return (minithread_t)0;
+    minithread_t t = minithread_create(proc, arg);
+    minithread_start(t);
+
+    return t;
 }
 
 minithread_t
 minithread_create(proc_t proc, arg_t arg) {
-    return (minithread_t)0;
+    minithread_t t = (minithread_t) malloc (sizeof(struct minithread));
+    t->id = next_id();
+    t->status = NEW;
+
+    minithread_allocate_stack(&(t->base), &(t->top));
+    minithread_initialize_stack(&(t->top), proc, arg, minithread_exit, NULL);
+
+    return t;
 }
 
 minithread_t
@@ -64,10 +79,6 @@ minithread_id() {
 }
 
 void
-minithread_stop() {
-}
-
-void
 minithread_start(minithread_t t) {
 }
 
@@ -76,7 +87,7 @@ minithread_yield() {
 }
 
 void
-minithread_exit() {
+minithread_stop() {
 }
 
 /*
