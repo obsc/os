@@ -23,6 +23,16 @@
  * that you feel they must have.
  */
 
+struct minithread {
+    int id;
+    status_t status;
+    stack_pointer_t base;
+    stack_pointer_t top;
+};
+
+minithread_t current_thread;
+queue_t ready_queue;
+queue_t zombie_queue;
 
 /* minithread functions */
 
@@ -56,6 +66,10 @@ minithread_start(minithread_t t) {
 
 void
 minithread_yield() {
+}
+
+void
+minithread_exit() {
 }
 
 /*

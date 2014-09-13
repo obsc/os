@@ -20,6 +20,7 @@
  *  You must define the thread control block as a struct minithread.
  */
 
+typedef enum {NEW, WAITING, READY, RUNNING, ZOMBIE} status_t;
 typedef struct minithread *minithread_t;
 
 /*
@@ -28,7 +29,7 @@ typedef struct minithread *minithread_t;
  *  Create and schedule a new thread of control so
  *  that it starts executing inside proc_t with
  *  initial argument arg.
- */ 
+ */
 extern minithread_t minithread_fork(proc_t proc, arg_t arg);
 
 
@@ -75,6 +76,12 @@ extern void minithread_start(minithread_t t);
  *  the ready queue.  Allows another thread to run.
  */
 extern void minithread_yield();
+
+/*
+ * minithread_exit()
+ *  Exits and marks the currently running thread to be freed.
+ */
+extern void minithread_exit();
 
 /*
  * minithread_system_initialize(proc_t mainproc, arg_t mainarg)
