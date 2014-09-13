@@ -33,6 +33,13 @@ struct minithread {
 minithread_t current_thread;
 queue_t ready_queue;
 queue_t zombie_queue;
+int cur_id;
+
+/* Returns the next available id for minithreads */
+
+int next_id() {
+    return cur_id++;
+}
 
 /* minithread functions */
 
@@ -48,12 +55,12 @@ minithread_create(proc_t proc, arg_t arg) {
 
 minithread_t
 minithread_self() {
-    return (minithread_t)0;
+    return current_thread;
 }
 
 int
 minithread_id() {
-    return 0;
+    return current_thread->id;
 }
 
 void
