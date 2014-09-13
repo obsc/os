@@ -31,13 +31,31 @@ struct minithread {
 };
 
 minithread_t current_thread;
+minithread_t idle_thread;
 queue_t ready_queue;
 queue_t zombie_queue;
 int cur_id;
 
+/* Schedules and context switch to the next thread using FCFS, or the idle thread if no threads left */
+
+void
+minithread_next() {
+    void *next;
+    minithread_t old;
+    old = current_thread;
+    if (queue_dequeue(ready_queue, &next) == 0) {
+        current_thread = (minithread_t) next;
+    } else {
+        current_thread = idle_thread;
+    }
+    current_thread->status = RUNNING;
+    minithread_switch(&(old->top), &(current_thread->top));
+}
+
 /* Returns the next available id for minithreads */
 
-int next_id() {
+int
+next_id() {
     return cur_id++;
 }
 
@@ -102,6 +120,14 @@ minithread_stop() {
     //minithread_next();
 }
 
+int
+idle(int* arg) {
+    while (1)
+        minithread_yield();
+
+    return 0;
+}
+
 /*
  * Initialization.
  *
@@ -118,6 +144,16 @@ minithread_stop() {
  */
 void
 minithread_system_initialize(proc_t mainproc, arg_t mainarg) {
+    stack_pointer_t trash;
+    minithread_t first;
+    ready_queue = queue_new();
+    zombie_queue = queue_new();
+    cur_id = 0;
+    idle_thread = minithread_create(idle, NULL);
+    first = minithread_fork(mainproc, mainarg);
+    minithread_switch(trash, &(first->top));
 }
+
+
 
 
