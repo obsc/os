@@ -12,19 +12,59 @@ void test_new() {
 
 void test_prepend() {
     queue_t q;
-    int x = 5;
-    void* item1 = (void *) &x;
+    int x1 = 5;
+    int x2 = 6;
+    void *value = NULL;
     q = queue_new();
-    queue_prepend(q, item1);
+    assert(queue_prepend(q, &x1) == 0);
     assert(queue_length(q) == 1);
+    assert(queue_prepend(q, &x2) == 0);
+    assert(queue_length(q) == 2);
+    assert(queue_dequeue(q, (&value)) == 0);
+    assert(*((int*) value) == x2);
+    assert(queue_dequeue(q, (&value)) == 0);
+    assert(*((int*) value) == x1);
+    assert(queue_length(q) == 0);
 }
 
 void test_append() {
+    queue_t q;
+    int x1 = 5;
+    int x2 = 6;
+    void *value = NULL;
+    q = queue_new();
+    assert(queue_append(q, &x1) == 0);
+    assert(queue_length(q) == 1);
+    assert(queue_append(q, &x2) == 0);
+    assert(queue_length(q) == 2);
+    assert(queue_dequeue(q, (&value)) == 0);
+    assert(*((int*) value) == x1);
+    assert(queue_dequeue(q, (&value)) == 0);
+    assert(*((int*) value) == x2);
+    assert(queue_length(q) == 0);
 
 }
 
 void test_dequeue() {
-
+    queue_t q;
+    int x1 = 5;
+    int x2 = 6;
+    int x3 = 7;
+    void *value = NULL;
+    q = queue_new();
+    assert(queue_append(q, &x1) == 0);
+    assert(queue_append(q, &x2) == 0);
+    assert(queue_append(q, &x3) == 0);
+    assert(queue_dequeue(q, (&value)) == 0);
+    assert(*((int*) value) == x1);
+    assert(queue_length(q) == 2);
+    assert(queue_dequeue(q, (&value)) == 0);
+    assert(*((int*) value) == x2);
+    assert(queue_length(q) == 1);
+    assert(queue_dequeue(q, &value) == 0);
+    assert(queue_length(q) == 0);
+    assert(*((int*) value) == x3);
+    assert(queue_dequeue(q, &value) == -1);
 }
 
 void length_helper(void *x, void *a) {
