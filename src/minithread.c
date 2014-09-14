@@ -43,6 +43,8 @@ int cur_id;
 void
 minithread_next() {
     void *next;
+    void *zomb;
+    minithread_t garbage;
     minithread_t old;
     old = current_thread;
     if (queue_dequeue(ready_queue, &next) == 0) {
@@ -51,6 +53,14 @@ minithread_next() {
         current_thread = idle_thread;
     }
     current_thread->status = RUNNING;
+
+    while (queue_length(zombie_queue) > 0) {
+        if (queue_dequeue(zombie_queue, &zomb) == 0) {
+            garbage = (minithread_t) zomb;
+            minithread_free_stack(garbage->base);
+            free(garbage);
+        }
+    }
     minithread_switch(&(old->top), &(current_thread->top));
 }
 
