@@ -57,11 +57,9 @@ minithread_next() {
     void *next;
     minithread_t old;
     old = current_thread;
-    if (queue_dequeue(ready_queue, &next) == 0) {
-        current_thread = (minithread_t) next;
-    } else {
-        current_thread = idle_thread;
-    }
+
+    queue_dequeue(ready_queue, &next);
+    current_thread = (minithread_t) next;
     current_thread->status = RUNNING;
 
     garbage_collect();
@@ -174,7 +172,7 @@ minithread_system_initialize(proc_t mainproc, arg_t mainarg) {
     zombie_queue = queue_new();
     cur_id = 0;
     // Initialize threads
-    idle_thread = minithread_create(idle, NULL);
+    idle_thread = minithread_fork(idle, NULL);
     current_thread = minithread_create(mainproc, mainarg);
     minithread_switch(&trash, &(current_thread->top));
 }
