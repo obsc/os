@@ -131,8 +131,12 @@ minithread_start(minithread_t t) {
 
 void
 minithread_yield() {
-    minithread_start(current_thread);
-    minithread_next();
+    if (queue_length(ready_queue) > 0) {
+        minithread_start(current_thread);
+        minithread_next();
+    } else {
+        garbage_collect();
+    }
 }
 
 void
