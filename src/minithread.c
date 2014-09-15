@@ -52,7 +52,6 @@ void garbage_collect() {
 /* Schedules and context switch to the next thread using FCFS, or the idle thread if no threads left */
 
 // TODO: comment this
-// TODO: write garbage collector
 void
 minithread_next() {
     void *next;
@@ -176,7 +175,7 @@ minithread_system_initialize(proc_t mainproc, arg_t mainarg) {
     cur_id = 0;
     // Initialize threads
     idle_thread = minithread_create(idle, NULL);
-    current_thread = minithread_fork(mainproc, mainarg);
+    current_thread = minithread_create(mainproc, mainarg);
     minithread_switch(&trash, &(current_thread->top));
 }
 
