@@ -82,7 +82,7 @@ int
 minithread_exit(int *i) {
     current_thread->status = ZOMBIE;
     minithread_next();
-    return 0;
+    return -1;
 }
 
 /* minithread functions */
@@ -147,7 +147,7 @@ idle(int* arg) {
     while (1)
         minithread_yield();
 
-    return 0;
+    return -1;
 }
 
 /*
