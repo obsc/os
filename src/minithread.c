@@ -49,24 +49,24 @@ void garbage_collect() {
     }
 }
 
-/* Schedules and context switch to the next thread using FCFS, or the idle thread if no threads left */
-
-
-// TODO: comment this
-
+/* minithread scheduler that decides the next thread
+ * (either the system or another minithread) to be run */
 void
 minithread_next() {
     void *next;
     minithread_t old;
     old = current_thread;
 
+    // get rid of existing garbage before appending new garbage
     garbage_collect();
     if (old->status == ZOMBIE) {
         queue_append(zombie_queue, old);
     }
 
+    // if there are no more runnable threads, return to the system
     if (queue_length(ready_queue) == 0) {
         minithread_switch(&(old->top), &system_stack);
+    // if there are runnable threads, take the next one and run it
     } else {
         queue_dequeue(ready_queue, &next);
         current_thread = (minithread_t) next;
@@ -75,10 +75,13 @@ minithread_next() {
     }
 }
 
+/* the system scheduler that decides the next thread to run
+ * or to idle */
 void
 scheduler() {
     void *next;
     while (1) {
+        // idle if there are no runnable threads
         while(queue_length(ready_queue) == 0);
 
         queue_dequeue(ready_queue, &next);
@@ -86,6 +89,7 @@ scheduler() {
         current_thread->status = RUNNING;
 
         minithread_switch(&system_stack, &(current_thread->top));
+        // invariant: collect garbage if we return from a minithread
         garbage_collect();
     }
 
