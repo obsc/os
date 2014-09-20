@@ -30,8 +30,8 @@ struct minithread {
     stack_pointer_t top;
 };
 
+stack_pointer_t system_stack;
 minithread_t current_thread;
-minithread_t idle_thread;
 queue_t ready_queue;
 queue_t zombie_queue;
 int cur_id;
@@ -51,26 +51,45 @@ void garbage_collect() {
 
 /* Schedules and context switch to the next thread using FCFS, or the idle thread if no threads left */
 
+
 // TODO: comment this
+
 void
 minithread_next() {
     void *next;
     minithread_t old;
     old = current_thread;
 
-    queue_dequeue(ready_queue, &next);
-    current_thread = (minithread_t) next;
-    current_thread->status = RUNNING;
-
     garbage_collect();
-
     if (old->status == ZOMBIE) {
         queue_append(zombie_queue, old);
     }
 
-    minithread_switch(&(old->top), &(current_thread->top));
+    if (queue_length(ready_queue) == 0) {
+        minithread_switch(&(old->top), &system_stack);
+    } else {
+        queue_dequeue(ready_queue, &next);
+        current_thread = (minithread_t) next;
+        current_thread->status = RUNNING;
+        minithread_switch(&(old->top), &(current_thread->top));
+    }
 }
 
+void
+scheduler() {
+    void *next;
+    while (1) {
+        while(queue_length(ready_queue) == 0);
+
+        queue_dequeue(ready_queue, &next);
+        current_thread = (minithread_t) next;
+        current_thread->status = RUNNING;
+
+        minithread_switch(&system_stack, &(current_thread->top));
+        garbage_collect();
+    }
+
+}
 /* Returns the next available id for minithreads */
 
 int
@@ -142,13 +161,6 @@ minithread_stop() {
     minithread_next();
 }
 
-int
-idle(int* arg) {
-    while (1)
-        minithread_yield();
-
-    return -1;
-}
 
 /*
  * Initialization.
@@ -166,14 +178,12 @@ idle(int* arg) {
  */
 void
 minithread_system_initialize(proc_t mainproc, arg_t mainarg) {
-    stack_pointer_t trash;
     // Initialize globals
     ready_queue = queue_new();
     zombie_queue = queue_new();
     cur_id = 0;
     // Initialize threads
-    idle_thread = minithread_fork(idle, NULL);
-    current_thread = minithread_create(mainproc, mainarg);
-    minithread_switch(&trash, &(current_thread->top));
+    current_thread = minithread_fork(mainproc, mainarg);
+    scheduler();
 }
 
