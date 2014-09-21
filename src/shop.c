@@ -21,23 +21,17 @@
 int unpack, sell;
 
 semaphore_t empty;
-semaphore_t full;
-semaphore_t lock;
 int consumer(int* arg) {
     semaphore_P(empty);
     sell += 1;
     printf("Phone %i\n", sell);
-    semaphore_V(full);
 
     return 0;
 }
 
 int employee(int* arg) {
     while (1) {
-        semaphore_P(full);
-        semaphore_P(lock);
         unpack += 1;
-        semaphore_V(lock);
         //printf("Unpacked phone %i\n", unpack);
         semaphore_V(empty);
         minithread_yield();
@@ -60,11 +54,7 @@ int spawner(int *arg) {
 int
 main(int argc, char * argv[]) {
     empty = semaphore_create();
-    full = semaphore_create();
-    lock = semaphore_create();
     semaphore_initialize(empty, 0);
-    semaphore_initialize(full, BUFFER);
-    semaphore_initialize(lock, 1);
     unpack = 0;
     sell = 0;
 
