@@ -8,6 +8,8 @@
 
 #define checkNull(q) if( !(q) ) { return -1; }
 
+typedef struct node* node_t;
+
 /*
  * Struct representing a node in the queue
  */

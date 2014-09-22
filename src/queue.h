@@ -4,8 +4,6 @@
 #ifndef __QUEUE_H__
 #define __QUEUE_H__
 
-typedef struct node* node_t;
-
 /*
  * queue_t is a pointer to an internally maintained data structure.
  * Clients of this package do not need to know how queues are
