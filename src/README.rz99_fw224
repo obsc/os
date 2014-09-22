@@ -55,7 +55,7 @@ garbage collection
     stacks and thread control blocks
   - When scheduling a next thread, we first garbage collect, then append the
     current thread to the garbage queue if it just ended. This is to make sure
-    that no thread every garbage collects itself.
+    that no thread ever garbage collects itself.
 
 ================================================================================
 Synch
