@@ -24,18 +24,22 @@
  */
 
 struct minithread {
-    int id;
-    status_t status;
+    int id; // Id of the minithread
+    status_t status; // Status: NEW, WAITING, READY, RUNNING, ZOMBIE
     stack_pointer_t base;
     stack_pointer_t top;
 };
 
-stack_pointer_t system_stack;
-minithread_t current_thread;
-queue_t ready_queue;
-queue_t zombie_queue;
-int cur_id;
+stack_pointer_t system_stack; // Stack pointer to the system thread
+minithread_t current_thread; // Thread control block of the current thread
+queue_t ready_queue; // Queue for ready threads
+queue_t zombie_queue; // Queue for zombie threads for cleanup
+int cur_id; // Current id (used to assign new ids)
 
+/*
+ * Garbage collect collects all the garbage in the zombie queue.
+ * This should be called by the scheduler to handle cleaning up zombies.
+ */
 void garbage_collect() {
     void *zomb;
     minithread_t garbage;
@@ -43,14 +47,17 @@ void garbage_collect() {
     while (queue_length(zombie_queue) > 0) {
         if (queue_dequeue(zombie_queue, &zomb) == 0) {
             garbage = (minithread_t) zomb;
-            minithread_free_stack(garbage->base);
-            free(garbage);
+            minithread_free_stack(garbage->base); // Frees the stack
+            free(garbage); // Frees the thread control block
         }
     }
 }
 
-/* minithread scheduler that decides the next thread
- * (either the system or another minithread) to be run */
+/*
+ * Minithread scheduler that decides the next thread
+ * (either the system or another minithread) to be run
+ * This swaps over to the system if there are no more ready threads.
+ */
 void
 minithread_next() {
     void *next;
@@ -75,8 +82,11 @@ minithread_next() {
     }
 }
 
-/* the system scheduler that decides the next thread to run
- * or to idle */
+/*
+ * The system scheduler that decides the next thread to run
+ * or to idle. This idles whenever there are no more threads in
+ * the ready queue
+ */
 void
 scheduler() {
     void *next;
@@ -94,13 +104,14 @@ scheduler() {
     }
 
 }
-/* Returns the next available id for minithreads */
 
+/* Returns the next available id for minithreads */
 int
 next_id() {
     return cur_id++;
 }
 
+/* Called after a thread ends operation */
 int
 minithread_exit(int *i) {
     current_thread->status = ZOMBIE;
@@ -110,6 +121,9 @@ minithread_exit(int *i) {
 
 /* minithread functions */
 
+/*
+ * Creates a new thread and sets it to runnable
+ */
 minithread_t
 minithread_fork(proc_t proc, arg_t arg) {
     minithread_t t = minithread_create(proc, arg);
@@ -118,6 +132,9 @@ minithread_fork(proc_t proc, arg_t arg) {
     return t;
 }
 
+/*
+ * Creates a new thread control block
+ */
 minithread_t
 minithread_create(proc_t proc, arg_t arg) {
     minithread_t t = (minithread_t) malloc (sizeof(struct minithread));
@@ -130,17 +147,26 @@ minithread_create(proc_t proc, arg_t arg) {
     return t;
 }
 
+/*
+ * Gets the thread control block of the currently running thread
+ */
 minithread_t
 minithread_self() {
     return current_thread;
 }
 
+/*
+ * Gets the id of the currently running thread
+ */
 int
 minithread_id() {
     return current_thread->id;
 }
 
-/* Does not start ready or zombie queues */
+/*
+ * Makes a minithread runnable
+ * Does not work on already READY or ZOMBIE threads
+ */
 void
 minithread_start(minithread_t t) {
     if (t->status != READY && t->status != ZOMBIE) {
@@ -149,6 +175,12 @@ minithread_start(minithread_t t) {
     }
 }
 
+/*
+ * Yields from the current thread, allowing others to run
+ * If this is the only runnable thread, instead of rescheduling,
+ * we just NOP and garbage collect any previously exited threads
+ * instead.
+ */
 void
 minithread_yield() {
     if (queue_length(ready_queue) > 0) {
@@ -159,6 +191,9 @@ minithread_yield() {
     }
 }
 
+/*
+ * Stops the current thread and does not set to runnable again.
+ */
 void
 minithread_stop() {
     current_thread->status = WAITING;

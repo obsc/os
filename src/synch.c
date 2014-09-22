@@ -17,8 +17,8 @@
  * Semaphores.
  */
 struct semaphore {
-    queue_t waiting;
-    tas_lock_t lock;
+    queue_t waiting; // Waiting queue for the semaphore
+    tas_lock_t lock; // Spinlock
     int count;
 };
 
@@ -59,10 +59,10 @@ void semaphore_initialize(semaphore_t sem, int cnt) {
  *      P on the sempahore.
  */
 void semaphore_P(semaphore_t sem) {
-    while (atomic_test_and_set(&sem->lock) == 1)
+    while (atomic_test_and_set(&sem->lock) == 1) // Gets spinlock
         minithread_yield();
 
-    if (--sem->count < 0) {
+    if (--sem->count < 0) { // No more resources; block until V
         queue_append(sem->waiting, minithread_self());
         atomic_clear(&sem->lock);
         minithread_stop();
@@ -78,10 +78,11 @@ void semaphore_P(semaphore_t sem) {
 void semaphore_V(semaphore_t sem) {
     void *next;
     minithread_t next_thread;
-    while (atomic_test_and_set(&sem->lock) == 1)
+
+    while (atomic_test_and_set(&sem->lock) == 1) // Gets spinlock
         minithread_yield();
 
-    if (++sem->count <= 0) {
+    if (++sem->count <= 0) { // Unblocks one element in the queue
         queue_dequeue(sem->waiting, &next);
         next_thread = (minithread_t) next;
         minithread_start(next_thread);
