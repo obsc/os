@@ -16,6 +16,8 @@ queue.c
     run in O(n)
   - delete does a linear search down the linked list to find and delete the
     first occurance of the data pointer
+queue_test.c
+  - tests for the queue
 
 ================================================================================
 Minithread
