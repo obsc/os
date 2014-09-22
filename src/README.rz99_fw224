@@ -1,0 +1,84 @@
+Rene Zhang - rz99
+Fukang Wen - fw224
+
+Implementation details of Project 1 for CS4411 - Fall 2014
+================================================================================
+Queue
+
+queue.h
+  - no modifications made to header
+queue.c
+  - macro defined for automatically returning -1 if the input queue is a null
+  - the queue is backed by a singly-linked list represented by nodes that have a
+    pointer to next and a pointer to data
+  - keeps track of head, tail and length to make operations faster
+  - All queue operations run in O(1) time except free, iterate and delete which
+    run in O(n)
+  - delete does a linear search down the linked list to find and delete the
+    first occurance of the data pointer
+
+================================================================================
+Minithread
+
+minithread.h
+  - status is represented by an enum of NEW, WAITING, READY, RUNNING, or ZOMBIE
+  - minithread_exit is called when a thread finally returns and marks the thread
+    for garbage collection
+minithread.c
+  - This is where our scheduler is also located
+  - thread control blocks have an id, a status, and pointers to the stack
+  - We save several states globally: the system stack (explained below), the
+    currently running thread, a queue of ready threads, a queue of zombie
+    threads, and an incrememting counter for assigning new ids.
+  - Thread ids are assigned in order, starting at 0
+  - We disallow starting already started threads (status READY) and zombie
+    threads.
+  - When yielding with 1 thread left, no context switch is performed, only
+    a garbage collection step is performed.
+  - We start by forking the main process and begin scheduling
+
+scheduler
+  - basic FIFO queue
+  - There are two pieces of the scheduler: minithread_next and scheduler
+  - We have a main "system" thread that is only running scheduler()
+    - this is not a minithread, but actually just the same thread as main()
+  - scheduler() can only be run by this system thread and blocks (spins) while
+    the ready queue is empty
+  - Once there is something in the ready queue, it will schedule it and switch
+  - minithread_next is run on individual minithreads when they need to swap to
+    a new thread
+  - If there is something in the ready queue, then it will swap to it, otherwise
+    it will swap back to the system thread to block on the ready queue
+
+garbage collection
+  - Our garbage collector iterates through the garbage queue, freeing all the
+    stacks and thread control blocks
+  - When scheduling a next thread, we first garbage collect, then append the
+    current thread to the garbage queue if it just ended. This is to make sure
+    that no thread every garbage collects itself.
+
+================================================================================
+Synch
+
+synch.h
+  - no modifications made to header
+synch.c
+  - each semaphore has a count, a lock and a waiting queue
+  - P and V operations are both locked with an atomic test and set spinlock
+  - If there is no more count, P will block and add the thread to the waiting
+    queue
+  - V notifies one thread in the waiting queue, if any
+
+================================================================================
+Shop
+
+shop.c
+  - Macros are used for the number of employees and customers
+  - We start a single spawning thread at the beginning to fork all of the
+    employee and customer threads at one time
+  - Employees constantly unpack 1 phone (V the semaphore), then yield and repeat
+  - Customers take one phone, print its id and then leave
+  - After all the customers have left, employees will still unpack phones
+    forever.
+
+================================================================================
