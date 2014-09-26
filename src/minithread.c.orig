@@ -9,7 +9,6 @@
  */
 #include <stdlib.h>
 #include <stdio.h>
-#include "interrupts.h"
 #include "minithread.h"
 #include "queue.h"
 #include "synch.h"
@@ -201,17 +200,6 @@ minithread_stop() {
     minithread_next();
 }
 
-
-/*
- * This is the clock interrupt handling routine.
- * You have to call minithread_clock_init with this
- * function as parameter in minithread_system_initialize
- */
-void 
-clock_handler(void* arg)
-{
-
-}
 
 /*
  * Initialization.
