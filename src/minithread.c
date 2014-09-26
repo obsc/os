@@ -238,3 +238,12 @@ minithread_system_initialize(proc_t mainproc, arg_t mainarg) {
     scheduler();
 }
 
+/*
+ * sleep with timeout in milliseconds
+ */
+void 
+minithread_sleep_with_timeout(int delay)
+{
+
+}
+
