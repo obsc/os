@@ -24,12 +24,6 @@ typedef enum {NEW, WAITING, READY, RUNNING, ZOMBIE} status_t;
 typedef struct minithread *minithread_t;
 
 /*
- * minithread_exit()
- *  Exits and marks the currently running thread to be freed.
- */
-extern int minithread_exit(int *);
-
-/*
  * minithread_t
  * minithread_fork(proc_t proc, arg_t arg)
  *  Create and schedule a new thread of control so

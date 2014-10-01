@@ -36,22 +36,25 @@ minithread_t current_thread; // Thread control block of the current thread
 queue_t ready_queue; // Queue for ready threads
 queue_t zombie_queue; // Queue for zombie threads for cleanup
 int cur_id; // Current id (used to assign new ids)
+semaphore_t garbage; // Semaphore representing garbage needed to be collected
 
 /*
- * Garbage collect collects all the garbage in the zombie queue.
- * This should be called by the scheduler to handle cleaning up zombies.
+ * Thread that garbage collects all the garbage in the zombie queue.
+ * This should only be ran when there is garbage, otherwise it will block.
  */
-void garbage_collect() {
+int reaper(int *arg) {
     void *zomb;
-    minithread_t garbage;
+    minithread_t garbage_thread;
 
-    while (queue_length(zombie_queue) > 0) {
+    while (1) {
+        semaphore_P(garbage);
         if (queue_dequeue(zombie_queue, &zomb) == 0) {
-            garbage = (minithread_t) zomb;
-            minithread_free_stack(garbage->base); // Frees the stack
-            free(garbage); // Frees the thread control block
+            garbage_thread = (minithread_t) zomb;
+            minithread_free_stack(garbage_thread->base); // Frees the stack
+            free(garbage_thread); // Frees the thread control block
         }
     }
+    return -1;
 }
 
 /*
@@ -65,10 +68,7 @@ minithread_next() {
     minithread_t old;
     old = current_thread;
 
-    // get rid of existing garbage before appending new garbage
-    garbage_collect();
     if (old->status == ZOMBIE) {
-        queue_append(zombie_queue, old);
     }
 
     // if there are no more runnable threads, return to the system
@@ -100,8 +100,6 @@ scheduler() {
         current_thread->status = RUNNING;
 
         minithread_switch(&system_stack, &(current_thread->top));
-        // invariant: collect garbage if we return from a minithread
-        garbage_collect();
     }
 
 }
@@ -116,6 +114,8 @@ next_id() {
 int
 minithread_exit(int *i) {
     current_thread->status = ZOMBIE;
+    queue_append(zombie_queue, current_thread);
+    semaphore_V(garbage);
     minithread_next();
     return -1;
 }
@@ -187,8 +187,6 @@ minithread_yield() {
     if (queue_length(ready_queue) > 0) {
         minithread_start(current_thread);
         minithread_next();
-    } else {
-        garbage_collect();
     }
 }
 
@@ -207,7 +205,7 @@ minithread_stop() {
  * You have to call minithread_clock_init with this
  * function as parameter in minithread_system_initialize
  */
-void 
+void
 clock_handler(void* arg)
 {
 
@@ -233,7 +231,10 @@ minithread_system_initialize(proc_t mainproc, arg_t mainarg) {
     ready_queue = queue_new();
     zombie_queue = queue_new();
     cur_id = 0;
+    garbage = semaphore_create();
+    semaphore_initialize(garbage, 0);
     // Initialize threads
+    minithread_fork(reaper, NULL);
     current_thread = minithread_fork(mainproc, mainarg);
     scheduler();
 }
@@ -241,7 +242,7 @@ minithread_system_initialize(proc_t mainproc, arg_t mainarg) {
 /*
  * sleep with timeout in milliseconds
  */
-void 
+void
 minithread_sleep_with_timeout(int delay)
 {
 
