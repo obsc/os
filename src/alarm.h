@@ -24,4 +24,14 @@ alarm_id register_alarm(int delay, alarm_handler_t func, void *arg);
  */
 int deregister_alarm(alarm_id id);
 
+/*
+ * Initialize alarm priority queue
+ */
+void initialize_alarms();
+
+/*
+ * Checks all available alarms and runs their handlers
+ */
+void check_alarms();
+
 #endif

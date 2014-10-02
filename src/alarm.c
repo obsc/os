@@ -10,8 +10,9 @@ typedef struct alarm* alarm_t;
 
 struct alarm
 {
-    alarm_handler_t func;
-    void *arg;
+    alarm_handler_t func; // Function to be called when alarm fires
+    void *arg; // Argument into the function
+    int time; // Time that the alarm fires at
 };
 
 pqueue_t alarm_pqueue;
@@ -23,6 +24,7 @@ register_alarm(int delay, alarm_handler_t alarm, void *arg) {
     alarm_t a = (alarm_t) malloc (sizeof(struct alarm));
     a->func = alarm;
     a->arg = arg;
+    a->time = t;
 
     pqueue_enqueue(alarm_pqueue, a, t);
 
@@ -44,6 +46,26 @@ deregister_alarm(alarm_id alarm) {
  */
 void initialize_alarms() {
     alarm_pqueue = pqueue_new();
+}
+
+/*
+ * Checks all available alarms and runs their handlers
+ */
+void check_alarms() {
+    alarm_id a;
+    alarm_t alarm;
+
+    while (pqueue_peek(alarm_pqueue, &a) == 0) {
+        alarm = (alarm_t) a;
+        if (time_ticks * PERIOD >= alarm->time) {
+            pqueue_dequeue(alarm_pqueue, &a);
+            alarm = (alarm_t) a;
+            alarm->func(alarm->arg);
+            free(alarm);
+        } else {
+            break;
+        }
+    }
 }
 
 /*
