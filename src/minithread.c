@@ -16,6 +16,8 @@
 
 #include <assert.h>
 
+#define TIMESTEP 100 // Represents how long each clock tick is in milliseconds
+
 /*
  * A minithread should be defined either in this file or in a private
  * header file.  Minithreads have a stack pointer with to make procedure
@@ -37,8 +39,7 @@ queue_t ready_queue; // Queue for ready threads
 queue_t zombie_queue; // Queue for zombie threads for cleanup
 int cur_id; // Current id (used to assign new ids)
 semaphore_t garbage; // Semaphore representing garbage needed to be collected
-int current_time; // Current time in number of clock ticks
-int time_step; // Represent how long each clock tick is
+int current_time; // Current time in number of interrupt ticks
 
 /*
  * Thread that garbage collects all the garbage in the zombie queue.
@@ -224,7 +225,8 @@ minithread_stop() {
 void
 clock_handler(void* arg) {
     interrupt_level_t old_level = set_interrupt_level(DISABLED);
-    current_time += time_step;
+
+    current_time++;
     if (current_thread != NULL) {
         minithread_yield();
     }
@@ -253,7 +255,6 @@ minithread_system_initialize(proc_t mainproc, arg_t mainarg) {
     zombie_queue = queue_new();
     cur_id = 0;
     current_time = 0;
-    time_step = 100 * MILLISECOND;
 
     garbage = semaphore_create();
     semaphore_initialize(garbage, 0);
@@ -261,7 +262,7 @@ minithread_system_initialize(proc_t mainproc, arg_t mainarg) {
     // Initialize threads
     minithread_fork(reaper, NULL);
     minithread_fork(mainproc, mainarg);
-    minithread_clock_init(time_step, clock_handler);
+    minithread_clock_init(TIMESTEP, clock_handler);
     // Disable interrupts
     old_level = set_interrupt_level(DISABLED);
     scheduler();
