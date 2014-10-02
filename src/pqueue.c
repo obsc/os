@@ -34,9 +34,8 @@ struct pqueue
  */
 pqueue_t
 pqueue_new() {
-    queue_t q = (queue_t) malloc (sizeof(struct queue));
+    pqueue_t q = (pqueue_t) malloc (sizeof(struct pqueue));
     q->head = NULL;
-    q->tail = NULL;
     q->length = 0;
     return q;
 }
@@ -48,21 +47,39 @@ pqueue_new() {
 int
 pqueue_enqueue(pqueue_t pqueue, void *data, int priority) {
     node_t n = NULL;
-    checkNull(queue);
+    node_t check = NULL;
+    node_t prev = NULL;
+    checkNull(pqueue);
 
     // Mallocs a new node
     n = (node_t) malloc (sizeof(struct node));
     checkNull(n);
 
-    n->data = item;
-    n->next = queue->head;
-    // Checks if the queue is empty
-    if ( queue->length == 0 ) {
-        queue->tail = n;
+    n->data = data;
+    n->priority = priority;
+    n->next = NULL;
+    check = pqueue->head;
+    if (check == NULL) {
+        pqueue->head = n;
+    } else {
+        while (check != NULL) {
+            if (priority < check->priority) {
+                if (prev != NULL) {
+                    prev->next = n;
+                }
+                n->next = check;
+                if (check == pqueue->head) {
+                    pqueue->head = n;
+                }
+                return 0;
+            }
+            prev = check;
+            check = prev->next;
+        }
+        prev->next = n;
     }
-
-    queue->head = n;
-    queue->length++;
+    
+    pqueue->length++;
     return 0;
 }
 
@@ -74,38 +91,46 @@ pqueue_enqueue(pqueue_t pqueue, void *data, int priority) {
 int
 pqueue_dequeue(pqueue_t pqueue, void **data) {
     node_t n = NULL;
-    checkNull(queue);
-    checkNull(item);
+    checkNull(pqueue);
+    checkNull(data);
 
     // Checks if queue is empty
-    if ( queue->length == 0 ) {
-        *item = NULL;
+    if ( pqueue->length == 0 ) {
+        *data = NULL;
         return -1;
     }
 
-    n = queue->head;
-    queue->head = n->next;
-
-    // Checks if the queue had 1 element
-    if ( queue->length == 1 ) {
-        queue->tail = NULL;
-    }
+    n = pqueue->head;
+    pqueue->head = n->next;
 
     // Frees node
-    *item = n->data;
+    *data = n->data;
     free(n);
 
-    queue->length--;
+    pqueue->length--;
     return 0;
 }
 
 /*
  * Return the first node from the priority queue without dequeueing.
- * Return 0 (success) and first item if queue is pnonempty, or -1 (failure) and
+ * Return 0 (success) and first item if queue is nonempty, or -1 (failure) and
  * NULL if pqueue is empty.
  */
 int
 pqueue_peek(pqueue_t pqueue, void **data) {
+    node_t n = NULL;
+    checkNull(pqueue);
+    checkNull(data);
+
+    // Checks if queue is empty
+    if ( pqueue->length == 0 ) {
+        *data = NULL;
+        return -1;
+    }
+
+    n = queue->head;
+    *data = n->data;
+
     return 0;
 }
 
@@ -116,9 +141,9 @@ int
 pqueue_free (pqueue_t pqueue) {
     node_t n = NULL;
     node_t temp = NULL; // Used to keep track of next after freeing
-    checkNull(queue);
+    checkNull(pqueue);
 
-    n = queue->head;
+    n = pqueue->head;
     // Iterates over queue
     while (n) {
         temp = n->next;
@@ -127,7 +152,7 @@ pqueue_free (pqueue_t pqueue) {
         n = temp;
     }
 
-    free(queue); // Frees entire queue
+    free(pqueue); // Frees entire queue
 
     return 0;
 }
@@ -137,8 +162,8 @@ pqueue_free (pqueue_t pqueue) {
  */
 int
 pqueue_length(pqueue_t pqueue) {
-    checkNull(queue);
-    return queue->length;
+    checkNull(pqueue);
+    return pqueue->length;
 }
 
 
@@ -150,26 +175,21 @@ int
 pqueue_delete(pqueue_t pqueue, void *data) {
     node_t prev = NULL;
     node_t n = NULL;
-    checkNull(queue);
+    checkNull(pqueue);
 
-    n = queue->head;
+    n = pqueue->head;
     // Iterates over the queue
     while (n) {
         // Found the item
         if (n->data == item) {
             // Item found as first in queue
-            if (n == queue->head) {
-                queue->head = n->next;
-                // Checks if queue only has 1 item
-                if (n == queue->tail) {
-                    queue->tail = NULL;
-                }
+            if (n == pqueue->head) {
+                pqueue->head = n->next;
             }
 
             // Item found last in queue (must have >= 2 items)
-            else if (n == queue->tail) {
-                queue->tail = prev;
-                queue->tail->next = NULL;
+            else if (n->next == NULL) {
+                prev->next = NULL;
             }
 
             // Item found in middle of queue (must have >= 3 items)
@@ -179,7 +199,7 @@ pqueue_delete(pqueue_t pqueue, void *data) {
 
             // Frees the node
             free(n);
-            queue->length--;
+            pqueue->length--;
             return 0;
         }
 
