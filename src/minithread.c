@@ -75,6 +75,7 @@ minithread_next() {
 
     // if there are no more runnable threads, return to the system
     if (queue_length(ready_queue) == 0) {
+        current_thread = NULL;
         minithread_switch(&(old->top), &system_stack);
     // if there are runnable threads, take the next one and run it
     } else {
@@ -106,12 +107,6 @@ scheduler() {
 
         minithread_switch(&system_stack, &(current_thread->top));
     }
-}
-
-/* Returns the next available id for minithreads */
-int
-next_id() {
-    return cur_id++;
 }
 
 /* Called after a thread ends operation */
@@ -148,7 +143,7 @@ minithread_create(proc_t proc, arg_t arg) {
     interrupt_level_t old_level = set_interrupt_level(DISABLED);
 
     minithread_t t = (minithread_t) malloc (sizeof(struct minithread));
-    t->id = next_id();
+    t->id = cur_id++;
     t->status = NEW;
 
     minithread_allocate_stack(&(t->base), &(t->top));
@@ -227,7 +222,9 @@ minithread_stop() {
 void
 clock_handler(void* arg) {
     interrupt_level_t old_level = set_interrupt_level(DISABLED);
-    printf("cools\n");
+    if (current_thread != NULL) {
+        minithread_yield();
+    }
     set_interrupt_level(old_level);
 }
 
@@ -252,12 +249,15 @@ minithread_system_initialize(proc_t mainproc, arg_t mainarg) {
     ready_queue = queue_new();
     zombie_queue = queue_new();
     cur_id = 0;
+
     garbage = semaphore_create();
     semaphore_initialize(garbage, 0);
+    current_thread = NULL;
     // Initialize threads
     minithread_fork(reaper, NULL);
-    current_thread = minithread_fork(mainproc, mainarg);
-    minithread_clock_init(2 * SECOND, clock_handler);
+    minithread_fork(mainproc, mainarg);
+    minithread_clock_init(100 * MILLISECOND, clock_handler);
+    // Disable interrupts
     old_level = set_interrupt_level(DISABLED);
     scheduler();
 }

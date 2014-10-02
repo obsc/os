@@ -5,6 +5,7 @@ buffer
 sieve
 queue_test
 shop
+test_int
 .depend
 *.o
 
