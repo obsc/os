@@ -45,14 +45,17 @@ semaphore_t garbage; // Semaphore representing garbage needed to be collected
 int reaper(int *arg) {
     void *zomb;
     minithread_t garbage_thread;
+    interrupt_level_t old_level;
 
     while (1) {
         semaphore_P(garbage);
+        old_level = set_interrupt_level(DISABLED);
         if (queue_dequeue(zombie_queue, &zomb) == 0) {
             garbage_thread = (minithread_t) zomb;
             minithread_free_stack(garbage_thread->base); // Frees the stack
             free(garbage_thread); // Frees the thread control block
         }
+        set_interrupt_level(old_level);
     }
     return -1;
 }
@@ -61,15 +64,14 @@ int reaper(int *arg) {
  * Minithread scheduler that decides the next thread
  * (either the system or another minithread) to be run
  * This swaps over to the system if there are no more ready threads.
+ * invariant: when calling minithread_next(), interrupts are already
+ * disabled, interrupts enabled when exiting
  */
 void
 minithread_next() {
     void *next;
     minithread_t old;
     old = current_thread;
-
-    if (old->status == ZOMBIE) {
-    }
 
     // if there are no more runnable threads, return to the system
     if (queue_length(ready_queue) == 0) {
@@ -91,17 +93,19 @@ minithread_next() {
 void
 scheduler() {
     void *next;
+    interrupt_level_t old_level;
+
     while (1) {
         // idle if there are no runnable threads
         while(queue_length(ready_queue) == 0);
 
+        old_level = set_interrupt_level(DISABLED);
         queue_dequeue(ready_queue, &next);
         current_thread = (minithread_t) next;
         current_thread->status = RUNNING;
 
         minithread_switch(&system_stack, &(current_thread->top));
     }
-
 }
 
 /* Returns the next available id for minithreads */
@@ -113,6 +117,9 @@ next_id() {
 /* Called after a thread ends operation */
 int
 minithread_exit(int *i) {
+    interrupt_level_t old_level;
+
+    old_level = set_interrupt_level(DISABLED);
     current_thread->status = ZOMBIE;
     queue_append(zombie_queue, current_thread);
     semaphore_V(garbage);
@@ -138,6 +145,8 @@ minithread_fork(proc_t proc, arg_t arg) {
  */
 minithread_t
 minithread_create(proc_t proc, arg_t arg) {
+    interrupt_level_t old_level = set_interrupt_level(DISABLED);
+
     minithread_t t = (minithread_t) malloc (sizeof(struct minithread));
     t->id = next_id();
     t->status = NEW;
@@ -145,6 +154,7 @@ minithread_create(proc_t proc, arg_t arg) {
     minithread_allocate_stack(&(t->base), &(t->top));
     minithread_initialize_stack(&(t->top), proc, arg, minithread_exit, NULL);
 
+    set_interrupt_level(old_level);
     return t;
 }
 
@@ -170,10 +180,13 @@ minithread_id() {
  */
 void
 minithread_start(minithread_t t) {
+    interrupt_level_t old_level = set_interrupt_level(DISABLED);
+
     if (t->status != READY && t->status != ZOMBIE) {
         t->status = READY;
         queue_append(ready_queue, t);
     }
+    set_interrupt_level(old_level);
 }
 
 /*
@@ -184,10 +197,13 @@ minithread_start(minithread_t t) {
  */
 void
 minithread_yield() {
+    interrupt_level_t old_level = set_interrupt_level(DISABLED);
+
     if (queue_length(ready_queue) > 0) {
         minithread_start(current_thread);
         minithread_next();
     }
+    set_interrupt_level(old_level);
 }
 
 /*
@@ -195,8 +211,11 @@ minithread_yield() {
  */
 void
 minithread_stop() {
+    interrupt_level_t old_level = set_interrupt_level(DISABLED);
+
     current_thread->status = WAITING;
     minithread_next();
+    set_interrupt_level(old_level);
 }
 
 
@@ -206,9 +225,10 @@ minithread_stop() {
  * function as parameter in minithread_system_initialize
  */
 void
-clock_handler(void* arg)
-{
-
+clock_handler(void* arg) {
+    interrupt_level_t old_level = set_interrupt_level(DISABLED);
+    printf("cools\n");
+    set_interrupt_level(old_level);
 }
 
 /*
@@ -227,6 +247,7 @@ clock_handler(void* arg)
  */
 void
 minithread_system_initialize(proc_t mainproc, arg_t mainarg) {
+    interrupt_level_t old_level;
     // Initialize globals
     ready_queue = queue_new();
     zombie_queue = queue_new();
@@ -236,6 +257,8 @@ minithread_system_initialize(proc_t mainproc, arg_t mainarg) {
     // Initialize threads
     minithread_fork(reaper, NULL);
     current_thread = minithread_fork(mainproc, mainarg);
+    minithread_clock_init(2 * SECOND, clock_handler);
+    old_level = set_interrupt_level(DISABLED);
     scheduler();
 }
 
@@ -243,8 +266,7 @@ minithread_system_initialize(proc_t mainproc, arg_t mainarg) {
  * sleep with timeout in milliseconds
  */
 void
-minithread_sleep_with_timeout(int delay)
-{
+minithread_sleep_with_timeout(int delay) {
 
 }
 
