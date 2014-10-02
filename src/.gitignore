@@ -6,6 +6,7 @@ sieve
 queue_test
 shop
 test_int
+test_alarm
 .depend
 *.o
 

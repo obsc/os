@@ -264,7 +264,7 @@ minithread_system_initialize(proc_t mainproc, arg_t mainarg) {
     current_thread = NULL;
     minithread_fork(reaper, NULL);
     minithread_fork(mainproc, mainarg);
-    minithread_clock_init(PERIOD, clock_handler);
+    minithread_clock_init(PERIOD * MILLISECOND, clock_handler);
     // Disable interrupts
     old_level = set_interrupt_level(DISABLED);
     scheduler();
