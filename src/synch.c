@@ -19,7 +19,6 @@
  */
 struct semaphore {
     queue_t waiting; // Waiting queue for the semaphore
-    tas_lock_t lock; // Spinlock
     int count;
 };
 
@@ -31,7 +30,6 @@ struct semaphore {
 semaphore_t semaphore_create() {
     semaphore_t sem = (semaphore_t) malloc (sizeof (struct semaphore));
     sem->waiting = queue_new();
-    sem->lock = 0;
     sem->count = 0;
     return sem;
 }
@@ -63,16 +61,12 @@ void semaphore_P(semaphore_t sem) {
     interrupt_level_t old_level;
 
     old_level = set_interrupt_level(DISABLED);
-    while (atomic_test_and_set(&sem->lock) == 1) // Gets spinlock
-        minithread_yield();
 
     if (--sem->count < 0) { // No more resources; block until V
         queue_append(sem->waiting, minithread_self());
-        atomic_clear(&sem->lock);
         minithread_stop();
-    } else {
-        atomic_clear(&sem->lock);
     }
+
     set_interrupt_level(old_level);
 }
 
@@ -86,8 +80,6 @@ void semaphore_V(semaphore_t sem) {
     interrupt_level_t old_level;
 
     old_level = set_interrupt_level(DISABLED);
-    while (atomic_test_and_set(&sem->lock) == 1) // Gets spinlock
-        minithread_yield();
 
     if (++sem->count <= 0) { // Unblocks one element in the queue
         queue_dequeue(sem->waiting, &next);
@@ -95,6 +87,5 @@ void semaphore_V(semaphore_t sem) {
         minithread_start(next_thread);
     }
 
-    atomic_clear(&sem->lock);
     set_interrupt_level(old_level);
 }
