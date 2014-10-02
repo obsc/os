@@ -3,7 +3,6 @@
  *
  */
 #include "pqueue.h"
-#include "alarm.h"
 #include <stdlib.h>
 #include <stdio.h>
 
@@ -16,8 +15,7 @@ typedef struct node* node_t;
  */
 struct node
 {
-    alarm_handler_t alarm; // Function to call after alarm
-    void *arg; // Pointer to argument of function
+    void *data // data
     int priority; // Priority of the alarm
     node_t next; // Pointer to next node
 };
@@ -48,7 +46,7 @@ pqueue_new() {
  * Returns 0 (success) or -1 (failure).
  */
 int
-pqueue_enqueue(pqueue_t pqueue, alarm_handler_t f, void* args, int priority) {
+pqueue_enqueue(pqueue_t pqueue, void *data, int priority) {
     node_t n = NULL;
     checkNull(queue);
 
@@ -74,7 +72,7 @@ pqueue_enqueue(pqueue_t pqueue, alarm_handler_t f, void* args, int priority) {
  * NULL if pqueue is empty.
  */
 int
-pqueue_dequeue(pqueue_t pqueue, alarm_id *alarm) {
+pqueue_dequeue(pqueue_t pqueue, void **data) {
     node_t n = NULL;
     checkNull(queue);
     checkNull(item);
@@ -107,7 +105,7 @@ pqueue_dequeue(pqueue_t pqueue, alarm_id *alarm) {
  * NULL if pqueue is empty.
  */
 int
-pqueue_peek(pqueue_t pqueue, alarm_id *alarm) {
+pqueue_peek(pqueue_t pqueue, void **data) {
     return 0;
 }
 
@@ -149,7 +147,7 @@ pqueue_length(pqueue_t pqueue) {
  * Returns 0 if an element was deleted, or -1 otherwise.
  */
 int
-pqueue_delete(pqueue_t pqueue, alarm_id node) {
+pqueue_delete(pqueue_t pqueue, void *data) {
     node_t prev = NULL;
     node_t n = NULL;
     checkNull(queue);

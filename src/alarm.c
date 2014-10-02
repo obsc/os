@@ -5,6 +5,13 @@
 #include "minithread.h"
 #include "queue.h"
 
+typedef struct alarm* alarm_t;
+
+struct alarm
+{
+    alarm_handler_t function;
+    void *arg;
+}
 /* see alarm.h */
 alarm_id
 register_alarm(int delay, alarm_handler_t alarm, void *arg)
