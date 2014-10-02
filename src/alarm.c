@@ -19,7 +19,7 @@ pqueue_t alarm_pqueue;
 /* see alarm.h */
 alarm_id
 register_alarm(int delay, alarm_handler_t alarm, void *arg) {
-    int t = delay; // Time
+    int t = time_ticks * PERIOD + delay; // Time
     alarm_t a = (alarm_t) malloc (sizeof(struct alarm));
     a->func = alarm;
     a->arg = arg;
@@ -32,6 +32,10 @@ register_alarm(int delay, alarm_handler_t alarm, void *arg) {
 /* see alarm.h */
 int
 deregister_alarm(alarm_id alarm) {
+    if (pqueue_delete(alarm_pqueue, alarm) == 0) {
+        free(alarm);
+        return 0;
+    }
     return 1;
 }
 
