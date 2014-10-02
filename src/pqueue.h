@@ -44,12 +44,12 @@ extern int pqueue_free (pqueue_t);
 /*
  * Return the number of items in the priority queue, or -1 if an error occured
  */
-extern int pqueue_length(pqueue_t queue);
+extern int pqueue_length(pqueue_t);
 
 /*
  * Delete the first instance of the specified item from the given queue.
  * Returns 0 if an element was deleted, or -1 otherwise.
  */
-extern int pqueue_delete(pqueue_t queue, alarm_id node);
+extern int pqueue_delete(pqueue_t, alarm_id node);
 
 #endif /*__PQUEUE_H__*/

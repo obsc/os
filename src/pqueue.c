@@ -32,10 +32,10 @@ struct pqueue
 };
 
 /*
- * Return an empty queue.
+ * Return an empty priority queue.  Returns NULL on error.
  */
-queue_t
-queue_new() {
+pqueue_t
+pqueue_new() {
     queue_t q = (queue_t) malloc (sizeof(struct queue));
     q->head = NULL;
     q->tail = NULL;
@@ -44,11 +44,11 @@ queue_new() {
 }
 
 /*
- * Prepend a void* to a queue (both specifed as parameters).  Return
- * 0 (success) or -1 (failure).
+ * Enqueues a void* to a priority queue (both specifed as parameters).
+ * Returns 0 (success) or -1 (failure).
  */
 int
-queue_prepend(queue_t queue, void* item) {
+pqueue_enqueue(pqueue_t pqueue, alarm_handler_t f, void* args, int priority) {
     node_t n = NULL;
     checkNull(queue);
 
@@ -69,11 +69,12 @@ queue_prepend(queue_t queue, void* item) {
 }
 
 /*
- * Dequeue and return the first void* from the queue or NULL if queue
- * is empty.  Return 0 (success) or -1 (failure).
+ * Dequeue and return the first node from the priority queue.
+ * Return 0 (success) and first item if pqueue is nonempty, or -1 (failure) and
+ * NULL if pqueue is empty.
  */
 int
-queue_dequeue(queue_t queue, void** item) {
+pqueue_dequeue(pqueue_t pqueue, alarm_id *alarm) {
     node_t n = NULL;
     checkNull(queue);
     checkNull(item);
@@ -101,34 +102,20 @@ queue_dequeue(queue_t queue, void** item) {
 }
 
 /*
- * Iterate the function parameter over each element in the queue.  The
- * additional void* argument is passed to the function as its first
- * argument and the queue element is the second.  Return 0 (success)
- * or -1 (failure).
+ * Return the first node from the priority queue without dequeueing.
+ * Return 0 (success) and first item if queue is pnonempty, or -1 (failure) and
+ * NULL if pqueue is empty.
  */
 int
-queue_iterate(queue_t queue, func_t f, void* item) {
-    node_t n = NULL;
-    // Checks if either queue or function is null
-    checkNull(queue);
-    checkNull(f);
-
-    n = queue->head;
-    // Iterates over queue
-    while (n) {
-        f(n->data, item); // Applies function
-
-        n = n->next;
-    }
-
+pqueue_peek(pqueue_t pqueue, alarm_id *alarm) {
     return 0;
 }
 
 /*
- * Free the queue and return 0 (success) or -1 (failure).
+ * Free the priority queue and return 0 (success) or -1 (failure).
  */
 int
-queue_free (queue_t queue) {
+pqueue_free (pqueue_t pqueue) {
     node_t n = NULL;
     node_t temp = NULL; // Used to keep track of next after freeing
     checkNull(queue);
@@ -148,21 +135,21 @@ queue_free (queue_t queue) {
 }
 
 /*
- * Return the number of items in the queue.
+ * Return the number of items in the priority queue, or -1 if an error occured
  */
 int
-queue_length(queue_t queue) {
+pqueue_length(pqueue_t pqueue) {
     checkNull(queue);
     return queue->length;
 }
 
 
 /*
- * Delete the specified item from the given queue.
- * Return -1 on error.
+ * Delete the first instance of the specified item from the given queue.
+ * Returns 0 if an element was deleted, or -1 otherwise.
  */
 int
-queue_delete(queue_t queue, void* item) {
+pqueue_delete(pqueue_t pqueue, alarm_id node) {
     node_t prev = NULL;
     node_t n = NULL;
     checkNull(queue);
