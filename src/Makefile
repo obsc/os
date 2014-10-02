@@ -34,6 +34,8 @@ OBJ =                              \
     random.o                       \
     alarm.o                        \
     queue.o                        \
+	pqueue.o                       \
+	multilevel_queue.o             \
     synch.o
 
 %: %.o start.o end.o $(OBJ) $(SYSTEMOBJ)
