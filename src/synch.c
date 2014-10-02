@@ -2,6 +2,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 
+#include "interrupts.h"
 #include "defs.h"
 #include "synch.h"
 #include "queue.h"
@@ -59,6 +60,9 @@ void semaphore_initialize(semaphore_t sem, int cnt) {
  *      P on the sempahore.
  */
 void semaphore_P(semaphore_t sem) {
+    interrupt_level_t old_level;
+
+    old_level = set_interrupt_level(DISABLED);
     while (atomic_test_and_set(&sem->lock) == 1) // Gets spinlock
         minithread_yield();
 
@@ -69,6 +73,7 @@ void semaphore_P(semaphore_t sem) {
     } else {
         atomic_clear(&sem->lock);
     }
+    set_interrupt_level(old_level);
 }
 
 /*
@@ -78,7 +83,9 @@ void semaphore_P(semaphore_t sem) {
 void semaphore_V(semaphore_t sem) {
     void *next;
     minithread_t next_thread;
+    interrupt_level_t old_level;
 
+    old_level = set_interrupt_level(DISABLED);
     while (atomic_test_and_set(&sem->lock) == 1) // Gets spinlock
         minithread_yield();
 
@@ -89,4 +96,5 @@ void semaphore_V(semaphore_t sem) {
     }
 
     atomic_clear(&sem->lock);
+    set_interrupt_level(old_level);
 }
