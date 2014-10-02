@@ -13,6 +13,7 @@
 #include "minithread.h"
 #include "queue.h"
 #include "synch.h"
+#include "alarm.h"
 
 #include <assert.h>
 
@@ -225,6 +226,7 @@ clock_handler(void* arg) {
     interrupt_level_t old_level = set_interrupt_level(DISABLED);
 
     time_ticks++;
+    check_alarms();
     if (current_thread != NULL) {
         minithread_yield();
     }
@@ -252,12 +254,14 @@ minithread_system_initialize(proc_t mainproc, arg_t mainarg) {
     ready_queue = queue_new();
     zombie_queue = queue_new();
     cur_id = 0;
+    // Initialize alarms
     time_ticks = 0;
-
+    initialize_alarms();
+    // Intialize garbage collection
     garbage = semaphore_create();
     semaphore_initialize(garbage, 0);
-    current_thread = NULL;
     // Initialize threads
+    current_thread = NULL;
     minithread_fork(reaper, NULL);
     minithread_fork(mainproc, mainarg);
     minithread_clock_init(PERIOD, clock_handler);
