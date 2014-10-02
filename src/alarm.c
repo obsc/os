@@ -22,6 +22,8 @@ register_alarm(int delay, alarm_handler_t alarm, void *arg) {
     a->alarm_handler_t = alarm;
     a->arg = arg;
 
+    t = delay // Time
+
     pqueue_enqueue(pqueue, a, t);
 
     return (alarm_id) a;

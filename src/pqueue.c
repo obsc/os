@@ -34,10 +34,11 @@ struct pqueue
  */
 pqueue_t
 pqueue_new() {
-    pqueue_t q = (pqueue_t) malloc (sizeof(struct pqueue));
-    q->head = NULL;
-    q->length = 0;
-    return q;
+    // pqueue_t q = (pqueue_t) malloc (sizeof(struct pqueue));
+    // q->head = NULL;
+    // q->length = 0;
+    // return q;
+    return NULL;
 }
 
 /*
@@ -46,40 +47,40 @@ pqueue_new() {
  */
 int
 pqueue_enqueue(pqueue_t pqueue, void *data, int priority) {
-    node_t n = NULL;
-    node_t check = NULL;
-    node_t prev = NULL;
-    checkNull(pqueue);
+    // node_t n = NULL;
+    // node_t check = NULL;
+    // node_t prev = NULL;
+    // checkNull(pqueue);
 
-    // Mallocs a new node
-    n = (node_t) malloc (sizeof(struct node));
-    checkNull(n);
+    // // Mallocs a new node
+    // n = (node_t) malloc (sizeof(struct node));
+    // checkNull(n);
 
-    n->data = data;
-    n->priority = priority;
-    n->next = NULL;
-    check = pqueue->head;
-    if (check == NULL) {
-        pqueue->head = n;
-    } else {
-        while (check != NULL) {
-            if (priority < check->priority) {
-                if (prev != NULL) {
-                    prev->next = n;
-                }
-                n->next = check;
-                if (check == pqueue->head) {
-                    pqueue->head = n;
-                }
-                return 0;
-            }
-            prev = check;
-            check = prev->next;
-        }
-        prev->next = n;
-    }
+    // n->data = data;
+    // n->priority = priority;
+    // n->next = NULL;
+    // check = pqueue->head;
+    // if (check == NULL) {
+    //     pqueue->head = n;
+    // } else {
+    //     while (check != NULL) {
+    //         if (priority < check->priority) {
+    //             if (prev != NULL) {
+    //                 prev->next = n;
+    //             }
+    //             n->next = check;
+    //             if (check == pqueue->head) {
+    //                 pqueue->head = n;
+    //             }
+    //             return 0;
+    //         }
+    //         prev = check;
+    //         check = prev->next;
+    //     }
+    //     prev->next = n;
+    // }
     
-    pqueue->length++;
+    // pqueue->length++;
     return 0;
 }
 
@@ -90,24 +91,24 @@ pqueue_enqueue(pqueue_t pqueue, void *data, int priority) {
  */
 int
 pqueue_dequeue(pqueue_t pqueue, void **data) {
-    node_t n = NULL;
-    checkNull(pqueue);
-    checkNull(data);
+    // node_t n = NULL;
+    // checkNull(pqueue);
+    // checkNull(data);
 
-    // Checks if queue is empty
-    if ( pqueue->length == 0 ) {
-        *data = NULL;
-        return -1;
-    }
+    // // Checks if queue is empty
+    // if ( pqueue->length == 0 ) {
+    //     *data = NULL;
+    //     return -1;
+    // }
 
-    n = pqueue->head;
-    pqueue->head = n->next;
+    // n = pqueue->head;
+    // pqueue->head = n->next;
 
-    // Frees node
-    *data = n->data;
-    free(n);
+    // // Frees node
+    // *data = n->data;
+    // free(n);
 
-    pqueue->length--;
+    // pqueue->length--;
     return 0;
 }
 
@@ -118,18 +119,18 @@ pqueue_dequeue(pqueue_t pqueue, void **data) {
  */
 int
 pqueue_peek(pqueue_t pqueue, void **data) {
-    node_t n = NULL;
-    checkNull(pqueue);
-    checkNull(data);
+    // node_t n = NULL;
+    // checkNull(pqueue);
+    // checkNull(data);
 
-    // Checks if queue is empty
-    if ( pqueue->length == 0 ) {
-        *data = NULL;
-        return -1;
-    }
+    // // Checks if queue is empty
+    // if ( pqueue->length == 0 ) {
+    //     *data = NULL;
+    //     return -1;
+    // }
 
-    n = queue->head;
-    *data = n->data;
+    // n = queue->head;
+    // *data = n->data;
 
     return 0;
 }
@@ -139,20 +140,20 @@ pqueue_peek(pqueue_t pqueue, void **data) {
  */
 int
 pqueue_free (pqueue_t pqueue) {
-    node_t n = NULL;
-    node_t temp = NULL; // Used to keep track of next after freeing
-    checkNull(pqueue);
+    // node_t n = NULL;
+    // node_t temp = NULL; // Used to keep track of next after freeing
+    // checkNull(pqueue);
 
-    n = pqueue->head;
-    // Iterates over queue
-    while (n) {
-        temp = n->next;
-        free(n); // Frees each node
+    // n = pqueue->head;
+    // // Iterates over queue
+    // while (n) {
+    //     temp = n->next;
+    //     free(n); // Frees each node
 
-        n = temp;
-    }
+    //     n = temp;
+    // }
 
-    free(pqueue); // Frees entire queue
+    // free(pqueue); // Frees entire queue
 
     return 0;
 }
@@ -162,8 +163,9 @@ pqueue_free (pqueue_t pqueue) {
  */
 int
 pqueue_length(pqueue_t pqueue) {
-    checkNull(pqueue);
-    return pqueue->length;
+    // checkNull(pqueue);
+    // return pqueue->length;
+    return 0;
 }
 
 
@@ -173,39 +175,39 @@ pqueue_length(pqueue_t pqueue) {
  */
 int
 pqueue_delete(pqueue_t pqueue, void *data) {
-    node_t prev = NULL;
-    node_t n = NULL;
-    checkNull(pqueue);
+    // node_t prev = NULL;
+    // node_t n = NULL;
+    // checkNull(pqueue);
 
-    n = pqueue->head;
-    // Iterates over the queue
-    while (n) {
-        // Found the item
-        if (n->data == item) {
-            // Item found as first in queue
-            if (n == pqueue->head) {
-                pqueue->head = n->next;
-            }
+    // n = pqueue->head;
+    // // Iterates over the queue
+    // while (n) {
+    //     // Found the item
+    //     if (n->data == item) {
+    //         // Item found as first in queue
+    //         if (n == pqueue->head) {
+    //             pqueue->head = n->next;
+    //         }
 
-            // Item found last in queue (must have >= 2 items)
-            else if (n->next == NULL) {
-                prev->next = NULL;
-            }
+    //         // Item found last in queue (must have >= 2 items)
+    //         else if (n->next == NULL) {
+    //             prev->next = NULL;
+    //         }
 
-            // Item found in middle of queue (must have >= 3 items)
-            else {
-                prev->next = n->next;
-            }
+    //         // Item found in middle of queue (must have >= 3 items)
+    //         else {
+    //             prev->next = n->next;
+    //         }
 
-            // Frees the node
-            free(n);
-            pqueue->length--;
-            return 0;
-        }
+    //         // Frees the node
+    //         free(n);
+    //         pqueue->length--;
+    //         return 0;
+    //     }
 
-        prev = n;
-        n = n->next;
-    }
+    //     prev = n;
+    //     n = n->next;
+    // }
 
     // Could not find item
     return -1;
