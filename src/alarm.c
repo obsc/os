@@ -12,7 +12,7 @@ struct alarm
 {
     alarm_handler_t func;
     void *arg;
-}
+};
 
 pqueue_t alarm_pqueue;
 
