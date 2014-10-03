@@ -207,7 +207,7 @@ minithread_start(minithread_t t) {
     if (t->status != READY && t->status != ZOMBIE) {
         t->status = READY;
         t->priority = 0;
-        multilevel_queue_enqueue(ready_queue, 0);
+        multilevel_queue_enqueue(ready_queue, 0, t);
     }
     set_interrupt_level(old_level);
 }
@@ -222,7 +222,7 @@ void
 minithread_yield() {
     interrupt_level_t old_level = set_interrupt_level(DISABLED);
     current_thread->status = READY;
-    multilevel_queue_enqueue(ready_queue, current_thread->priority);
+    multilevel_queue_enqueue(ready_queue, current_thread->priority, current_thread);
     minithread_next();
     set_interrupt_level(old_level);
 }
@@ -254,10 +254,10 @@ clock_handler(void* arg) {
     if (current_thread != NULL) {
         current_thread->status = READY;
         if (current_thread->priority == 3) {
-            multilevel_queue_enqueue(ready_queue, current_thread->priority);
+            multilevel_queue_enqueue(ready_queue, current_thread->priority, current_thread);
         } else {
             current_thread->priority++;
-            multilevel_queue_enqueue(ready_queue, current_thread->priority);
+            multilevel_queue_enqueue(ready_queue, current_thread->priority, current_thread);
         }
         minithread_next();
     }
