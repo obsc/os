@@ -245,14 +245,17 @@ void minithread_stop() {
 void clock_handler(void* arg) {
     interrupt_level_t old_level = set_interrupt_level(DISABLED);
     time_ticks++;
+    printf("testing\n");
     check_alarms();
     if (current_thread != NULL) {
+        printf("quanta level at %i\n", quanta_passed);
         quanta_passed++;
         if (quanta_passed == (1 << current_thread->level)) {
             current_thread->status = READY;
             if (current_thread->level < 3) {
                 current_thread->level++;
             }
+            printf("going to priority level %i\n", current_thread->level);
             multilevel_queue_enqueue(ready_queue, current_thread->level, current_thread);
             quanta_passed = 0;
             minithread_next();
