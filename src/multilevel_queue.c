@@ -26,6 +26,7 @@ multilevel_queue_t multilevel_queue_new(int number_of_levels) {
     q->levels = number_of_levels;
     q->length = 0;
     q->queues = (queue_t *) malloc (sizeof(queue_t) * number_of_levels);
+    // if error on malloc'ing queues field, return NULL
     if ( !(q->queues) ) {
         free(q);
         return NULL;
@@ -37,6 +38,7 @@ multilevel_queue_t multilevel_queue_new(int number_of_levels) {
             break;
         }
     }
+    // if there was an error malloc'ing all the queues, return NULL
     if (acc < number_of_levels) {
         for (; acc > 0; acc--) {
             queue_free((q->queues)[acc - 1]);
@@ -65,7 +67,7 @@ int multilevel_queue_enqueue(multilevel_queue_t queue, int level, void* item) {
  * Dequeue and return the first void* from the multilevel queue starting at the specified level.
  * Levels wrap around so as long as there is something in the multilevel queue an item should be returned.
  * Return the level that the item was located on and that item if the multilevel queue is nonempty,
- * or -1 (failure) and NULL if queue is empty.
+ * or -1 (failure) and NULL if queue is empty. Return -1 and NULL if level passed in is out of bounds
  */
 int multilevel_queue_dequeue(multilevel_queue_t queue, int level, void** item) {
     int current_level;
@@ -73,15 +75,23 @@ int multilevel_queue_dequeue(multilevel_queue_t queue, int level, void** item) {
     checkNull(queue);
     checkNull(item);
 
-    current_level = level % (queue->levels); // TODO: maybe change
+    current_level = level
+    
+    if (current_level >= queue->levels) {
+    	*item = NULL;
+    	return -1
+    }
 
     for (acc = 0; acc < queue->levels; acc++) {
         if (queue_dequeue(((queue->queues)[current_level]), item) == 0) {
             queue->length--;
             return current_level;
         }
+        // wraparound if at the end of the levels
         current_level = (current_level + 1) % (queue->levels);
     }
+
+    // no item found
     *item = NULL;
     return -1;
 }

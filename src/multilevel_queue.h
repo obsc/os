@@ -26,7 +26,7 @@ extern int multilevel_queue_enqueue(multilevel_queue_t queue, int level, void* i
  * Dequeue and return the first void* from the multilevel queue starting at the specified level. 
  * Levels wrap around so as long as there is something in the multilevel queue an item should be returned.
  * Return the level that the item was located on and that item if the multilevel queue is nonempty,
- * or -1 (failure) and NULL if queue is empty.
+ * or -1 (failure) and NULL if queue is empty. Return -1 and NULL if level passed in is out of bounds
  */
 extern int multilevel_queue_dequeue(multilevel_queue_t queue, int level, void** item);
 
