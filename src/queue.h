@@ -3,13 +3,6 @@
  */
 #ifndef __QUEUE_H__
 #define __QUEUE_H__
-typedef struct node* node_t;
-
-struct node
-{
-    void *data;
-    node_t next;
-};
 
 /*
  * queue_t is a pointer to an internally maintained data structure.
@@ -17,16 +10,6 @@ struct node
  * represented.  They see and manipulate only queue_t's.
  */
 typedef struct queue* queue_t;
-
-/*
- * Struct representing a queue backed by a singly-linked list
- */
-struct queue
-{
-    node_t head;
-    node_t tail;
-    int length;
-};
 
 /*
  * Return an empty queue.  Returns NULL on error.
