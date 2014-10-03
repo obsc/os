@@ -4,6 +4,7 @@ test3
 buffer
 sieve
 queue_test
+pqueue_test
 shop
 test_int
 test_alarm

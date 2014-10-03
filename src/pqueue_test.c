@@ -1,4 +1,4 @@
-#include "queue.h"
+#include "pqueue.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -42,7 +42,7 @@ void test_dequeue() {
     int x1 = 5;
     int x2 = 6;
     int x3 = 7;
-    void *value;
+    void *value = NULL;
     // Testing null queue
     assert(pqueue_dequeue(NULL, &value) == -1);
     assert(value == NULL);
@@ -88,12 +88,11 @@ void test_peek() {
     assert(*((int*) value) == x1);
     assert(pqueue_length(q) == 3);
     assert(pqueue_peek(q, (&value)) == 0);
-    assert(*((int*) value) == x3);
+    assert(*((int*) value) == x1);
     assert(pqueue_length(q) == 3);
     assert(pqueue_peek(q, &value) == 0);
-    assert(*((int*) value) == x2);
+    assert(*((int*) value) == x1);
     assert(pqueue_length(q) == 3);
-    assert(pqueue_peek(q, &value) == -1);
     assert(pqueue_free(q) == 0);
 }
 
