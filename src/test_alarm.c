@@ -18,6 +18,7 @@ int thread1(int* arg) {
     register_alarm(1000, func, NULL);
     register_alarm(2000, func, NULL);
     register_alarm(3000, func, NULL);
+    minithread_sleep_with_timeout(5000);
     register_alarm(4000, func, NULL);
     register_alarm(5000, func, NULL);
 

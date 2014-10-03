@@ -270,11 +270,18 @@ minithread_system_initialize(proc_t mainproc, arg_t mainarg) {
     scheduler();
 }
 
+void unblock(void *sem) {
+    semaphore_V((semaphore_t) sem);
+}
+
 /*
  * sleep with timeout in milliseconds
  */
 void
 minithread_sleep_with_timeout(int delay) {
-
+    semaphore_t block = semaphore_create();
+    semaphore_initialize(block, 0);
+    register_alarm(delay, unblock, block);
+    semaphore_P(block);
 }
 
