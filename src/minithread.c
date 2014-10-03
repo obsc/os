@@ -42,6 +42,7 @@ queue_t zombie_queue; // Queue for zombie threads for cleanup
 int cur_id; // Current id (used to assign new ids)
 semaphore_t garbage; // Semaphore representing garbage needed to be collected
 int time_ticks; // Current time in number of interrupt ticks
+int quanta_passed;
 
 /* Function decides the level of the multilevel queue to start trying to
  * dequeue from, then dequeues starting from that level.
@@ -101,6 +102,7 @@ minithread_next() {
     // if there are no more runnable threads, return to the system
     if (multilevel_queue_length(ready_queue) == 0) {
         current_thread = NULL;
+        quanta_passed = 0;
         minithread_switch(&(old->top), &system_stack);
     // if there are runnable threads, take the next one and run it
     } else {
@@ -144,6 +146,7 @@ minithread_exit(int *i) {
     current_thread->status = ZOMBIE;
     queue_append(zombie_queue, current_thread);
     semaphore_V(garbage);
+    quanta_passed = 0;
     minithread_next();
     return -1;
 }
@@ -222,6 +225,7 @@ void
 minithread_yield() {
     interrupt_level_t old_level = set_interrupt_level(DISABLED);
     current_thread->status = READY;
+    quanta_passed = 0;
     multilevel_queue_enqueue(ready_queue, current_thread->priority, current_thread);
     minithread_next();
     set_interrupt_level(old_level);
@@ -233,7 +237,7 @@ minithread_yield() {
 void
 minithread_stop() {
     interrupt_level_t old_level = set_interrupt_level(DISABLED);
-
+    quanta_passed = 0;
     current_thread->status = WAITING;
     minithread_next();
     set_interrupt_level(old_level);
@@ -248,18 +252,20 @@ minithread_stop() {
 void
 clock_handler(void* arg) {
     interrupt_level_t old_level = set_interrupt_level(DISABLED);
-
     time_ticks++;
     check_alarms();
     if (current_thread != NULL) {
-        current_thread->status = READY;
-        if (current_thread->priority == 3) {
+        quanta_passed++;
+        if (quanta_passed == (1 << current_thread->priority)) {
+            current_thread->status = READY;
+            if (current_thread->priority < 3) {
+                current_thread->priority++;
+            }
             multilevel_queue_enqueue(ready_queue, current_thread->priority, current_thread);
-        } else {
-            current_thread->priority++;
-            multilevel_queue_enqueue(ready_queue, current_thread->priority, current_thread);
+            quanta_passed = 0;
+            minithread_next();
         }
-        minithread_next();
+        
     }
     set_interrupt_level(old_level);
 }
@@ -286,6 +292,7 @@ minithread_system_initialize(proc_t mainproc, arg_t mainarg) {
     ready_queue = multilevel_queue_new(LEVELS);
     zombie_queue = queue_new();
     cur_id = 0;
+    quanta_passed = 0;
     // Initialize alarms
     time_ticks = 0;
     initialize_alarms();
