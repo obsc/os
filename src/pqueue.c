@@ -35,6 +35,10 @@ struct pqueue
 pqueue_t
 pqueue_new() {
     pqueue_t q = (pqueue_t) malloc (sizeof(struct pqueue));
+    if (q == NULL) {
+        return NULL;
+    }
+
     q->head = NULL;
     q->length = 0;
     return q;

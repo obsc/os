@@ -15,7 +15,7 @@ typedef void (*alarm_handler_t)(void*);
 typedef void *alarm_id;
 
 /* register an alarm to go off in "delay" milliseconds.  Returns a handle to
- * the alarm.
+ * the alarm. Returns NULL on failure.
  */
 alarm_id register_alarm(int delay, alarm_handler_t func, void *arg);
 

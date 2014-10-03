@@ -25,10 +25,14 @@ struct semaphore {
 
 /*
  * semaphore_t semaphore_create()
- *      Allocate a new semaphore.
+ *      Allocate a new semaphore. Return NULL on failure
  */
 semaphore_t semaphore_create() {
     semaphore_t sem = (semaphore_t) malloc (sizeof (struct semaphore));
+    if (sem == NULL) {
+        return NULL;
+    }
+
     sem->waiting = queue_new();
     sem->count = 0;
     return sem;

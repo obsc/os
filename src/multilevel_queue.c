@@ -10,37 +10,57 @@
 struct multilevel_queue {
     int levels;
     int length;
-	queue_t *queues;
+    queue_t *queues;
 };
 
 /*
  * Returns an empty multilevel queue with number_of_levels levels. On error should return NULL.
  */
 multilevel_queue_t multilevel_queue_new(int number_of_levels) {
-	int acc;
-	multilevel_queue_t q;
-	acc = 0;
-	q = (multilevel_queue_t) malloc (sizeof(struct multilevel_queue));
+    int acc;
+    multilevel_queue_t q;
+
+    q = (multilevel_queue_t) malloc (sizeof(struct multilevel_queue));
+    if (q == NULL) {
+        return NULL;
+    }
+
     q->levels = number_of_levels;
     q->length = 0;
     q->queues = (queue_t *) malloc (sizeof(queue_t) * number_of_levels);
-    while (acc < number_of_levels) {
-    	(q->queues)[acc] = queue_new();
-    	acc++;
+    if (q->queues == NULL) {
+        free(q);
+        return NULL;
     }
+
+    for (acc = 0; acc < number_of_levels; acc++) {
+        (q->queues)[acc] = queue_new();
+        if ((q->queues)[acc] == NULL) {
+            break;
+        }
+    }
+    if (acc < number_of_levels) {
+        for (; acc > 0; acc--) {
+            queue_free((q->queues)[acc - 1]);
+        }
+        free(q->queues);
+        free(q);
+        return NULL;
+    }
+
     return q;
 }
 /*
  * Appends an void* to the multilevel queue at the specified level. Return 0 (success) or -1 (failure).
  */
 int multilevel_queue_enqueue(multilevel_queue_t queue, int level, void* item) {
-	checkNull(queue);
-	checkNull(item);
-	if (level >= queue->levels) {
-		return -1;
-	}
-	queue->length++;
-	return queue_append((queue->queues)[level], item);
+    checkNull(queue);
+    checkNull(item);
+    if (level >= queue->levels) {
+        return -1;
+    }
+    queue->length++;
+    return queue_append((queue->queues)[level], item);
 }
 
 /*
@@ -50,23 +70,22 @@ int multilevel_queue_enqueue(multilevel_queue_t queue, int level, void* item) {
  * or -1 (failure) and NULL if queue is empty.
  */
 int multilevel_queue_dequeue(multilevel_queue_t queue, int level, void** item) {
-	int current_level;
-	int acc;
-	checkNull(queue);
-	checkNull(item);
-	current_level = level % (queue->levels);
-	acc = 0;
-	while (acc < queue->levels) {
-		if (queue_dequeue(((queue->queues)[current_level]), item) == 0) {
-			queue->length--;
-			return current_level;
-		}
-		current_level = (current_level + 1) % (queue->levels);
-		acc++;
-	}
-	*item = NULL;
-	return -1;
+    int current_level;
+    int acc;
+    checkNull(queue);
+    checkNull(item);
 
+    current_level = level % (queue->levels); // TODO: maybe change
+
+    for (acc = 0; acc < queue->levels; acc++) {
+        if (queue_dequeue(((queue->queues)[current_level]), item) == 0) {
+            queue->length--;
+            return current_level;
+        }
+        current_level = (current_level + 1) % (queue->levels);
+    }
+    *item = NULL;
+    return -1;
 }
 
 /*
@@ -74,15 +93,19 @@ int multilevel_queue_dequeue(multilevel_queue_t queue, int level, void** item) {
  * the responsibility of the programmer.
  */
 int multilevel_queue_free(multilevel_queue_t queue) {
-	// TODO: maybe fix this
+    int acc;
     checkNull(queue);
-	free(queue->queues);
-	free(queue);
-	return 0;
+
+    for (acc = 0; acc < queue->levels; acc++) {
+        queue_free((queue->queues)[acc]);
+    }
+    free(queue->queues);
+    free(queue);
+    return 0;
 }
 
 /* returns the sum of items in the queues of the multilevel queue */
 int multilevel_queue_length(multilevel_queue_t queue) {
-	checkNull(queue);
+    checkNull(queue);
     return queue->length;
 }

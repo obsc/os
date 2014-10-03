@@ -32,6 +32,10 @@ struct queue
 queue_t
 queue_new() {
     queue_t q = (queue_t) malloc (sizeof(struct queue));
+    if (q == NULL) {
+        return NULL;
+    }
+
     q->head = NULL;
     q->tail = NULL;
     q->length = 0;
