@@ -37,4 +37,9 @@ extern int multilevel_queue_dequeue(multilevel_queue_t queue, int level, void** 
  */
 extern int multilevel_queue_free(multilevel_queue_t queue);
 
+/*
+ * Returns the number of elements in the multilevel queue
+ */
+extern int multilevel_queue_length(multilevel_queue_t queue);
+
 #endif /*__MULTILEVEL_QUEUE_H__*/

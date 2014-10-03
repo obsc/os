@@ -16,7 +16,9 @@
 #include "alarm.h"
 
 #include <assert.h>
+#include <time.h>
 
+#define LEVELS 4
 /*
  * A minithread should be defined either in this file or in a private
  * header file.  Minithreads have a stack pointer with to make procedure
@@ -30,21 +32,42 @@ struct minithread {
     status_t status; // Status: NEW, WAITING, READY, RUNNING, ZOMBIE
     stack_pointer_t base;
     stack_pointer_t top;
+    int priority;
 };
 
 stack_pointer_t system_stack; // Stack pointer to the system thread
 minithread_t current_thread; // Thread control block of the current thread
-queue_t ready_queue; // Queue for ready threads
+multilevel_queue_t ready_queue; // Queue for ready threads
 queue_t zombie_queue; // Queue for zombie threads for cleanup
 int cur_id; // Current id (used to assign new ids)
 semaphore_t garbage; // Semaphore representing garbage needed to be collected
 int time_ticks; // Current time in number of interrupt ticks
 
+/* Function decides the level of the multilevel queue to start trying to
+ * dequeue from, then dequeues starting from that level.
+ * Returns -1 if nothing is dequeued, or the level from which it dequeued from */
+int
+next_item(void **location) {
+    int rng;
+    int level;
+    rng = rand() % 100;
+    if (rng < 50) {
+        level = 0;
+    } else if (rng < 75) {
+        level = 1;
+    } else if (rng < 90) {
+        level = 2;
+    } else {
+        level = 3;
+    }
+    return multilevel_queue_dequeue(ready_queue, level, location);
+}
 /*
  * Thread that garbage collects all the garbage in the zombie queue.
  * This should only be ran when there is garbage, otherwise it will block.
  */
-int reaper(int *arg) {
+int
+reaper(int *arg) {
     void *zomb;
     minithread_t garbage_thread;
     interrupt_level_t old_level;
@@ -76,12 +99,12 @@ minithread_next() {
     old = current_thread;
 
     // if there are no more runnable threads, return to the system
-    if (queue_length(ready_queue) == 0) {
+    if (multilevel_queue_length(ready_queue) == 0) {
         current_thread = NULL;
         minithread_switch(&(old->top), &system_stack);
     // if there are runnable threads, take the next one and run it
     } else {
-        queue_dequeue(ready_queue, &next);
+        next_item(&next);
         current_thread = (minithread_t) next;
         current_thread->status = RUNNING;
         minithread_switch(&(old->top), &(current_thread->top));
@@ -100,10 +123,11 @@ scheduler() {
 
     while (1) {
         // idle if there are no runnable threads
-        while(queue_length(ready_queue) == 0);
+
+        while(multilevel_queue_length(ready_queue) == 0);
 
         old_level = set_interrupt_level(DISABLED);
-        queue_dequeue(ready_queue, &next);
+        next_item(&next);
         current_thread = (minithread_t) next;
         current_thread->status = RUNNING;
 
@@ -147,6 +171,7 @@ minithread_create(proc_t proc, arg_t arg) {
     minithread_t t = (minithread_t) malloc (sizeof(struct minithread));
     t->id = cur_id++;
     t->status = NEW;
+    t->priority = 0;
 
     minithread_allocate_stack(&(t->base), &(t->top));
     minithread_initialize_stack(&(t->top), proc, arg, minithread_exit, NULL);
@@ -181,7 +206,8 @@ minithread_start(minithread_t t) {
 
     if (t->status != READY && t->status != ZOMBIE) {
         t->status = READY;
-        queue_append(ready_queue, t);
+        t->priority = 0;
+        multilevel_queue_enqueue(ready_queue, 0);
     }
     set_interrupt_level(old_level);
 }
@@ -195,11 +221,9 @@ minithread_start(minithread_t t) {
 void
 minithread_yield() {
     interrupt_level_t old_level = set_interrupt_level(DISABLED);
-
-    if (queue_length(ready_queue) > 0) {
-        minithread_start(current_thread);
-        minithread_next();
-    }
+    current_thread->status = READY;
+    multilevel_queue_enqueue(ready_queue, current_thread->priority);
+    minithread_next();
     set_interrupt_level(old_level);
 }
 
@@ -228,7 +252,14 @@ clock_handler(void* arg) {
     time_ticks++;
     check_alarms();
     if (current_thread != NULL) {
-        minithread_yield();
+        current_thread->status = READY;
+        if (current_thread->priority == 3) {
+            multilevel_queue_enqueue(ready_queue, current_thread->priority);
+        } else {
+            current_thread->priority++;
+            multilevel_queue_enqueue(ready_queue, current_thread->priority);
+        }
+        minithread_next();
     }
     set_interrupt_level(old_level);
 }
@@ -250,8 +281,9 @@ clock_handler(void* arg) {
 void
 minithread_system_initialize(proc_t mainproc, arg_t mainarg) {
     interrupt_level_t old_level;
+    srand(time(NULL));
     // Initialize globals
-    ready_queue = queue_new();
+    ready_queue = multilevel_queue_new(LEVELS);
     zombie_queue = queue_new();
     cur_id = 0;
     // Initialize alarms
