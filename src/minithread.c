@@ -30,9 +30,9 @@
 struct minithread {
     int id; // Id of the minithread
     status_t status; // Status: NEW, WAITING, READY, RUNNING, ZOMBIE
+    int level; // The priority level of the thread
     stack_pointer_t base;
     stack_pointer_t top;
-    int priority;
 };
 
 stack_pointer_t system_stack; // Stack pointer to the system thread
@@ -173,7 +173,7 @@ minithread_t minithread_create(proc_t proc, arg_t arg) {
 
     t->id = cur_id++;
     t->status = NEW;
-    t->priority = 0;
+    t->level = 0;
 
     minithread_allocate_stack(&(t->base), &(t->top));
     minithread_initialize_stack(&(t->top), proc, arg, minithread_exit, NULL);
@@ -205,7 +205,7 @@ void minithread_start(minithread_t t) {
 
     if (t->status != READY && t->status != ZOMBIE) {
         t->status = READY;
-        multilevel_queue_enqueue(ready_queue, t->priority, t);
+        multilevel_queue_enqueue(ready_queue, t->level, t);
     }
     set_interrupt_level(old_level);
 }
@@ -220,7 +220,7 @@ void minithread_yield() {
     interrupt_level_t old_level = set_interrupt_level(DISABLED);
     current_thread->status = READY;
     quanta_passed = 0;
-    multilevel_queue_enqueue(ready_queue, current_thread->priority, current_thread);
+    multilevel_queue_enqueue(ready_queue, current_thread->level, current_thread);
     minithread_next();
     set_interrupt_level(old_level);
 }
@@ -248,12 +248,12 @@ void clock_handler(void* arg) {
     check_alarms();
     if (current_thread != NULL) {
         quanta_passed++;
-        if (quanta_passed == (1 << current_thread->priority)) {
+        if (quanta_passed == (1 << current_thread->level)) {
             current_thread->status = READY;
-            if (current_thread->priority < 3) {
-                current_thread->priority++;
+            if (current_thread->level < 3) {
+                current_thread->level++;
             }
-            multilevel_queue_enqueue(ready_queue, current_thread->priority, current_thread);
+            multilevel_queue_enqueue(ready_queue, current_thread->level, current_thread);
             quanta_passed = 0;
             minithread_next();
         }

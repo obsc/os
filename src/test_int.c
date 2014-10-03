@@ -14,7 +14,7 @@ int b;
 int thread2(int* arg) {
     int i;
     while(1) {
-        minithread_sleep_with_timeout(100000);
+        minithread_sleep_with_timeout(10000);
         for(i = 0; i < 1000000; i++);
         a++;
         printf("a: %i\n", a);
@@ -28,7 +28,7 @@ int thread1(int* arg) {
     minithread_fork(thread2, NULL);
 
     while(1) {
-        minithread_sleep_with_timeout(2000);
+        minithread_sleep_with_timeout(1000);
         for(i = 0; i < 1000000; i++);
         b++;
         printf("b: %i\n", b);
