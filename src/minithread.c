@@ -11,9 +11,9 @@
 #include <stdio.h>
 #include "interrupts.h"
 #include "minithread.h"
-#include "queue.h"
 #include "synch.h"
 #include "alarm.h"
+#include "multilevel_queue.h"
 
 #include <assert.h>
 #include <time.h>
