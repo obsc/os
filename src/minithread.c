@@ -205,8 +205,7 @@ void minithread_start(minithread_t t) {
 
     if (t->status != READY && t->status != ZOMBIE) {
         t->status = READY;
-        t->priority = 0;
-        multilevel_queue_enqueue(ready_queue, 0, t);
+        multilevel_queue_enqueue(ready_queue, t->priority, t);
     }
     set_interrupt_level(old_level);
 }
@@ -258,7 +257,6 @@ void clock_handler(void* arg) {
             quanta_passed = 0;
             minithread_next();
         }
-        
     }
     set_interrupt_level(old_level);
 }
@@ -316,5 +314,6 @@ void minithread_sleep_with_timeout(int delay) {
     semaphore_initialize(block, 0);
     register_alarm(delay, unblock, block);
     semaphore_P(block);
+    semaphore_destroy(block);
 }
 
