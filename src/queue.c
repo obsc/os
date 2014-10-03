@@ -8,27 +8,6 @@
 
 #define checkNull(q) if( !(q) ) { return -1; }
 
-typedef struct node* node_t;
-
-/*
- * Struct representing a node in the queue
- */
-struct node
-{
-    void  *data; // Pointer to some data
-    node_t next; // Pointer to next node
-};
-
-/*
- * Struct representing a queue backed by a singly-linked list
- */
-struct queue
-{
-    node_t head;
-    node_t tail;
-    int length;
-};
-
 /*
  * Return an empty queue.
  */

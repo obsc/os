@@ -12,7 +12,7 @@ struct multilevel_queue
 {
     int levels;
     int length;
-	queue_t queues[];
+	queue_t *queues;
 };
 /*
  * Returns an empty multilevel queue with number_of_levels levels. On error should return NULL.
@@ -21,19 +21,17 @@ multilevel_queue_t multilevel_queue_new(int number_of_levels)
 {
 	int acc;
 	multilevel_queue_t q;
-	queue_t queues[number_of_levels]; 
 	acc = 0;
 	q = (multilevel_queue_t) malloc (sizeof(struct multilevel_queue));
     q->levels = number_of_levels;
     q->length = 0;
+    q->queues = (queue_t *) malloc (sizeof(struct queue) * number_of_levels);
     while (acc < number_of_levels) {
-    	queues[acc] = queue_new();
+    	(q->queues)[acc] = queue_new();
     	acc++;
     }
-    q->queues = queues;
-    return q;
+    return  q;
 }
-
 /*
  * Appends an void* to the multilevel queue at the specified level. Return 0 (success) or -1 (failure).
  */
@@ -46,7 +44,7 @@ int multilevel_queue_enqueue(multilevel_queue_t queue, int level, void* item)
 		return -1;
 	}
 	queue->length++;
-	result = queue_enqueue(((queue->queues)[level]), item);
+	result = queue_append((queue->queues)[level], item);
     return result;
 }
 

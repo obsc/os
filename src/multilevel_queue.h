@@ -5,7 +5,6 @@
 #define __MULTILEVEL_QUEUE_H__
 
 #include "queue.h"
-
 /*
  * multilevel_queue_t is a pointer to an internally maintained data structure.
  * Clients of this package do not need to know how the queues are
