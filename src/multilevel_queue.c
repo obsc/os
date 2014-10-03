@@ -81,12 +81,8 @@ int multilevel_queue_dequeue(multilevel_queue_t queue, int level, void** item)
  */
 int multilevel_queue_free(multilevel_queue_t queue)
 {
-	int acc;
 	checkNull(queue);
-	acc = 0;
-	while (acc < queue->levels) {
-		free(((queue->queues)[acc]));
-	}
+	free(queue->queues);
 	free(queue);
 	return 0;
 }
