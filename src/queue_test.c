@@ -15,7 +15,7 @@ void test_prepend() {
     queue_t q;
     int x1 = 5;
     int x2 = 6;
-    void *value = NULL;
+    void *value;
     // Testing null queue
     assert(queue_prepend(NULL, &x1) == -1);
     // Testing queue
@@ -36,7 +36,7 @@ void test_append() {
     queue_t q;
     int x1 = 5;
     int x2 = 6;
-    void *value = NULL;
+    void *value;
     // Testing null queue
     assert(queue_append(NULL, &x1) == -1);
     // Testing queue
@@ -58,7 +58,7 @@ void test_dequeue() {
     int x1 = 5;
     int x2 = 6;
     int x3 = 7;
-    void *value = NULL;
+    void *value;
     // Testing null queue
     assert(queue_dequeue(NULL, &value) == -1);
     assert(value == NULL);

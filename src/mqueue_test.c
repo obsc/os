@@ -41,10 +41,10 @@ void test_enqueue() {
 
 void test_dequeue() {
     multilevel_queue_t q;
+    void *value;
     int x1 = 5;
     int x2 = 6;
     int x3 = 7;
-    void *value;
     // Testing null queue
     assert(multilevel_queue_dequeue(NULL, 0, &value) == -1);
     assert(value == NULL);
@@ -99,9 +99,9 @@ void test_free() {
 
 void test_length() {
     multilevel_queue_t q1;
+    void *p;
     int i1 = 0;
     int i2 = 0;
-    void *p = NULL;
     // Test null queue
     assert(multilevel_queue_length(NULL) == -1);
     // Test queues

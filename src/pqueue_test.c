@@ -39,10 +39,10 @@ void test_enqueue() {
 
 void test_dequeue() {
     pqueue_t q;
+    void *value;
     int x1 = 5;
     int x2 = 6;
     int x3 = 7;
-    void *value;
     // Testing null queue
     assert(pqueue_dequeue(NULL, &value) == -1);
     assert(value == NULL);
@@ -69,10 +69,10 @@ void test_dequeue() {
 
 void test_peek() {
     pqueue_t q;
+    void *value;
     int x1 = 5;
     int x2 = 6;
     int x3 = 7;
-    void *value;
     // Testing null queue
     assert(pqueue_peek(NULL, &value) == -1);
     assert(value == NULL);
