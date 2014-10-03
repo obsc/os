@@ -29,9 +29,7 @@ struct semaphore {
  */
 semaphore_t semaphore_create() {
     semaphore_t sem = (semaphore_t) malloc (sizeof (struct semaphore));
-    if (sem == NULL) {
-        return NULL;
-    }
+    if ( !sem ) return NULL;
 
     sem->waiting = queue_new();
     sem->count = 0;

@@ -21,21 +21,19 @@ multilevel_queue_t multilevel_queue_new(int number_of_levels) {
     multilevel_queue_t q;
 
     q = (multilevel_queue_t) malloc (sizeof(struct multilevel_queue));
-    if (q == NULL) {
-        return NULL;
-    }
+    if ( !q ) return NULL;
 
     q->levels = number_of_levels;
     q->length = 0;
     q->queues = (queue_t *) malloc (sizeof(queue_t) * number_of_levels);
-    if (q->queues == NULL) {
+    if ( !(q->queues) ) {
         free(q);
         return NULL;
     }
 
     for (acc = 0; acc < number_of_levels; acc++) {
         (q->queues)[acc] = queue_new();
-        if ((q->queues)[acc] == NULL) {
+        if ( !((q->queues)[acc]) ) {
             break;
         }
     }

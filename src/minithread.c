@@ -38,37 +38,19 @@ struct minithread {
 stack_pointer_t system_stack; // Stack pointer to the system thread
 minithread_t current_thread; // Thread control block of the current thread
 multilevel_queue_t ready_queue; // Queue for ready threads
-queue_t zombie_queue; // Queue for zombie threads for cleanup
-int cur_id; // Current id (used to assign new ids)
-semaphore_t garbage; // Semaphore representing garbage needed to be collected
-int time_ticks; // Current time in number of interrupt ticks
-int quanta_passed;
 
-/* Function decides the level of the multilevel queue to start trying to
- * dequeue from, then dequeues starting from that level.
- * Returns -1 if nothing is dequeued, or the level from which it dequeued from */
-int
-next_item(void **location) {
-    int rng;
-    int level;
-    rng = rand() % 100;
-    if (rng < 50) {
-        level = 0;
-    } else if (rng < 75) {
-        level = 1;
-    } else if (rng < 90) {
-        level = 2;
-    } else {
-        level = 3;
-    }
-    return multilevel_queue_dequeue(ready_queue, level, location);
-}
+queue_t zombie_queue; // Queue for zombie threads for cleanup
+semaphore_t garbage; // Semaphore representing garbage needed to be collected
+
+int cur_id; // Current id (used to assign new ids)
+int time_ticks; // Current time in number of interrupt ticks
+int quanta_passed; // The amount of quanta that has passed for current thread
+
 /*
  * Thread that garbage collects all the garbage in the zombie queue.
  * This should only be ran when there is garbage, otherwise it will block.
  */
-int
-reaper(int *arg) {
+int reaper(int *arg) {
     void *zomb;
     minithread_t garbage_thread;
     interrupt_level_t old_level;
@@ -86,6 +68,26 @@ reaper(int *arg) {
     return -1;
 }
 
+/* Function decides the level of the multilevel queue to start trying to
+ * dequeue from, then dequeues starting from that level.
+ * Returns -1 if nothing dequeued, or the level from which it dequeued from */
+int next_item(void **location) {
+    int rng;
+    int level;
+    rng = rand() % 100;
+    
+    if (rng < 50) {
+        level = 0;
+    } else if (rng < 75) {
+        level = 1;
+    } else if (rng < 90) {
+        level = 2;
+    } else {
+        level = 3;
+    }
+    return multilevel_queue_dequeue(ready_queue, level, location);
+}
+
 /*
  * Minithread scheduler that decides the next thread
  * (either the system or another minithread) to be run
@@ -93,8 +95,7 @@ reaper(int *arg) {
  * invariant: when calling minithread_next(), interrupts are already
  * disabled, interrupts enabled when exiting
  */
-void
-minithread_next() {
+void minithread_next() {
     void *next;
     minithread_t old;
     old = current_thread;
@@ -118,8 +119,7 @@ minithread_next() {
  * or to idle. This idles whenever there are no more threads in
  * the ready queue
  */
-void
-scheduler() {
+void scheduler() {
     void *next;
     interrupt_level_t old_level;
 
@@ -138,8 +138,7 @@ scheduler() {
 }
 
 /* Called after a thread ends operation */
-int
-minithread_exit(int *i) {
+int minithread_exit(int *i) {
     interrupt_level_t old_level;
 
     old_level = set_interrupt_level(DISABLED);
@@ -156,8 +155,7 @@ minithread_exit(int *i) {
 /*
  * Creates a new thread and sets it to runnable
  */
-minithread_t
-minithread_fork(proc_t proc, arg_t arg) {
+minithread_t minithread_fork(proc_t proc, arg_t arg) {
     minithread_t t = minithread_create(proc, arg);
     minithread_start(t);
 
@@ -165,13 +163,14 @@ minithread_fork(proc_t proc, arg_t arg) {
 }
 
 /*
- * Creates a new thread control block
+ * Creates a new thread control block. Returns NULL on failure
  */
-minithread_t
-minithread_create(proc_t proc, arg_t arg) {
+minithread_t minithread_create(proc_t proc, arg_t arg) {
     interrupt_level_t old_level = set_interrupt_level(DISABLED);
 
     minithread_t t = (minithread_t) malloc (sizeof(struct minithread));
+    if ( !t ) return NULL;
+
     t->id = cur_id++;
     t->status = NEW;
     t->priority = 0;
@@ -186,16 +185,14 @@ minithread_create(proc_t proc, arg_t arg) {
 /*
  * Gets the thread control block of the currently running thread
  */
-minithread_t
-minithread_self() {
+minithread_t minithread_self() {
     return current_thread;
 }
 
 /*
  * Gets the id of the currently running thread
  */
-int
-minithread_id() {
+int minithread_id() {
     return current_thread->id;
 }
 
@@ -203,8 +200,7 @@ minithread_id() {
  * Makes a minithread runnable
  * Does not work on already READY or ZOMBIE threads
  */
-void
-minithread_start(minithread_t t) {
+void minithread_start(minithread_t t) {
     interrupt_level_t old_level = set_interrupt_level(DISABLED);
 
     if (t->status != READY && t->status != ZOMBIE) {
@@ -221,8 +217,7 @@ minithread_start(minithread_t t) {
  * we just NOP and garbage collect any previously exited threads
  * instead.
  */
-void
-minithread_yield() {
+void minithread_yield() {
     interrupt_level_t old_level = set_interrupt_level(DISABLED);
     current_thread->status = READY;
     quanta_passed = 0;
@@ -234,8 +229,7 @@ minithread_yield() {
 /*
  * Stops the current thread and does not set to runnable again.
  */
-void
-minithread_stop() {
+void minithread_stop() {
     interrupt_level_t old_level = set_interrupt_level(DISABLED);
     quanta_passed = 0;
     current_thread->status = WAITING;
@@ -249,8 +243,7 @@ minithread_stop() {
  * You have to call minithread_clock_init with this
  * function as parameter in minithread_system_initialize
  */
-void
-clock_handler(void* arg) {
+void clock_handler(void* arg) {
     interrupt_level_t old_level = set_interrupt_level(DISABLED);
     time_ticks++;
     check_alarms();
@@ -284,8 +277,7 @@ clock_handler(void* arg) {
  *       Start scheduling.
  *
  */
-void
-minithread_system_initialize(proc_t mainproc, arg_t mainarg) {
+void minithread_system_initialize(proc_t mainproc, arg_t mainarg) {
     interrupt_level_t old_level;
     srand(time(NULL));
     // Initialize globals
@@ -309,6 +301,9 @@ minithread_system_initialize(proc_t mainproc, arg_t mainarg) {
     scheduler();
 }
 
+/*
+ * Unblocks a semaphore (used by sleep)
+ */
 void unblock(void *sem) {
     semaphore_V((semaphore_t) sem);
 }
@@ -316,8 +311,7 @@ void unblock(void *sem) {
 /*
  * sleep with timeout in milliseconds
  */
-void
-minithread_sleep_with_timeout(int delay) {
+void minithread_sleep_with_timeout(int delay) {
     semaphore_t block = semaphore_create();
     semaphore_initialize(block, 0);
     register_alarm(delay, unblock, block);
