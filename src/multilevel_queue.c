@@ -75,11 +75,11 @@ int multilevel_queue_dequeue(multilevel_queue_t queue, int level, void** item) {
     checkNull(queue);
     checkNull(item);
 
-    current_level = level
+    current_level = level;
     
     if (current_level >= queue->levels) {
     	*item = NULL;
-    	return -1
+    	return -1;
     }
 
     for (acc = 0; acc < queue->levels; acc++) {
