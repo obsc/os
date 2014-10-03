@@ -20,9 +20,10 @@ struct multilevel_queue
 multilevel_queue_t multilevel_queue_new(int number_of_levels)
 {
 	int acc;
+	multilevel_queue_t q;
 	queue_t queues[number_of_levels]; 
 	acc = 0;
-	multilevel_queue_t q = (multilevel_queue_t) malloc (sizeof(struct multilevel_queue));
+	q = (multilevel_queue_t) malloc (sizeof(struct multilevel_queue));
     q->levels = number_of_levels;
     q->length = 0;
     while (acc < number_of_levels) {
