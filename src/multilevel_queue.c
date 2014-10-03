@@ -10,10 +10,10 @@
 
 struct multilevel_queue
 {
+    int levels;
+    int length;
 	queue_t queues[];
-	int levels;
-	int length;
-}
+};
 /*
  * Returns an empty multilevel queue with number_of_levels levels. On error should return NULL.
  */
@@ -39,13 +39,15 @@ multilevel_queue_t multilevel_queue_new(int number_of_levels)
  */
 int multilevel_queue_enqueue(multilevel_queue_t queue, int level, void* item)
 {
+    int result;
 	checkNull(queue);
 	checkNull(item);
 	if (level >= queue->levels) {
 		return -1;
 	}
 	queue->length++;
-	return queue_enqueue(((queue->queues)[level]), item);
+	result = queue_enqueue(((queue->queues)[level]), item);
+    return result;
 }
 
 /*
