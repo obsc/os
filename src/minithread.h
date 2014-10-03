@@ -13,7 +13,7 @@
 
 #include "machineprimitives.h"
 
-#define PERIOD 100 // Represents how long each clock tick is in milliseconds
+#define PERIOD (100*MILLISECOND)  // Represents how long each clock tick is
 
 /*
  * struct minithread:

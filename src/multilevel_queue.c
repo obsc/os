@@ -21,7 +21,7 @@ multilevel_queue_t multilevel_queue_new(int number_of_levels) {
     multilevel_queue_t q;
 
     q = (multilevel_queue_t) malloc (sizeof(struct multilevel_queue));
-    if ( !q ) return NULL;
+    if ( !q ) return NULL; // Failed to malloc
 
     q->levels = number_of_levels;
     q->length = 0;
@@ -38,6 +38,7 @@ multilevel_queue_t multilevel_queue_new(int number_of_levels) {
             break;
         }
     }
+    
     // if there was an error malloc'ing all the queues, return NULL
     if (acc < number_of_levels) {
         for (; acc > 0; acc--) {

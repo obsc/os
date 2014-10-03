@@ -17,23 +17,27 @@ struct alarm
 
 pqueue_t alarm_pqueue;
 
-/* see alarm.h */
+/* register an alarm to go off in "delay" milliseconds.  Returns a handle to
+ * the alarm. Returns NULL on failure.
+ */
 alarm_id
 register_alarm(int delay, alarm_handler_t alarm, void *arg) {
-    int t = time_ticks * PERIOD + delay; // Time
+    int t = time_ticks * PERIOD + delay * MILLISECOND; // Time
     alarm_t a = (alarm_t) malloc (sizeof(struct alarm));
-    if ( !a ) return NULL;
+    if ( !a ) return NULL; // Failure to malloc
 
     a->func = alarm;
     a->arg = arg;
     a->time = t;
 
-    pqueue_enqueue(alarm_pqueue, a, t);
+    if (pqueue_enqueue(alarm_pqueue, a, t) == -1) return NULL;
 
     return (alarm_id) a;
 }
 
-/* see alarm.h */
+/* unregister an alarm.  Returns 0 if the alarm had not been executed, 1
+ * otherwise.
+ */
 int
 deregister_alarm(alarm_id alarm) {
     if (pqueue_delete(alarm_pqueue, alarm) == 0) {

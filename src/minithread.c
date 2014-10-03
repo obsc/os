@@ -13,6 +13,7 @@
 #include "minithread.h"
 #include "synch.h"
 #include "alarm.h"
+#include "queue.h"
 #include "multilevel_queue.h"
 
 #include <assert.h>
@@ -36,15 +37,15 @@ struct minithread {
 };
 
 stack_pointer_t system_stack; // Stack pointer to the system thread
-minithread_t current_thread; // Thread control block of the current thread
+minithread_t cur_thread; // Thread control block of the current thread
 multilevel_queue_t ready_queue; // Queue for ready threads
 
 queue_t zombie_queue; // Queue for zombie threads for cleanup
 semaphore_t garbage; // Semaphore representing garbage needed to be collected
 
 int cur_id; // Current id (used to assign new ids)
-int time_ticks; // Current time in number of interrupt ticks
 int quanta_passed; // The amount of quanta that has passed for current thread
+long time_ticks; // Current time in number of interrupt ticks
 
 /*
  * Thread that garbage collects all the garbage in the zombie queue.
@@ -70,7 +71,9 @@ int reaper(int *arg) {
 
 /* Function decides the level of the multilevel queue to start trying to
  * dequeue from, then dequeues starting from that level.
- * Returns -1 if nothing dequeued, or the level from which it dequeued from */
+ * Returns -1 if nothing dequeued, or the level from which it dequeued from 
+ * invariant: this function should be called with interrupts disabled
+ */
 int next_item(void **location) {
     int rng;
     int level;
@@ -98,20 +101,20 @@ int next_item(void **location) {
 void minithread_next() {
     void *next;
     minithread_t old;
-    old = current_thread;
+    old = cur_thread;
     // if we are looking for the next thread, then we set next thread's used quanta to 0
     quanta_passed = 0;
 
     // if there are no more runnable threads, return to the system
     if (multilevel_queue_length(ready_queue) == 0) {
-        current_thread = NULL;
+        cur_thread = NULL;
         minithread_switch(&(old->top), &system_stack);
     // if there are runnable threads, take the next one and run it
     } else {
         next_item(&next);
-        current_thread = (minithread_t) next;
-        current_thread->status = RUNNING;
-        minithread_switch(&(old->top), &(current_thread->top));
+        cur_thread = (minithread_t) next;
+        cur_thread->status = RUNNING;
+        minithread_switch(&(old->top), &(cur_thread->top));
     }
 }
 
@@ -138,10 +141,10 @@ void scheduler() {
 
         old_level = set_interrupt_level(DISABLED);
         next_item(&next);
-        current_thread = (minithread_t) next;
-        current_thread->status = RUNNING;
+        cur_thread = (minithread_t) next;
+        cur_thread->status = RUNNING;
 
-        minithread_switch(&system_stack, &(current_thread->top));
+        minithread_switch(&system_stack, &(cur_thread->top));
     }
 }
 
@@ -150,8 +153,8 @@ int minithread_exit(int *i) {
     interrupt_level_t old_level;
 
     old_level = set_interrupt_level(DISABLED);
-    current_thread->status = ZOMBIE;
-    queue_append(zombie_queue, current_thread);
+    cur_thread->status = ZOMBIE;
+    queue_append(zombie_queue, cur_thread);
     semaphore_V(garbage);
     minithread_next();
     return -1;
@@ -173,11 +176,14 @@ minithread_t minithread_fork(proc_t proc, arg_t arg) {
  * Creates a new thread control block. Returns NULL on failure
  */
 minithread_t minithread_create(proc_t proc, arg_t arg) {
-
+    interrupt_level_t old_level;
     minithread_t t = (minithread_t) malloc (sizeof(struct minithread));
     if ( !t ) return NULL;
 
-    t->id = cur_id++;
+    old_level = set_interrupt_level(DISABLED);
+    t->id = cur_id++; // Disables interrupt to access cur_id
+    set_interrupt_level(old_level);
+
     t->status = NEW;
     t->level = 0;
 
@@ -191,14 +197,14 @@ minithread_t minithread_create(proc_t proc, arg_t arg) {
  * Gets the thread control block of the currently running thread
  */
 minithread_t minithread_self() {
-    return current_thread;
+    return cur_thread;
 }
 
 /*
  * Gets the id of the currently running thread
  */
 int minithread_id() {
-    return current_thread->id;
+    return cur_thread->id;
 }
 
 /*
@@ -206,13 +212,14 @@ int minithread_id() {
  * Does not work on already READY or ZOMBIE threads
  */
 void minithread_start(minithread_t t) {
-    interrupt_level_t old_level = set_interrupt_level(DISABLED);
+    interrupt_level_t old_level;
 
     if (t->status != READY && t->status != ZOMBIE) {
         t->status = READY;
+        old_level = set_interrupt_level(DISABLED);
         multilevel_queue_enqueue(ready_queue, t->level, t);
+        set_interrupt_level(old_level);
     }
-    set_interrupt_level(old_level);
 }
 
 /*
@@ -220,9 +227,16 @@ void minithread_start(minithread_t t) {
  */
 void minithread_yield() {
     interrupt_level_t old_level = set_interrupt_level(DISABLED);
-    current_thread->status = READY;
-    multilevel_queue_enqueue(ready_queue, current_thread->level, current_thread);
-    minithread_next();
+
+    // Only reenqueue if there are other threads waiting to be run
+    // Otherwise, just return
+    if (multilevel_queue_length(ready_queue) > 0) {
+        minithread_start(cur_thread);
+        minithread_next();
+    }
+
+    // We set this to maintain the invariant that yielding sets your quanta to 0
+    quanta_passed = 0;
     set_interrupt_level(old_level);
 }
 
@@ -231,7 +245,7 @@ void minithread_yield() {
  */
 void minithread_stop() {
     interrupt_level_t old_level = set_interrupt_level(DISABLED);
-    current_thread->status = WAITING;
+    cur_thread->status = WAITING;
     minithread_next();
     set_interrupt_level(old_level);
 }
@@ -247,15 +261,15 @@ void clock_handler(void* arg) {
     time_ticks++;
     check_alarms();
     // only deal with quanta logic when not in system thread
-    if (current_thread != NULL) {
+    if (cur_thread != NULL) {
         quanta_passed++;
         // if the thread used up all its quanta, demote its priority
-        if (quanta_passed == (1 << current_thread->level)) {
-            current_thread->status = READY;
-            if (current_thread->level < 3) {
-                current_thread->level++;
+        if (quanta_passed == (1 << cur_thread->level)) {
+            cur_thread->status = READY;
+            if (cur_thread->level < LEVELS - 1) {
+                cur_thread->level++;
             }
-            multilevel_queue_enqueue(ready_queue, current_thread->level, current_thread);
+            multilevel_queue_enqueue(ready_queue,cur_thread->level,cur_thread);
             // only context switch if current thread used up its quanta
             minithread_next();
         }
@@ -293,10 +307,11 @@ void minithread_system_initialize(proc_t mainproc, arg_t mainarg) {
     garbage = semaphore_create();
     semaphore_initialize(garbage, 0);
     // Initialize threads
-    current_thread = NULL;
+    cur_thread = NULL;
     minithread_fork(reaper, NULL);
     minithread_fork(mainproc, mainarg);
-    minithread_clock_init(PERIOD * MILLISECOND, clock_handler);
+    // Initialize clock
+    minithread_clock_init(PERIOD, clock_handler);
     // Disable interrupts
     old_level = set_interrupt_level(DISABLED);
     scheduler();
