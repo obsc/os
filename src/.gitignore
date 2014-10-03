@@ -5,6 +5,7 @@ buffer
 sieve
 queue_test
 pqueue_test
+mqueue_test
 shop
 test_int
 test_alarm

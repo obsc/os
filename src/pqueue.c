@@ -94,8 +94,10 @@ pqueue_enqueue(pqueue_t pqueue, void *data, int priority) {
 int
 pqueue_dequeue(pqueue_t pqueue, void **data) {
     node_t n = NULL;
-    checkNull(pqueue);
-    checkNull(data);
+    if (pqueue == NULL || data == NULL) {
+        *data = NULL;
+        return -1;
+    }
 
     // Checks if queue is empty
     if ( pqueue->length == 0 ) {
@@ -121,8 +123,10 @@ pqueue_dequeue(pqueue_t pqueue, void **data) {
  */
 int
 pqueue_peek(pqueue_t pqueue, void **data) {
-    checkNull(pqueue);
-    checkNull(data);
+    if (pqueue == NULL || data == NULL) {
+        *data = NULL;
+        return -1;
+    }
 
     // Checks if queue is empty
     if ( pqueue->length == 0 ) {

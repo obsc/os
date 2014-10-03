@@ -99,8 +99,10 @@ queue_append(queue_t queue, void* item) {
 int
 queue_dequeue(queue_t queue, void** item) {
     node_t n = NULL;
-    checkNull(queue);
-    checkNull(item);
+    if (queue == NULL || item == NULL) {
+        *item = NULL;
+        return -1;
+    }
 
     // Checks if queue is empty
     if ( queue->length == 0 ) {

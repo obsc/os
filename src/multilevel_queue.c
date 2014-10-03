@@ -73,8 +73,10 @@ int multilevel_queue_enqueue(multilevel_queue_t queue, int level, void* item) {
 int multilevel_queue_dequeue(multilevel_queue_t queue, int level, void** item) {
     int current_level;
     int acc;
-    checkNull(queue);
-    checkNull(item);
+    if (queue == NULL || item == NULL) {
+        *item = NULL;
+        return -1;
+    }
 
     current_level = level;
     

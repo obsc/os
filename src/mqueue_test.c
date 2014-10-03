@@ -46,16 +46,17 @@ void test_dequeue() {
     int x3 = 7;
     void *value;
     // Testing null queue
-    assert(multilevel_queue_dequeue(NULL, &value) == -1);
+    assert(multilevel_queue_dequeue(NULL, 0, &value) == -1);
     assert(value == NULL);
     // Testing empty queue
     q = multilevel_queue_new(2);
-    assert(multilevel_queue_dequeue(q, &value) == -1);
+    assert(multilevel_queue_dequeue(q, 3, &value) == -1);
     assert(value == NULL);
     // Testing queue
     assert(multilevel_queue_enqueue(q, 0, &x2) == 0);
     assert(multilevel_queue_enqueue(q, 1, &x3) == 0);
     assert(multilevel_queue_enqueue(q, 0, &x1) == 0);
+    assert(multilevel_queue_dequeue(q, 2, (&value)) == -1);
     assert(multilevel_queue_dequeue(q, 0, (&value)) == 0);
     assert(*((int*) value) == x2);
     assert(multilevel_queue_length(q) == 2);
@@ -63,7 +64,7 @@ void test_dequeue() {
     assert(*((int*) value) == x3);
     assert(multilevel_queue_length(q) == 1);
     assert(multilevel_queue_dequeue(q, 1, &value) == 0);
-    assert(*((int*) value) == x2);
+    assert(*((int*) value) == x1);
     assert(multilevel_queue_length(q) == 0);
     assert(multilevel_queue_dequeue(q, 0, &value) == -1);
     assert(multilevel_queue_free(q) == 0);
@@ -117,10 +118,10 @@ void test_length() {
     assert(multilevel_queue_dequeue(q1, 0, &p) == 0);
     assert(multilevel_queue_length(q1) == 3);
     assert(multilevel_queue_dequeue(q1, 0, &p) == 0);
-    assert(multilevel_queue_length(q1) == 3);
+    assert(multilevel_queue_length(q1) == 2);
     assert(multilevel_queue_dequeue(q1, 1, &p) == 1);
     assert(multilevel_queue_dequeue(q1, 1, &p) == 1);
-    assert(multilevel_queue_length(q1) == 1);
+    assert(multilevel_queue_length(q1) == 0);
     assert(multilevel_queue_free(q1) == 0);
 }
 

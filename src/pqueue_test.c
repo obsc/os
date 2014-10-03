@@ -42,7 +42,7 @@ void test_dequeue() {
     int x1 = 5;
     int x2 = 6;
     int x3 = 7;
-    void *value = NULL;
+    void *value;
     // Testing null queue
     assert(pqueue_dequeue(NULL, &value) == -1);
     assert(value == NULL);
