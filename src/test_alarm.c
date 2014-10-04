@@ -21,6 +21,7 @@ int thread2(int* arg) {
     register_alarm(1000, func, NULL); // 5
     register_alarm(3000, func, NULL); // 7
 
+    return 0;
 }
 
 int thread1(int* arg) {
