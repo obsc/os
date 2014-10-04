@@ -92,6 +92,20 @@ int next_item(void **location) {
 }
 
 /*
+ * Function to get the next thread and switch to it
+ * It is assumed that interrupts are already disabled when calling this function
+ * Additionally, it is also assumed that the ready_queue is not empty
+ */
+void switch_next(stack_pointer_t *stack) {
+    void *next;
+
+    next_item(&next);
+    cur_thread = (minithread_t) next;
+    cur_thread->status = RUNNING;
+    minithread_switch(stack, &(cur_thread->top));
+}
+
+/*
  * Minithread scheduler that decides the next thread
  * (either the system or another minithread) to be run
  * This swaps over to the system if there are no more ready threads.
@@ -99,7 +113,6 @@ int next_item(void **location) {
  * disabled, interrupts enabled when exiting
  */
 void minithread_next() {
-    void *next;
     minithread_t old;
     old = cur_thread;
     // if we are looking for the next thread,
@@ -112,10 +125,7 @@ void minithread_next() {
         minithread_switch(&(old->top), &system_stack);
     // if there are runnable threads, take the next one and run it
     } else {
-        next_item(&next);
-        cur_thread = (minithread_t) next;
-        cur_thread->status = RUNNING;
-        minithread_switch(&(old->top), &(cur_thread->top));
+        switch_next(&(old->top));
     }
 }
 
@@ -221,7 +231,6 @@ void minithread_stop() {
     set_interrupt_level(old_level);
 }
 
-
 /*
  * This is the clock interrupt handling routine.
  * You have to call minithread_clock_init with this
@@ -229,7 +238,6 @@ void minithread_stop() {
  */
 void clock_handler(void* arg) {
     interrupt_level_t old_level = set_interrupt_level(DISABLED);
-    void *next;
 
     time_ticks++;
     check_alarms();
@@ -248,12 +256,7 @@ void clock_handler(void* arg) {
         }
     } else if (multilevel_queue_length(ready_queue) > 0) {
         // if we are idling and a new thread is on the ready queue
-        next_item(&next);
-        cur_thread = (minithread_t) next;
-        cur_thread->status = RUNNING;
-
-        // swap to new thread
-        minithread_switch(&system_stack, &(cur_thread->top));
+        switch_next(&system_stack);
     }
     set_interrupt_level(old_level);
 }
@@ -294,8 +297,10 @@ void minithread_system_initialize(proc_t mainproc, arg_t mainarg) {
     old_level = set_interrupt_level(DISABLED);
     // Initialize clock
     minithread_clock_init(PERIOD * MILLISECOND, clock_handler);
+    // Switch into our first thread
     minithread_switch(&system_stack, &(cur_thread->top));
-    while (1); // Idles
+    // Idles
+    while (1);
 }
 
 /*
