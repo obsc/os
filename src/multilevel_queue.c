@@ -60,7 +60,7 @@ int multilevel_queue_enqueue(multilevel_queue_t queue, int level, void* item) {
     checkNull(queue);
     checkNull(item);
     // Queue level out of bounds
-    if (current_level < 0 || level >= queue->levels) {
+    if (level < 0 || level >= queue->levels) {
         return -1;
     }
     queue->length++;
@@ -81,13 +81,13 @@ int multilevel_queue_dequeue(multilevel_queue_t queue, int level, void** item) {
         return -1;
     }
 
-    current_level = level;
-    
     // Queue level out of bounds
-    if (current_level < 0 || current_level >= queue->levels) {
+    if (level < 0 || level >= queue->levels) {
     	*item = NULL;
     	return -1;
     }
+
+    current_level = level;
 
     // Check levels starting at input level
     for (acc = 0; acc < queue->levels; acc++) {
