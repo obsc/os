@@ -119,36 +119,6 @@ void minithread_next() {
     }
 }
 
-/*
- * The system scheduler that decides the next thread to run
- * or to idle. This idles whenever there are no more threads in
- * the ready queue
- */
-void scheduler() {
-    void *next;
-    interrupt_level_t old_level;
-
-    while (1) {
-        // idle if there are no runnable threads
-
-        // note: the only possibility of having a race condition on length
-        // is between this system thread and the interrupt handler.
-        // However, the interrupt handler never calls dequeue on ready_queue,
-        // which gets the following invariant to guard against race conditions
-
-        // invariant: length function always return a value less or equal
-        // to the current length
-        while(multilevel_queue_length(ready_queue) == 0);
-
-        old_level = set_interrupt_level(DISABLED);
-        next_item(&next);
-        cur_thread = (minithread_t) next;
-        cur_thread->status = RUNNING;
-
-        minithread_switch(&system_stack, &(cur_thread->top));
-    }
-}
-
 /* Called after a thread ends operation */
 int minithread_exit(int *i) {
     interrupt_level_t old_level;
@@ -259,6 +229,8 @@ void minithread_stop() {
  */
 void clock_handler(void* arg) {
     interrupt_level_t old_level = set_interrupt_level(DISABLED);
+    void *next;
+
     time_ticks++;
     check_alarms();
     // only deal with quanta logic when not in system thread
@@ -274,6 +246,14 @@ void clock_handler(void* arg) {
             // only context switch if current thread used up its quanta
             minithread_next();
         }
+    } else if (multilevel_queue_length(ready_queue) > 0) {
+        // if we are idling and a new thread is on the ready queue
+        next_item(&next);
+        cur_thread = (minithread_t) next;
+        cur_thread->status = RUNNING;
+
+        // swap to new thread
+        minithread_switch(&system_stack, &(cur_thread->top));
     }
     set_interrupt_level(old_level);
 }
@@ -308,14 +288,14 @@ void minithread_system_initialize(proc_t mainproc, arg_t mainarg) {
     garbage = semaphore_create();
     semaphore_initialize(garbage, 0);
     // Initialize threads
-    cur_thread = NULL;
     minithread_fork(reaper, NULL);
-    minithread_fork(mainproc, mainarg);
+    cur_thread = minithread_create(mainproc, mainarg);
+    // Disable interrupts for first switch
+    old_level = set_interrupt_level(DISABLED);
     // Initialize clock
     minithread_clock_init(PERIOD * MILLISECOND, clock_handler);
-    // Disable interrupts
-    old_level = set_interrupt_level(DISABLED);
-    scheduler();
+    minithread_switch(&system_stack, &(cur_thread->top));
+    while (1); // Idles
 }
 
 /*
