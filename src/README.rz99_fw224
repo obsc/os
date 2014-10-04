@@ -77,39 +77,44 @@ synch.c
 Minithread
 
 minithread.h
-  - status is represented by an enum of NEW, WAITING, READY, RUNNING, or ZOMBIE
-  - minithread_exit is called when a thread finally returns and marks the thread
-    for garbage collection
+  - added macro for PERIOD in milliseconds
+  - added a time_ticks to allow alarm to interface with the clock in minithread
 minithread.c
-  - This is where our scheduler is also located
-  - thread control blocks have an id, a status, and pointers to the stack
-  - We save several states globally: the system stack (explained below), the
-    currently running thread, a queue of ready threads, a queue of zombie
-    threads, and an incrememting counter for assigning new ids.
-  - Thread ids are assigned in order, starting at 0
-  - We disallow starting already started threads (status READY) and zombie
-    threads.
-  - When yielding with 1 thread left, no context switch is performed, only
-    a garbage collection step is performed.
-  - We start by forking the main process and begin scheduling
+  - schedule, reaper, interrupts, sleeps
 
 scheduler
-  - basic FIFO queue
-  - There are two pieces of the scheduler: minithread_next and scheduler
-  - We have a main "system" thread that is only running scheduler()
-    - this is not a minithread, but actually just the same thread as main()
-  - scheduler() can only be run by this system thread and blocks (spins) while
-    the ready queue is empty
-  - Once there is something in the ready queue, it will schedule it and switch
-  - minithread_next is run on individual minithreads when they need to swap to
-    a new thread
-  - If there is something in the ready queue, then it will swap to it, otherwise
-    it will swap back to the system thread to block on the ready queue
+  - multilevel scheduling
+  - At any time, we pick randomly between the 4 levels of the queue 50/25/15/10
+    rate. Then we try to dequeue from there and run that thread. 
+  - if no thread is runnable, we have a while(1) loop in our system initialize
+    thread
+    - this can be interrupted and then a new thread could be run when available
+  - we keep track of the quanta that the current thread has used up. After
+    all the quanta has been used up, we forcefully start a new thread
+  - however, when yielding, sleeping, stopping, the thread will come back on
+    the same quanta level, with all its quanta refreshed. 
 
 reaper
   - Our reaper thread P's on a garbage semaphore and then cleans up that
     piece of garbage.
   - interrupts disabled when dequeueing off zombie queue
+
+interrupts
+  - interrupts disabled inside handler
+  - We keep track of the time as a long
+    - time_ticks represents how many PERIODS has passed
+    - incremented by 1 every interrupt
+  - We also attempt to run any available alarms during the interrupt
+  - If we are running a thread, we increment quanta and kick the thread out if
+    its used up all its available quanta.
+  - If we are idling in the system thread, we switch out if there is another
+    available thread to switch to. 
+
+sleep
+  - We sleep by constructing and initializing a semaphore. We then set an alarm
+    for waking ourselves up and then P the semaphore
+    - The alarm wakes the thread up by V-ing the semaphore
+  - After being woken up, we free the semaphore to prevent memory leaks
 
 test_int.c
   - test for our scheduling
