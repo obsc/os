@@ -8,7 +8,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-#define delay() for(i = 0; i < 1000000; i++);
+#define delay() for(i = 0; i < 10000000; i++);
 
 int a;
 int b;
