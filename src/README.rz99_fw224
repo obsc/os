@@ -1,23 +1,58 @@
 Rene Zhang - rz99
 Fukang Wen - fw224
 
-Implementation details of Project 1 for CS4411 - Fall 2014
+Implementation details of Project 2 for CS4411 - Fall 2014
 ================================================================================
-Queue
+Alarm
 
-queue.h
+alarm.h
+  - added initialize_alarms() which initializes the alarm priority queue
+    structure
+  - added check_alarms() which is called every interrupt and runs any possible
+    alarms
+alarm.c
+  - time is held in milliseconds
+  - alarm structure keeps track of function, argument, and time it should be run
+  - deregister searches through the priority queue, deletes and frees the node
+    if it exists, otherwise we assume that the alarm has already rang
+  - register and deregister both run in worst case O(n)
+  - check_alarms checks the earliest alarm, triggers it if time is up and then
+    repeats. This does not check every element in the queue everytime, so it
+    usually acts within O(1).
+  - However, it will trigger every alarm it can possibly do so it can take up to
+    O(n) in those cases.
+  - alarms are ran instantly inside interrupt handler, which means we must
+    assume that they run fast without blocking, io or any long computation
+test_alarm.c
+  - tests for the alarm and sleeping
+    - Normally, this is impossible because user threads cannot directly register
+      alarms
+  - two threads set up alarms so that "HELLO" is printed once a second
+    - alarms registered in arbitrary order with sleeps in between.
+
+================================================================================
+Pqueue
+
+synch.h
   - no modifications made to header
-queue.c
-  - macro defined for automatically returning -1 if the input queue is a null
-  - the queue is backed by a singly-linked list represented by nodes that have a
-    pointer to next and a pointer to data
-  - keeps track of head, tail and length to make operations faster
-  - All queue operations run in O(1) time except free, iterate and delete which
-    run in O(n)
-  - delete does a linear search down the linked list to find and delete the
-    first occurance of the data pointer
-queue_test.c
-  - tests for the queue
+synch.c
+  - each semaphore has a count, a lock and a waiting queue
+  - P and V operations are both locked with an atomic test and set spinlock
+  - If there is no more count, P will block and add the thread to the waiting
+    queue
+  - V notifies one thread in the waiting queue, if any
+
+================================================================================
+Multilevel_queue
+
+shop.c
+  - Macros are used for the number of employees and customers
+  - We start a single spawning thread at the beginning to fork all of the
+    employee and customer threads at one time
+  - Employees constantly unpack 1 phone (V the semaphore), then yield and repeat
+  - Customers take one phone, print its id and then leave
+  - After all the customers have left, employees will still unpack phones
+    forever.
 
 ================================================================================
 Minithread
@@ -62,18 +97,6 @@ garbage collection
 ================================================================================
 Synch
 
-synch.h
-  - no modifications made to header
-synch.c
-  - each semaphore has a count, a lock and a waiting queue
-  - P and V operations are both locked with an atomic test and set spinlock
-  - If there is no more count, P will block and add the thread to the waiting
-    queue
-  - V notifies one thread in the waiting queue, if any
-
-================================================================================
-Shop
-
 shop.c
   - Macros are used for the number of employees and customers
   - We start a single spawning thread at the beginning to fork all of the
@@ -84,3 +107,4 @@ shop.c
     forever.
 
 ================================================================================
+
