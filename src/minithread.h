@@ -13,7 +13,7 @@
 
 #include "machineprimitives.h"
 
-#define PERIOD (100*MILLISECOND)  // Represents how long each clock tick is
+#define PERIOD 100  // Represents how long each clock tick is
 
 /*
  * struct minithread:
@@ -24,7 +24,7 @@
 typedef enum {NEW, WAITING, READY, RUNNING, ZOMBIE} status_t;
 typedef struct minithread *minithread_t;
 
-int time_ticks; // Current time in number of interrupt ticks
+long time_ticks; // Current time in number of interrupt ticks
 
 /*
  * minithread_t

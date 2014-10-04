@@ -71,7 +71,7 @@ int reaper(int *arg) {
 
 /* Function decides the level of the multilevel queue to start trying to
  * dequeue from, then dequeues starting from that level.
- * Returns -1 if nothing dequeued, or the level from which it dequeued from 
+ * Returns -1 if nothing dequeued, or the level from which it dequeued from
  * invariant: this function should be called with interrupts disabled
  */
 int next_item(void **location) {
@@ -102,7 +102,8 @@ void minithread_next() {
     void *next;
     minithread_t old;
     old = cur_thread;
-    // if we are looking for the next thread, then we set next thread's used quanta to 0
+    // if we are looking for the next thread,
+    // then we set next thread's used quanta to 0
     quanta_passed = 0;
 
     // if there are no more runnable threads, return to the system
@@ -132,9 +133,9 @@ void scheduler() {
 
         // note: the only possibility of having a race condition on length
         // is between this system thread and the interrupt handler.
-        // However, the interrupt handler never calls dequeue on the ready_queue,
-        // which gets us the following invariant to guard against race conditions
-        
+        // However, the interrupt handler never calls dequeue on ready_queue,
+        // which gets the following invariant to guard against race conditions
+
         // invariant: length function always return a value less or equal
         // to the current length
         while(multilevel_queue_length(ready_queue) == 0);
@@ -311,7 +312,7 @@ void minithread_system_initialize(proc_t mainproc, arg_t mainarg) {
     minithread_fork(reaper, NULL);
     minithread_fork(mainproc, mainarg);
     // Initialize clock
-    minithread_clock_init(PERIOD, clock_handler);
+    minithread_clock_init(PERIOD * MILLISECOND, clock_handler);
     // Disable interrupts
     old_level = set_interrupt_level(DISABLED);
     scheduler();

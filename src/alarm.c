@@ -12,7 +12,7 @@ struct alarm
 {
     alarm_handler_t func; // Function to be called when alarm fires
     void *arg; // Argument into the function
-    int time; // Time that the alarm fires at
+    long time; // Time that the alarm fires at
 };
 
 pqueue_t alarm_pqueue;
@@ -22,7 +22,7 @@ pqueue_t alarm_pqueue;
  */
 alarm_id
 register_alarm(int delay, alarm_handler_t alarm, void *arg) {
-    int t = time_ticks * PERIOD + delay * MILLISECOND; // Time
+    long t = time_ticks * PERIOD + delay; // Time
     alarm_t a = (alarm_t) malloc (sizeof(struct alarm));
     if ( !a ) return NULL; // Failure to malloc
 
