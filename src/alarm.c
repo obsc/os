@@ -30,6 +30,7 @@ register_alarm(int delay, alarm_handler_t alarm, void *arg) {
     a->arg = arg;
     a->time = t;
 
+    // Attempt to enqueue onto priority queue
     if (pqueue_enqueue(alarm_pqueue, a, t) == -1) return NULL;
 
     return (alarm_id) a;
@@ -41,7 +42,7 @@ register_alarm(int delay, alarm_handler_t alarm, void *arg) {
 int
 deregister_alarm(alarm_id alarm) {
     if (pqueue_delete(alarm_pqueue, alarm) == 0) {
-        free(alarm);
+        free(alarm); // Only frees if alarm is found
         return 0;
     }
     return 1;
@@ -61,13 +62,15 @@ void check_alarms() {
     alarm_id a;
     alarm_t alarm;
 
+    // Keep checking queue until we find an alarm that should not execute
     while (pqueue_peek(alarm_pqueue, &a) == 0) {
         alarm = (alarm_t) a;
         if (time_ticks * PERIOD >= alarm->time) {
+            // Executes the alarm
             pqueue_dequeue(alarm_pqueue, &a);
             alarm = (alarm_t) a;
             alarm->func(alarm->arg);
-            free(alarm);
+            free(alarm); // Frees alarm after execution
         } else {
             break;
         }

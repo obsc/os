@@ -32,13 +32,14 @@ multilevel_queue_t multilevel_queue_new(int number_of_levels) {
         return NULL;
     }
 
+    // Initialize all the queues
     for (acc = 0; acc < number_of_levels; acc++) {
         (q->queues)[acc] = queue_new();
         if ( !((q->queues)[acc]) ) {
             break;
         }
     }
-    
+
     // if there was an error malloc'ing all the queues, return NULL
     if (acc < number_of_levels) {
         for (; acc > 0; acc--) {
@@ -52,12 +53,14 @@ multilevel_queue_t multilevel_queue_new(int number_of_levels) {
     return q;
 }
 /*
- * Appends an void* to the multilevel queue at the specified level. Return 0 (success) or -1 (failure).
+ * Appends an void* to the multilevel queue at the specified level.
+ * Return 0 (success) or -1 (failure).
  */
 int multilevel_queue_enqueue(multilevel_queue_t queue, int level, void* item) {
     checkNull(queue);
     checkNull(item);
-    if (level >= queue->levels) {
+    // Queue level out of bounds
+    if (current_level < 0 || level >= queue->levels) {
         return -1;
     }
     queue->length++;
@@ -80,11 +83,13 @@ int multilevel_queue_dequeue(multilevel_queue_t queue, int level, void** item) {
 
     current_level = level;
     
-    if (current_level >= queue->levels) {
+    // Queue level out of bounds
+    if (current_level < 0 || current_level >= queue->levels) {
     	*item = NULL;
     	return -1;
     }
 
+    // Check levels starting at input level
     for (acc = 0; acc < queue->levels; acc++) {
         if (queue_dequeue(((queue->queues)[current_level]), item) == 0) {
             queue->length--;

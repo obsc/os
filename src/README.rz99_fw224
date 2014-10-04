@@ -14,7 +14,7 @@ alarm.c
   - time is held in milliseconds
   - alarm structure keeps track of function, argument, and time it should be run
   - deregister searches through the priority queue, deletes and frees the node
-    if it exists, otherwise we assume that the alarm has already rang
+    if it exists, otherwise we assume that the alarm has already been freed
   - register and deregister both run in worst case O(n)
   - check_alarms checks the earliest alarm, triggers it if time is up and then
     repeats. This does not check every element in the queue everytime, so it
@@ -33,26 +33,45 @@ test_alarm.c
 ================================================================================
 Pqueue
 
-synch.h
-  - no modifications made to header
-synch.c
-  - each semaphore has a count, a lock and a waiting queue
-  - P and V operations are both locked with an atomic test and set spinlock
-  - If there is no more count, P will block and add the thread to the waiting
-    queue
-  - V notifies one thread in the waiting queue, if any
+This is a file we added to act as a priority queue for alarms
+
+pqueue.h
+  - The interface for this is mostly the same as the interface for queue.h
+    - The only difference is that we also need to provide a priority
+  - We also provide a pqueue_peek function to allow viewing of the head
+    of the priority queue without having to dequeue first
+pqueue.c
+  - This is implemented similarly to queue.c
+  - enqueue iterates over the queue until it finds a location that has a higher
+    priority
+  - enqueue, free and delete run in O(n)
+  - new, dequeue, peek, length run in O(1)
+pqueue_test.c
+  - unit tests for priority queue
 
 ================================================================================
 Multilevel_queue
 
-shop.c
-  - Macros are used for the number of employees and customers
-  - We start a single spawning thread at the beginning to fork all of the
-    employee and customer threads at one time
-  - Employees constantly unpack 1 phone (V the semaphore), then yield and repeat
-  - Customers take one phone, print its id and then leave
-  - After all the customers have left, employees will still unpack phones
-    forever.
+multilevel_queue.h
+  - No change other than adding a length function
+multilevel_queue.c
+  - in new, we malloc the multiqueue, then the array of queues, then each queue
+    in the array. If any of these mallocs fail, we free up all the successful
+    mallocs previously and return NULL
+  - enqueue and dequeue both fail if passed a nonexistant level (too high/low)
+  - dequeue starts at the input level and then continues to check levels in
+    increasing order. If it reaches the last level, it wraps around to 0.
+mqueue_test.c
+  - unit tests for multilevel_queue
+
+================================================================================
+Synch
+
+synch.h
+  - No changes made
+synch.c
+  - Modified semaphore P and V to be interrupt safe
+    - disabled interrupts through entire body
 
 ================================================================================
 Minithread
@@ -87,24 +106,16 @@ scheduler
   - If there is something in the ready queue, then it will swap to it, otherwise
     it will swap back to the system thread to block on the ready queue
 
-garbage collection
-  - Our garbage collector iterates through the garbage queue, freeing all the
-    stacks and thread control blocks
-  - When scheduling a next thread, we first garbage collect, then append the
-    current thread to the garbage queue if it just ended. This is to make sure
-    that no thread ever garbage collects itself.
+reaper
+  - Our reaper thread P's on a garbage semaphore and then cleans up that
+    piece of garbage.
+  - interrupts disabled when dequeueing off zombie queue
 
+test_int.c
+  - test for our scheduling
+  - two threads constantly running and not yielding printing incrementing
+    numbers after a delay
+  - both threads should start out very interleaved (quanta level 0) and then
+    slowly reach a point where one executes for a while (8 quantas, level 3)
+    and then swaps
 ================================================================================
-Synch
-
-shop.c
-  - Macros are used for the number of employees and customers
-  - We start a single spawning thread at the beginning to fork all of the
-    employee and customer threads at one time
-  - Employees constantly unpack 1 phone (V the semaphore), then yield and repeat
-  - Customers take one phone, print its id and then leave
-  - After all the customers have left, employees will still unpack phones
-    forever.
-
-================================================================================
-

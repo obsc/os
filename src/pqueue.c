@@ -61,25 +61,26 @@ pqueue_enqueue(pqueue_t pqueue, void *data, int priority) {
     n->priority = priority;
     n->next = NULL;
     check = pqueue->head;
-    if (check == NULL) {
+
+    if (check == NULL) { // Empty queue
         pqueue->head = n;
     } else {
         while (check) {
-            if (priority < check->priority) {
-                if (prev != NULL) {
+            if (priority < check->priority) { // Found location for node
+                if (prev != NULL) { // Not first element
                     prev->next = n;
                 }
                 n->next = check;
-                if (check == pqueue->head) {
+                if (check == pqueue->head) { // First element
                     pqueue->head = n;
                 }
                 pqueue->length++;
                 return 0;
             }
             prev = check;
-            check = prev->next;
+            check = prev->next; // Continue iterating down list
         }
-        prev->next = n;
+        prev->next = n; // Failed to find location for node, append to tail
     }
 
     pqueue->length++;
