@@ -10,7 +10,7 @@ default: all
 #    necessary PortOS code.
 #
 # this would be a good place to add your tests
-all: test1 test2 test3 buffer sieve mqueue_test queue_test pqueue_test test_int test_alarm
+all: test1 test2 test3 buffer sieve mqueue_test queue_test pqueue_test test_int test_alarm network1 network2 network3 network4 network5 network6
 
 # running "make clean" will remove all files ignored by git.  To ignore more
 # files, you should add them to the file .gitignore
@@ -36,7 +36,10 @@ OBJ =                              \
     queue.o                        \
 	pqueue.o                       \
 	multilevel_queue.o             \
-    synch.o
+    synch.o                        \
+	miniheader.o				   \
+	minimsg.o                      \
+	network.o
 
 %: %.o start.o end.o $(OBJ) $(SYSTEMOBJ)
 	$(CC) $(LIB) -o $@ start.o $(filter-out start.o end.o $(SYSTEMOBJ), $^) end.o $(SYSTEMOBJ) $(LFLAGS)
