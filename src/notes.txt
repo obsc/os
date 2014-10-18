@@ -1,0 +1,11 @@
+1. queue to hold messages, 1 queue for each port
+
+2. network interrupt calls semaphore_v on the semaphore holding threads waiting on this port
+
+3. union for miniport necessary because we do not know which type of port the miniport holds
+
+4. array of large size to hold each port number: holds NULL if none or freed, or the port
+
+5. disable interrupts in network handler
+
+6. 
