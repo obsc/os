@@ -45,14 +45,6 @@ network_handler(network_interrupt_arg_t *arg) {
     queue_append(unbound_ports[destination]->u.unbound.incoming_data, arg);
     semaphore_V(unbound_ports[destination]->u.unbound.ready);
     set_interrupt_level(old_level);
-    // extract the destination port from the buffer
-    // (how?) maybe by taking just the first miniheader bytes
-    // and then cast it to miniheader?
-
-    // unpack the destination
-
-    // enqueue the whole network_interrupt_arg_t into message box of the destination
-    // semaphore V on unbound_port[destination]
 }
 
 /* Increments the bound id
@@ -216,23 +208,23 @@ int
 minimsg_send(miniport_t local_unbound_port, miniport_t local_bound_port, minimsg_t msg, int len) {
 	network_address_t my_address;
 	mini_header_t header;
-	if (len + sizeof(struct mini_header) > MINIMSG_MAX_MSG_SIZE) {
+	// Size check
+    if (len + sizeof(struct mini_header) > MINIMSG_MAX_MSG_SIZE) {
 		return 0;
-	} else {
-		header = (mini_header_t) malloc (sizeof(struct mini_header));
-		header->protocol = PROTOCOL_MINIDATAGRAM;
-		network_get_my_address(my_address);
-		pack_address(header->source_address, my_address);
-		pack_unsigned_short(header->source_port, local_unbound_port->port_number);
-		pack_address(header->destination_address, local_bound_port->u.bound.remote_address);
-		pack_unsigned_short(header->destination_port, local_bound_port->u.bound.remote_unbound_port);
-		network_send_pkt(local_bound_port->u.bound.remote_address, sizeof(struct mini_header), (char *) header, len, msg);
-        return len;
 	}
-    // construct header with the info given
-    // call network_send_pkt()
-    // (seems too simple??)
-    // do we need to lock this? or disable interrupts while calling? (can multiple sends be concurrent)
+
+	network_get_my_address(my_address); // Get my address
+    // Construct a header to send
+	header = (mini_header_t) malloc (sizeof(struct mini_header));
+	header->protocol = PROTOCOL_MINIDATAGRAM;
+	// Pack source and destination
+    pack_address(header->source_address, my_address);
+	pack_unsigned_short(header->source_port, local_unbound_port->port_number);
+	pack_address(header->destination_address, local_bound_port->u.bound.remote_address);
+	pack_unsigned_short(header->destination_port, local_bound_port->u.bound.remote_unbound_port);
+
+    network_send_pkt(local_bound_port->u.bound.remote_address, sizeof(struct mini_header), (char *) header, len, msg);
+    return len;
 }
 
 /* Receives a message through a locally unbound port. Threads that call this function are
