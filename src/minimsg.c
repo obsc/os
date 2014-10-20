@@ -2,14 +2,29 @@
  *  Implementation of minimsgs and miniports.
  */
 #include "minimsg.h"
+#include "queue.h"
+#include "synch.h"
 #include "network.h"
 
-struct miniport
-{
-    int dummy; /* you should erase this field and replace it with your definition */
+struct miniport {
+    char port_type;
+    int port_number;
+
+    union {
+        struct {
+            queue_t incoming_data;
+            semaphore_t lock; // Maybe remove this?
+            semaphore_t ready;
+        } unbound;
+        struct {
+            network_address_t remote_address;
+            int remote_unbound_port;
+        } bound;
+    } u;
 };
 
-void network_handler(network_interrupt_arg_t *arg) {
+void
+network_handler(network_interrupt_arg_t *arg) {
 
 }
 
@@ -28,8 +43,7 @@ minimsg_initialize() {
  * outside this range, it is considered an error.
  */
 miniport_t
-miniport_create_unbound(int port_number)
-{
+miniport_create_unbound(int port_number) {
     return 0;
 }
 
@@ -42,8 +56,7 @@ miniport_create_unbound(int port_number)
  * currently in use.
  */
 miniport_t
-miniport_create_bound(network_address_t addr, int remote_unbound_port_number)
-{
+miniport_create_bound(network_address_t addr, int remote_unbound_port_number) {
     return 0;
 }
 
@@ -51,8 +64,7 @@ miniport_create_bound(network_address_t addr, int remote_unbound_port_number)
  * the time it was destroyed, subsequent behavior is undefined.
  */
 void
-miniport_destroy(miniport_t miniport)
-{
+miniport_destroy(miniport_t miniport) {
 }
 
 /* Sends a message through a locally bound port (the bound port already has an associated
@@ -65,8 +77,7 @@ miniport_destroy(miniport_t miniport)
  * data payload bytes sent not inclusive of the header.
  */
 int
-minimsg_send(miniport_t local_unbound_port, miniport_t local_bound_port, minimsg_t msg, int len)
-{
+minimsg_send(miniport_t local_unbound_port, miniport_t local_bound_port, minimsg_t msg, int len) {
     return 0;
 }
 
@@ -78,8 +89,8 @@ minimsg_send(miniport_t local_unbound_port, miniport_t local_bound_port, minimsg
  * data payload and data length via the respective msg and len parameter. The return value
  * of this function is the number of data payload bytes received not inclusive of the header.
  */
-int minimsg_receive(miniport_t local_unbound_port, miniport_t* new_local_bound_port, minimsg_t msg, int *len)
-{
+int
+minimsg_receive(miniport_t local_unbound_port, miniport_t* new_local_bound_port, minimsg_t msg, int *len) {
     return 0;
 }
 
