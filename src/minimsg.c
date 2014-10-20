@@ -1,6 +1,7 @@
 /*
  *  Implementation of minimsgs and miniports.
  */
+#include <stdlib.h>
 #include "minimsg.h"
 #include "queue.h"
 #include "synch.h"
@@ -23,6 +24,10 @@ struct miniport {
     } u;
 };
 
+miniport_t unbound_ports[NUMPORTS]; // Array of all the unbound ports
+miniport_t bound_ports[NUMPORTS]; // Array of all the bound ports
+int next_bound_id; // Next bound port id to use
+
 void
 network_handler(network_interrupt_arg_t *arg) {
 
@@ -32,7 +37,16 @@ network_handler(network_interrupt_arg_t *arg) {
  */
 void
 minimsg_initialize() {
+    int i;
+    // Initialize network with handler
     network_initialize(network_handler);
+    // Initialize global id counter
+    next_bound_id = 0;
+    // Initializes both tables to 0
+    for (i = 0; i < NUMPORTS; i++) {
+        unbound_ports[i] = NULL;
+        bound_ports[i] = NULL;
+    }
 }
 
 /* Creates an unbound port for listening. Multiple requests to create the same

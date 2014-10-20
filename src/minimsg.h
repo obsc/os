@@ -13,6 +13,9 @@
  * Must be <= MAX_NETWORK_PKT_SIZE - NETWORK_HDR_SIZE
  */
 #define MINIMSG_MAX_MSG_SIZE (4096)
+#define NUMPORTS 32768
+
+enum {UNBOUND = 1, BOUND};
 
 typedef struct miniport* miniport_t;
 typedef char* minimsg_t;

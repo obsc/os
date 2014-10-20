@@ -21,7 +21,7 @@
  *  You must define the thread control block as a struct minithread.
  */
 
-typedef enum {NEW, WAITING, READY, RUNNING, ZOMBIE} status_t;
+typedef enum {NEW = 1, WAITING, READY, RUNNING, ZOMBIE} status_t;
 typedef struct minithread *minithread_t;
 
 long time_ticks; // Current time in number of interrupt ticks
