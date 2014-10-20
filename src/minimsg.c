@@ -3,6 +3,7 @@
  */
 #include <stdlib.h>
 #include "minimsg.h"
+#include "network.h"
 #include "queue.h"
 #include "synch.h"
 #include "network.h"
@@ -31,6 +32,15 @@ int next_bound_id; // Next bound port id to use (NUMPORTS less than port number)
 void
 network_handler(network_interrupt_arg_t *arg) {
 
+}
+
+/* Increments the bound id
+ */
+void
+increment_bound_id() {
+    if (++next_bound_id >= NUMPORTS) {
+        next_bound_id = 0;
+    }
 }
 
 /* performs any required initialization of the minimsg layer.
@@ -65,6 +75,22 @@ new_unbound(int port_number) {
     unbound_ports[port_number] = port;
 }
 
+/*
+ * Instantiates a new bound port and puts it into the array of ports
+ * Should only be called when the port is NULL
+ */
+void
+new_bound(int bound_id, network_address_t addr, int remote_unbound_port) {
+    miniport_t port = (miniport_t) malloc (sizeof(struct miniport));
+    port->port_type = BOUND;
+    port->port_number = bound_id + NUMPORTS;
+    port->u.bound.remote_address[0] = addr[0];
+    port->u.bound.remote_address[1] = addr[1];
+    port->u.bound.remote_unbound_port = remote_unbound_port;
+
+    bound_ports[bound_id] = port;
+}
+
 /* Creates an unbound port for listening. Multiple requests to create the same
  * unbound port should return the same miniport reference. It is the responsibility
  * of the programmer to make sure he does not destroy unbound miniports while they
@@ -93,11 +119,22 @@ miniport_create_unbound(int port_number) {
  */
 miniport_t
 miniport_create_bound(network_address_t addr, int remote_unbound_port_number) {
-    // Out of range check
-    if (remote_unbound_port_number < NUMPORTS ||
-        remote_unbound_port_number >= 2 * NUMPORTS) return NULL;
+    int i;
+    int cur_id;
 
-    return 0;
+    for (i = 0; i < NUMPORTS; i++) { // Loop once through entire array
+        // The first time through the array, everything is null
+        // so this should terminate in O(1) time
+        if (bound_ports[next_bound_id] == NULL) { // Found new empty location
+            cur_id = next_bound_id;
+            increment_bound_id();
+            new_bound(cur_id, addr, remote_unbound_port_number);
+            return bound_ports[cur_id];
+        }
+        increment_bound_id();
+    }
+
+    return NULL; // All ports are taken
 }
 
 /* Destroys a miniport and frees up its resources. If the miniport was in use at
