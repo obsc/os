@@ -14,7 +14,7 @@ struct miniport {
     union {
         struct {
             queue_t incoming_data;
-            semaphore_t lock; // Maybe remove this?
+            semaphore_t lock; // TODO: Maybe remove this?
             semaphore_t ready;
         } unbound;
         struct {
@@ -26,7 +26,7 @@ struct miniport {
 
 miniport_t unbound_ports[NUMPORTS]; // Array of all the unbound ports
 miniport_t bound_ports[NUMPORTS]; // Array of all the bound ports
-int next_bound_id; // Next bound port id to use
+int next_bound_id; // Next bound port id to use (NUMPORTS less than port number)
 
 void
 network_handler(network_interrupt_arg_t *arg) {
@@ -49,6 +49,22 @@ minimsg_initialize() {
     }
 }
 
+/*
+ * Instantiates a new unbound port and puts it into the array of ports
+ * Should only be called when the port is NULL
+ */
+void
+new_unbound(int port_number) {
+    miniport_t port = (miniport_t) malloc (sizeof(struct miniport));
+    port->port_type = UNBOUND;
+    port->port_number = port_number;
+    port->u.unbound.incoming_data = queue_new();
+    port->u.unbound.lock = semaphore_create(); // TODO: Maybe remove?
+    port->u.unbound.ready = semaphore_create();
+
+    unbound_ports[port_number] = port;
+}
+
 /* Creates an unbound port for listening. Multiple requests to create the same
  * unbound port should return the same miniport reference. It is the responsibility
  * of the programmer to make sure he does not destroy unbound miniports while they
@@ -58,7 +74,10 @@ minimsg_initialize() {
  */
 miniport_t
 miniport_create_unbound(int port_number) {
-    return 0;
+    if (unbound_ports[port_number] == NULL) {
+        new_unbound(port_number);
+    }
+    return unbound_ports[port_number];
 }
 
 /* Creates a bound port for use in sending packets. The two parameters, addr and
