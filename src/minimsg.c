@@ -9,6 +9,10 @@
 #include "synch.h"
 #include "interrupts.h"
 
+#define validUnbound(p) p >= 0 && p < NUMPORTS
+#define validBound(p) p >= NUMPORTS && p < 2 * NUMPORTS
+
+// Miniport structure
 struct miniport {
     char port_type;
     int port_number;
@@ -33,17 +37,40 @@ miniport_t unbound_ports[NUMPORTS]; // Array of all the unbound ports
 miniport_t bound_ports[NUMPORTS]; // Array of all the bound ports
 int next_bound_id; // Next bound port id to use (NUMPORTS less than port number)
 
+/*
+ * Interrupt handler to handle receiving packets
+ * Does nothing if either source or destination ports are invalid port numbers
+ * Does nothing if there is no unbound port instantiated at destination
+ */
 void
 network_handler(network_interrupt_arg_t *arg) {
     interrupt_level_t old_level;
     mini_header_t header;
+    int source;
     int destination;
 
+    if ( !arg ) return;
+
     old_level = set_interrupt_level(DISABLED);
-    header = (mini_header_t) arg->buffer;
-    destination = unpack_unsigned_short(header->destination_port);
-    queue_append(unbound_ports[destination]->u.unbound.incoming_data, arg);
-    semaphore_V(unbound_ports[destination]->u.unbound.ready);
+    // Check protocol type
+    if (arg->buffer[0] == PROTOCOL_MINIDATAGRAM) {
+        header = (mini_header_t) arg->buffer;
+        source = unpack_unsigned_short(header->source_port);
+        destination = unpack_unsigned_short(header->destination_port);
+
+        // Sanity checks
+        if (!(validUnbound(source)) || !(validUnbound(destination)) ||
+            unbound_ports[destination] == NULL) {
+            set_interrupt_level(old_level);
+            return;
+        }
+
+        queue_append(unbound_ports[destination]->u.unbound.incoming_data, arg);
+        semaphore_V(unbound_ports[destination]->u.unbound.ready);
+    } else if (arg->buffer[0] == PROTOCOL_MINISTREAM) {
+        // Ministream logic here
+    }
+
     set_interrupt_level(old_level);
 }
 
@@ -84,6 +111,7 @@ minimsg_initialize() {
 void
 new_unbound(int port_number) {
     miniport_t port = (miniport_t) malloc (sizeof(struct miniport));
+
     // Generic port data
     port->port_type = UNBOUND;
     port->port_number = port_number;
