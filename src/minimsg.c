@@ -74,6 +74,9 @@ new_unbound(int port_number) {
  */
 miniport_t
 miniport_create_unbound(int port_number) {
+    // Out of range check
+    if (port_number < 0 || port_number >= NUMPORTS) return NULL;
+
     if (unbound_ports[port_number] == NULL) {
         new_unbound(port_number);
     }
@@ -90,6 +93,10 @@ miniport_create_unbound(int port_number) {
  */
 miniport_t
 miniport_create_bound(network_address_t addr, int remote_unbound_port_number) {
+    // Out of range check
+    if (remote_unbound_port_number < NUMPORTS ||
+        remote_unbound_port_number >= 2 * NUMPORTS) return NULL;
+
     return 0;
 }
 
