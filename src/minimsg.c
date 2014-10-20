@@ -2,17 +2,22 @@
  *  Implementation of minimsgs and miniports.
  */
 #include "minimsg.h"
+#include "network.h"
 
 struct miniport
 {
     int dummy; /* you should erase this field and replace it with your definition */
 };
 
+void network_handler(network_interrupt_arg_t *arg) {
+
+}
+
 /* performs any required initialization of the minimsg layer.
  */
 void
-minimsg_initialize()
-{
+minimsg_initialize() {
+    network_initialize(network_handler);
 }
 
 /* Creates an unbound port for listening. Multiple requests to create the same

@@ -11,6 +11,7 @@
 #include <stdio.h>
 #include "interrupts.h"
 #include "minithread.h"
+#include "minimsg.h"
 #include "synch.h"
 #include "alarm.h"
 #include "queue.h"
@@ -297,6 +298,8 @@ void minithread_system_initialize(proc_t mainproc, arg_t mainarg) {
     old_level = set_interrupt_level(DISABLED);
     // Initialize clock
     minithread_clock_init(PERIOD * MILLISECOND, clock_handler);
+    // Initialize network
+    minimsg_initialize();
     // Switch into our first thread
     minithread_switch(&system_stack, &(cur_thread->top));
     // Idles
