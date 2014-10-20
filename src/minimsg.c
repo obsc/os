@@ -98,6 +98,19 @@ miniport_create_bound(network_address_t addr, int remote_unbound_port_number) {
  */
 void
 miniport_destroy(miniport_t miniport) {
+    if (miniport == NULL) return;
+
+    if (miniport->port_type == UNBOUND) {
+        // Free internal queue and semaphores
+        queue_free(miniport->u.unbound.incoming_data);
+        semaphore_destroy(miniport->u.unbound.lock); // TODO: Maybe remove?
+        semaphore_destroy(miniport->u.unbound.ready);
+        // Sets to array value to NULL and free
+        unbound_ports[miniport->port_number] = NULL;
+        free(miniport);
+    } else if (miniport->port_type == BOUND) {
+
+    }
 }
 
 /* Sends a message through a locally bound port (the bound port already has an associated
