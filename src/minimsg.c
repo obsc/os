@@ -42,7 +42,7 @@ network_handler(network_interrupt_arg_t *arg) {
     old_level = set_interrupt_level(DISABLED);
     header = (mini_header_t) arg->buffer;
     destination = unpack_unsigned_short(header->destination_port);
-    queue_append(unbound_ports[destination]->u.unbound.incoming_data, *arg);
+    queue_append(unbound_ports[destination]->u.unbound.incoming_data, arg);
     semaphore_V(unbound_ports[destination]->u.unbound.ready);
     set_interrupt_level(old_level);
     // extract the destination port from the buffer
@@ -226,7 +226,7 @@ minimsg_send(miniport_t local_unbound_port, miniport_t local_bound_port, minimsg
 		pack_unsigned_short(header->source_port, local_unbound_port->port_number);
 		pack_address(header->destination_address, local_bound_port->u.bound.remote_address);
 		pack_unsigned_short(header->destination_port, local_bound_port->u.bound.remote_unbound_port);
-		network_send_pkt(header->destination_address, sizeof(struct mini_header), header, len, msg);
+		network_send_pkt(local_bound_port->u.bound.remote_address, sizeof(struct mini_header), (char *) header, len, msg);
         return len;
 	}
     // construct header with the info given
