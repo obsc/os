@@ -237,6 +237,31 @@ minimsg_send(miniport_t local_unbound_port, miniport_t local_bound_port, minimsg
  */
 int
 minimsg_receive(miniport_t local_unbound_port, miniport_t* new_local_bound_port, minimsg_t msg, int *len) {
+	void *node;
+	mini_header_t header;
+	network_interrupt_arg_t *data;
+	minimsg_t payload;
+	if (local_unbound_port == NULL) {
+		new_local_bound_port = NULL;
+		msg = NULL;
+		*len = 0;
+		return 0;
+	}
+
+	semaphore_P(local_unbound_port->u.unbound.ready);
+
+	queue_dequeue(local_unbound_port->u.unbound.incoming_data, &node);
+	data = (network_interrupt_arg_t *) *node;
+	header = (mini_header_t) data->buffer;
+	*new_local_bound_port = miniport_create_bound(unpack_address(header->source_address), unpack_unsigned_short(header->source_port));
+	payload = (minimsg_t) data->buffer[sizeof(struct mini_header)];
+	*len = data->size - sizeof(struct mini_header);
+	memcpy(msg, payload, strlen(payload));
+	
+	free(data);
+	return *len;
+
+
     // probably need to lock/disable interrupts
     // semaphore P on the unbound port's semaphore
 
@@ -247,6 +272,5 @@ minimsg_receive(miniport_t local_unbound_port, miniport_t* new_local_bound_port,
     // store the data and the length in params (need to memcpy data? for freeing)
     // free the message (everything)
     // return the length
-    return 0;
 }
 
