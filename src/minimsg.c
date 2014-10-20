@@ -153,7 +153,9 @@ miniport_destroy(miniport_t miniport) {
         unbound_ports[miniport->port_number] = NULL;
         free(miniport);
     } else if (miniport->port_type == BOUND) {
-
+        // Sets to array value to NULL and free
+        bound_ports[miniport->port_number - NUMPORTS] = NULL;
+        free(miniport);
     }
 }
 
