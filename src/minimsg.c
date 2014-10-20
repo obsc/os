@@ -31,7 +31,15 @@ int next_bound_id; // Next bound port id to use (NUMPORTS less than port number)
 
 void
 network_handler(network_interrupt_arg_t *arg) {
+    unsigned short destination;
+    // extract the destination port from the buffer
+    // (how?) maybe by taking just the first miniheader bytes
+    // and then cast it to miniheader?
 
+    // unpack the destination
+
+    // enqueue the whole network_interrupt_arg_t into message box of the destination
+    // semaphore V on unbound_port[destination]
 }
 
 /* Increments the bound id
@@ -52,7 +60,7 @@ minimsg_initialize() {
     network_initialize(network_handler);
     // Initialize global id counter
     next_bound_id = 0;
-    // Initializes both tables to 0
+    // Initializes both tables to 0, and the message box to empty queues
     for (i = 0; i < NUMPORTS; i++) {
         unbound_ports[i] = NULL;
         bound_ports[i] = NULL;
@@ -170,6 +178,10 @@ miniport_destroy(miniport_t miniport) {
  */
 int
 minimsg_send(miniport_t local_unbound_port, miniport_t local_bound_port, minimsg_t msg, int len) {
+    // construct header with the info given
+    // call network_send_pkt()
+    // (seems too simple??)
+    // do we need to lock this? or disable interrupts while calling? (can multiple sends be concurrent)
     return 0;
 }
 
@@ -183,6 +195,16 @@ minimsg_send(miniport_t local_unbound_port, miniport_t local_bound_port, minimsg
  */
 int
 minimsg_receive(miniport_t local_unbound_port, miniport_t* new_local_bound_port, minimsg_t msg, int *len) {
+    // probably need to lock/disable interrupts
+    // semaphore P on the unbound port's semaphore
+
+    // coming back from wait:
+    // pop the first message
+    // construct the bound port by using header info: address and port
+    // use size - sizeof(miniheader) to find data
+    // store the data and the length in params (need to memcpy data? for freeing)
+    // free the message (everything)
+    // return the length
     return 0;
 }
 
