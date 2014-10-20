@@ -6,7 +6,7 @@
 #include "network.h"
 #include "queue.h"
 #include "synch.h"
-#include "network.h"
+#include "interrupts.h"
 
 struct miniport {
     char port_type;
@@ -32,6 +32,15 @@ int next_bound_id; // Next bound port id to use (NUMPORTS less than port number)
 void
 network_handler(network_interrupt_arg_t *arg) {
     unsigned short destination;
+    mini_header_t header;
+    interrupt_level_t old_level;
+
+    old level = set_interrupt_level(DISABLED);
+    header = (mini_header_t) (*arg)->buffer;
+    destination = header->destination_port;
+    queue_enqueue(unbound_ports[destination]->u.unbound.incoming_data, *arg);
+    semaphore_V(unbound_ports[destination]->u.unbound.ready);
+    set_interrupt_level(old_level);
     // extract the destination port from the buffer
     // (how?) maybe by taking just the first miniheader bytes
     // and then cast it to miniheader?
@@ -178,6 +187,14 @@ miniport_destroy(miniport_t miniport) {
  */
 int
 minimsg_send(miniport_t local_unbound_port, miniport_t local_bound_port, minimsg_t msg, int len) {
+	network_address_t my_address;
+	mini_header_t header = (mini_header_t) malloc (sizeof(struct mini_header));
+	header->protocol = PROTOCOL_MINIDATAGRAM;
+	network_get_my_address(my_address);
+	pack_address(header->source_address, my_address);
+	pack_unsigned_short(header->source_port, local_unbound_port->port_number);
+	
+	header->source_port 
     // construct header with the info given
     // call network_send_pkt()
     // (seems too simple??)
