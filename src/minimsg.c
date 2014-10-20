@@ -215,18 +215,24 @@ miniport_destroy(miniport_t miniport) {
 int
 minimsg_send(miniport_t local_unbound_port, miniport_t local_bound_port, minimsg_t msg, int len) {
 	network_address_t my_address;
-	mini_header_t header = (mini_header_t) malloc (sizeof(struct mini_header));
-	header->protocol = PROTOCOL_MINIDATAGRAM;
-	network_get_my_address(my_address);
-	pack_address(header->source_address, my_address);
-	pack_unsigned_short(header->source_port, local_unbound_port->port_number);
-	
-	header->source_port 
+	mini_header_t header;
+	if (len + sizeof(struct mini_header) > MINIMSG_MAX_MSG_SIZE) {
+		return 0;
+	} else {
+		header = (mini_header_t) malloc (sizeof(struct mini_header));
+		header->protocol = PROTOCOL_MINIDATAGRAM;
+		network_get_my_address(my_address);
+		pack_address(header->source_address, my_address);
+		pack_unsigned_short(header->source_port, local_unbound_port->port_number);
+		pack_address(header->destination_address, local_bound_port->u.bound.remote_address);
+		pack_unsigned_short(header->destination_port, local_bound_port->u.bound.remote_unbound_port);
+		network_send_pkt(header->destination_address, sizeof(struct mini_header), header, len, msg);
+        return len;
+	}
     // construct header with the info given
     // call network_send_pkt()
     // (seems too simple??)
     // do we need to lock this? or disable interrupts while calling? (can multiple sends be concurrent)
-    return 0;
 }
 
 /* Receives a message through a locally unbound port. Threads that call this function are
