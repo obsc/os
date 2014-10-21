@@ -123,6 +123,7 @@ new_unbound(int port_number) {
     port->port_type = UNBOUND;
     port->port_number = port_number;
     // Unbound port data
+    // TODO: NULL CHECKS
     port->u.unbound.incoming_data = queue_new();
     port->u.unbound.lock = semaphore_create(); // TODO: Maybe remove?
     port->u.unbound.ready = semaphore_create();
@@ -221,16 +222,13 @@ miniport_destroy(miniport_t miniport) {
         queue_free(miniport->u.unbound.incoming_data);
         semaphore_destroy(miniport->u.unbound.lock); // TODO: Maybe remove?
         semaphore_destroy(miniport->u.unbound.ready);
-        // Sets to array value to NULL and free
-        free(miniport);
     } else if (miniport->port_type == BOUND) {
         // Sets to array value to NULL and free
         semaphore_P(mutex_bound); // Acquire lock
         bound_ports[miniport->port_number - NUMPORTS] = NULL;
         semaphore_V(mutex_bound); // Release lock
-
-        free(miniport);
     }
+    free(miniport);
 }
 
 /* Sends a message through a locally bound port (the bound port already has an associated
@@ -246,14 +244,18 @@ int
 minimsg_send(miniport_t local_unbound_port, miniport_t local_bound_port, minimsg_t msg, int len) {
 	network_address_t my_address;
 	mini_header_t header;
-	// Size check
-    if (len + sizeof(struct mini_header) > MINIMSG_MAX_MSG_SIZE) {
-		return 0;
-	}
+	// Null checks
+	if ( !local_unbound_port || !local_bound_port || msg == NULL ) return 0;
+
+    // Size check
+    if (len + sizeof(struct mini_header) > MINIMSG_MAX_MSG_SIZE) return 0;
 
 	network_get_my_address(my_address); // Get my address
     // Construct a header to send
 	header = (mini_header_t) malloc (sizeof(struct mini_header));
+
+    if ( !header ) return 0;
+
 	header->protocol = PROTOCOL_MINIDATAGRAM;
 	// Pack source and destination
     pack_address(header->source_address, my_address);
@@ -261,7 +263,9 @@ minimsg_send(miniport_t local_unbound_port, miniport_t local_bound_port, minimsg
 	pack_address(header->destination_address, local_bound_port->u.bound.remote_address);
 	pack_unsigned_short(header->destination_port, local_bound_port->u.bound.remote_unbound_port);
 
-    network_send_pkt(local_bound_port->u.bound.remote_address, sizeof(struct mini_header), (char *) header, len, msg);
+    if (network_send_pkt(local_bound_port->u.bound.remote_address, sizeof(struct mini_header), (char *) header, len, msg) == -1) {
+        return 0;
+    }
     return len;
 }
 
@@ -278,16 +282,16 @@ minimsg_receive(miniport_t local_unbound_port, miniport_t* new_local_bound_port,
 	void *node;
 	mini_header_t header;
 	network_interrupt_arg_t *data;
-	char *payload;
 	network_address_t source_address;
 
-    if (local_unbound_port == NULL) {
-		new_local_bound_port = NULL;
-		msg = NULL;
+    // Null check
+    if ( !local_unbound_port ) {
+		*new_local_bound_port = NULL;
 		*len = 0;
 		return 0;
 	}
 
+    // Wait until ready
 	semaphore_P(local_unbound_port->u.unbound.ready);
 
 	queue_dequeue(local_unbound_port->u.unbound.incoming_data, &node);
@@ -296,24 +300,20 @@ minimsg_receive(miniport_t local_unbound_port, miniport_t* new_local_bound_port,
 
     unpack_address(header->source_address, source_address);
     *new_local_bound_port = miniport_create_bound(source_address, unpack_unsigned_short(header->source_port));
-	*len = data->size - sizeof(struct mini_header);
 
-    payload = data->buffer + sizeof(struct mini_header);
-	memcpy(msg, payload, *len);
+    // Failed to get a new bound port
+    // TODO: maybe change?
+    if ( *new_local_bound_port == NULL ) {
+        *new_local_bound_port = NULL;
+        *len = 0;
+        return 0;
+    }
+
+    *len = data->size - sizeof(struct mini_header);
+
+	memcpy(msg, data->buffer + sizeof(struct mini_header), *len);
 
 	free(data);
 	return *len;
-
-
-    // probably need to lock/disable interrupts
-    // semaphore P on the unbound port's semaphore
-
-    // coming back from wait:
-    // pop the first message
-    // construct the bound port by using header info: address and port
-    // use size - sizeof(miniheader) to find data
-    // store the data and the length in params (need to memcpy data? for freeing)
-    // free the message (everything)
-    // return the length
 }
 
