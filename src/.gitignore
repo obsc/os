@@ -15,6 +15,7 @@ mqueue_test
 shop
 test_int
 test_alarm
+network_port_stress_test
 .depend
 *.o
 
