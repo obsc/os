@@ -12,6 +12,7 @@
 #include "interrupts.h"
 #include "minithread.h"
 #include "minimsg.h"
+#include "miniheader.h"
 #include "synch.h"
 #include "alarm.h"
 #include "queue.h"
@@ -233,6 +234,33 @@ void minithread_stop() {
 }
 
 /*
+ * Unblocks a semaphore (used by sleep)
+ */
+void unblock(void *sem) {
+    semaphore_V((semaphore_t) sem);
+}
+
+/*
+ * sleep with timeout in milliseconds
+ */
+void minithread_sleep_with_timeout(int delay) {
+    interrupt_level_t old_level;
+    semaphore_t sleep_done;
+
+    old_level = set_interrupt_level(DISABLED);
+
+    sleep_done = semaphore_create();
+    semaphore_initialize(sleep_done, 0);
+    // set alarm to wake up thread after delay
+    register_alarm(delay, unblock, sleep_done);
+    // wait until alarm wakes up thread
+    semaphore_P(sleep_done);
+    semaphore_destroy(sleep_done);
+
+    set_interrupt_level(old_level);
+}
+
+/*
  * This is the clock interrupt handling routine.
  * You have to call minithread_clock_init with this
  * function as parameter in minithread_system_initialize
@@ -259,6 +287,28 @@ void clock_handler(void* arg) {
         // if we are idling and a new thread is on the ready queue
         switch_next(&system_stack);
     }
+    set_interrupt_level(old_level);
+}
+
+/*
+ * Interrupt handler to handle receiving packets
+ * Does nothing if either source or destination ports are invalid port numbers
+ * Does nothing if there is no unbound port instantiated at destination
+ */
+void
+network_handler(network_interrupt_arg_t *arg) {
+    interrupt_level_t old_level;
+
+    if ( !arg ) return;
+
+    old_level = set_interrupt_level(DISABLED);
+    // Check protocol type
+    if (arg->buffer[0] == PROTOCOL_MINIDATAGRAM) {
+        minimsg_handle(arg);
+    } else if (arg->buffer[0] == PROTOCOL_MINISTREAM) {
+        // Ministream logic here
+    }
+
     set_interrupt_level(old_level);
 }
 
@@ -299,34 +349,10 @@ void minithread_system_initialize(proc_t mainproc, arg_t mainarg) {
     // Initialize clock
     minithread_clock_init(PERIOD * MILLISECOND, clock_handler);
     // Initialize network
+    network_initialize(network_handler);
     minimsg_initialize();
     // Switch into our first thread
     minithread_switch(&system_stack, &(cur_thread->top));
     // Idles
     while (1);
 }
-
-/*
- * Unblocks a semaphore (used by sleep)
- */
-void unblock(void *sem) {
-    semaphore_V((semaphore_t) sem);
-}
-
-/*
- * sleep with timeout in milliseconds
- */
-void minithread_sleep_with_timeout(int delay) {
-    interrupt_level_t old_level;
-    old_level = set_interrupt_level(DISABLED);
-
-    semaphore_t block = semaphore_create();
-    semaphore_initialize(block, 0);
-    // set alarm to wake up thread after delay
-    register_alarm(delay, unblock, block);
-    // wait until alarm wakes up thread
-    semaphore_P(block);
-    semaphore_destroy(block);
-    set_interrupt_level(old_level);
-}
-

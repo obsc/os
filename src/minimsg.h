@@ -20,6 +20,9 @@ enum {UNBOUND = 1, BOUND};
 typedef struct miniport* miniport_t;
 typedef char* minimsg_t;
 
+/* Handler for receiving a minimsg */
+extern void minimsg_handle(network_interrupt_arg_t *arg);
+
 /* performs any required initialization of the minimsg layer.  */
 extern void minimsg_initialize();
 

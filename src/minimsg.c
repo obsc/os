@@ -38,40 +38,31 @@ miniport_t bound_ports[NUMPORTS]; // Array of all the bound ports
 int next_bound_id; // Next bound port id to use (NUMPORTS less than port number)
 
 /*
- * Interrupt handler to handle receiving packets
- * Does nothing if either source or destination ports are invalid port numbers
- * Does nothing if there is no unbound port instantiated at destination
+ * Handler for receiving a minimsg
+ * Assumes interrupts are disabled throughout
  */
 void
-network_handler(network_interrupt_arg_t *arg) {
-    interrupt_level_t old_level;
+minimsg_handle(network_interrupt_arg_t *arg) {
     mini_header_t header;
     int source;
     int destination;
 
-    if ( !arg ) return;
+    header = (mini_header_t) arg->buffer;
+    source = unpack_unsigned_short(header->source_port);
+    destination = unpack_unsigned_short(header->destination_port);
 
-    old_level = set_interrupt_level(DISABLED);
-    // Check protocol type
-    if (arg->buffer[0] == PROTOCOL_MINIDATAGRAM) {
-        header = (mini_header_t) arg->buffer;
-        source = unpack_unsigned_short(header->source_port);
-        destination = unpack_unsigned_short(header->destination_port);
-
-        // Sanity checks
-        if (!(validUnbound(source)) || !(validUnbound(destination)) ||
-            unbound_ports[destination] == NULL) {
-            set_interrupt_level(old_level);
-            return;
-        }
-
-        queue_append(unbound_ports[destination]->u.unbound.incoming_data, arg);
-        semaphore_V(unbound_ports[destination]->u.unbound.ready);
-    } else if (arg->buffer[0] == PROTOCOL_MINISTREAM) {
-        // Ministream logic here
+    // Sanity checks
+    if (!(validUnbound(source)) || !(validUnbound(destination)) ||
+        unbound_ports[destination] == NULL) {
+        return;
     }
 
-    set_interrupt_level(old_level);
+    // Lock incoming data queue
+    semaphore_P(unbound_ports[destination]->u.unbound.lock);
+    queue_append(unbound_ports[destination]->u.unbound.incoming_data, arg);
+    semaphore_V(unbound_ports[destination]->u.unbound.lock);
+    // One more piece of data ready
+    semaphore_V(unbound_ports[destination]->u.unbound.ready);
 }
 
 /* Increments the bound id
@@ -88,8 +79,6 @@ increment_bound_id() {
 void
 minimsg_initialize() {
     int i;
-    // Initialize network with handler
-    network_initialize(network_handler);
     // Initialize global id counter
     next_bound_id = 0;
     // Initializes both tables to 0, and the message box to empty queues
@@ -263,9 +252,12 @@ minimsg_send(miniport_t local_unbound_port, miniport_t local_bound_port, minimsg
 	pack_address(header->destination_address, local_bound_port->u.bound.remote_address);
 	pack_unsigned_short(header->destination_port, local_bound_port->u.bound.remote_unbound_port);
 
+    // Frees the header after sending the packet
     if (network_send_pkt(local_bound_port->u.bound.remote_address, sizeof(struct mini_header), (char *) header, len, msg) == -1) {
+        free(header);
         return 0;
     }
+    free(header);
     return len;
 }
 
@@ -294,7 +286,11 @@ minimsg_receive(miniport_t local_unbound_port, miniport_t* new_local_bound_port,
     // Wait until ready
 	semaphore_P(local_unbound_port->u.unbound.ready);
 
+    // Lock incoming data queue
+    semaphore_P(local_unbound_port->u.unbound.lock);
 	queue_dequeue(local_unbound_port->u.unbound.incoming_data, &node);
+    semaphore_V(local_unbound_port->u.unbound.lock);
+
 	data = (network_interrupt_arg_t *) node;
 	header = (mini_header_t) data->buffer;
 
