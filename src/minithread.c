@@ -318,15 +318,18 @@ void unblock(void *sem) {
  */
 void minithread_sleep_with_timeout(int delay) {
     interrupt_level_t old_level;
+    semaphore_t sleep_done;
+
     old_level = set_interrupt_level(DISABLED);
 
-    semaphore_t block = semaphore_create();
-    semaphore_initialize(block, 0);
+    sleep_done = semaphore_create();
+    semaphore_initialize(sleep_done, 0);
     // set alarm to wake up thread after delay
-    register_alarm(delay, unblock, block);
+    register_alarm(delay, unblock, sleep_done);
     // wait until alarm wakes up thread
-    semaphore_P(block);
-    semaphore_destroy(block);
+    semaphore_P(sleep_done);
+    semaphore_destroy(sleep_done);
+
     set_interrupt_level(old_level);
 }
 
