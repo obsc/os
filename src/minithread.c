@@ -12,6 +12,7 @@
 #include "interrupts.h"
 #include "minithread.h"
 #include "minimsg.h"
+#include "miniheader.h"
 #include "synch.h"
 #include "alarm.h"
 #include "queue.h"
