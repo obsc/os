@@ -5,13 +5,12 @@
 #include "minithread.h"
 #include "minimsg.h"
 #include "synch.h"
+#include "queue.h"
 
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
 #include <assert.h>
-
-
 
 int
 thread(int* arg) {
@@ -30,10 +29,10 @@ thread(int* arg) {
     for (i = 0; i < 2*NUMPORTS; i++) {
         listen_port = miniport_create_unbound(i);
         send_port = miniport_create_bound(my_address, i);
-        if (!listen_port) {
+        if (listen_port) {
             queue_append(listen_ports, listen_port);
         }
-        if (!send_port) {
+        if (send_port) {
             queue_append(send_ports, send_port);
         }
     }
@@ -48,15 +47,14 @@ thread(int* arg) {
     queue_free(listen_ports);
     queue_free(send_ports);
 
-    printf("all finished");
-    
+    printf("all finished\n");
 
 
     return 0;
 }
 
 int
-main(int argc, char** argv) { 
+main(int argc, char** argv) {
     minithread_system_initialize(thread, NULL);
     return -1;
 }

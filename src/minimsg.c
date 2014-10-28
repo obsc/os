@@ -10,7 +10,6 @@
 #include "interrupts.h"
 
 #define validUnbound(p) p >= 0 && p < NUMPORTS
-#define validBound(p) p >= NUMPORTS && p < 2 * NUMPORTS
 
 // Miniport structure
 struct miniport {
@@ -314,7 +313,6 @@ minimsg_receive(miniport_t local_unbound_port, miniport_t* new_local_bound_port,
     *new_local_bound_port = miniport_create_bound(data->sender, source_port);
 
     // Failed to get a new bound port
-    // TODO: maybe change?
     if ( *new_local_bound_port == NULL ) {
         *len = 0;
         return 0;
