@@ -317,6 +317,9 @@ void unblock(void *sem) {
  * sleep with timeout in milliseconds
  */
 void minithread_sleep_with_timeout(int delay) {
+    interrupt_level_t old_level;
+    old_level = set_interrupt_level(DISABLED);
+
     semaphore_t block = semaphore_create();
     semaphore_initialize(block, 0);
     // set alarm to wake up thread after delay
@@ -324,5 +327,6 @@ void minithread_sleep_with_timeout(int delay) {
     // wait until alarm wakes up thread
     semaphore_P(block);
     semaphore_destroy(block);
+    set_interrupt_level(old_level);
 }
 
