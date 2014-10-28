@@ -307,6 +307,7 @@ network_handler(network_interrupt_arg_t *arg) {
         minimsg_handle(arg);
     } else if (arg->buffer[0] == PROTOCOL_MINISTREAM) {
         // Ministream logic here
+        // Currently just drops the packet
     }
 
     set_interrupt_level(old_level);

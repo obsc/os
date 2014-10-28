@@ -20,7 +20,7 @@ struct miniport {
     union {
         struct {
             queue_t incoming_data;
-            semaphore_t lock; // TODO: Maybe remove this?
+            semaphore_t lock;
             semaphore_t ready;
         } unbound;
         struct {
@@ -81,7 +81,7 @@ minimsg_initialize() {
     int i;
     // Initialize global id counter
     next_bound_id = 0;
-    // Initializes both tables to 0, and the message box to empty queues
+    // Initializes both tables to 0
     for (i = 0; i < NUMPORTS; i++) {
         unbound_ports[i] = NULL;
         bound_ports[i] = NULL;
@@ -91,6 +91,8 @@ minimsg_initialize() {
     mutex_bound = semaphore_create();
     // Null check
     if ( !mutex_unbound || !mutex_bound ) {
+        semaphore_destroy(mutex_unbound);
+        semaphore_destroy(mutex_bound);
         return;
     }
 
@@ -112,11 +114,20 @@ new_unbound(int port_number) {
     port->port_type = UNBOUND;
     port->port_number = port_number;
     // Unbound port data
-    // TODO: NULL CHECKS
     port->u.unbound.incoming_data = queue_new();
-    port->u.unbound.lock = semaphore_create(); // TODO: Maybe remove?
+    port->u.unbound.lock = semaphore_create();
     port->u.unbound.ready = semaphore_create();
-    semaphore_initialize(port->u.unbound.lock, 1); // TODO: Maybe remove?
+    // Null check (free if any mallocs fail)
+    if ( !port->u.unbound.incoming_data ||
+         !port->u.unbound.lock || !port->u.unbound.ready) {
+        queue_free(port->u.unbound.incoming_data);
+        semaphore_destroy(port->u.unbound.lock);
+        semaphore_destroy(port->u.unbound.ready);
+        free(port);
+        return;
+    }
+
+    semaphore_initialize(port->u.unbound.lock, 1);
     semaphore_initialize(port->u.unbound.ready, 0);
 
     unbound_ports[port_number] = port;
@@ -176,6 +187,11 @@ miniport_t
 miniport_create_bound(network_address_t addr, int remote_unbound_port_number) {
     int i;
     int cur_id;
+
+    // Out of range check
+    if (remote_unbound_port_number < 0 ||
+        remote_unbound_port_number >= NUMPORTS)
+        return NULL;
 
     semaphore_P(mutex_bound); // Acquire lock
     for (i = 0; i < NUMPORTS; i++) { // Loop once through entire array
@@ -274,7 +290,7 @@ minimsg_receive(miniport_t local_unbound_port, miniport_t* new_local_bound_port,
 	void *node;
 	mini_header_t header;
 	network_interrupt_arg_t *data;
-	network_address_t source_address;
+    int source_port;
 
     // Null check
     if ( !local_unbound_port ) {
@@ -293,14 +309,13 @@ minimsg_receive(miniport_t local_unbound_port, miniport_t* new_local_bound_port,
 
 	data = (network_interrupt_arg_t *) node;
 	header = (mini_header_t) data->buffer;
+    source_port = unpack_unsigned_short(header->source_port);
 
-    unpack_address(header->source_address, source_address);
-    *new_local_bound_port = miniport_create_bound(source_address, unpack_unsigned_short(header->source_port));
+    *new_local_bound_port = miniport_create_bound(data->sender, source_port);
 
     // Failed to get a new bound port
     // TODO: maybe change?
     if ( *new_local_bound_port == NULL ) {
-        *new_local_bound_port = NULL;
         *len = 0;
         return 0;
     }
