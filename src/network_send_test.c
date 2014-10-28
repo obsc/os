@@ -1,8 +1,11 @@
-/* network test for send
- * 1. send a message to an uncreated port 
- *    and then create the port and listen on it
- *    behavior: message should be dropped
- */
+/* network test program 1
+
+   local loopback test: sends and then receives one message on the same machine.
+
+   USAGE: ./network1 <port>
+
+   where <port> is the minimsg port to use
+*/
 
 #include "minithread.h"
 #include "minimsg.h"
@@ -19,7 +22,6 @@
 
 miniport_t listen_port;
 miniport_t send_port;
-miniport_t reply_port;
 
 char text[] = "Hello, world!\n";
 int textlen = 14;
@@ -32,13 +34,12 @@ thread(int* arg) {
     network_address_t my_address;
 
     network_get_my_address(my_address);
-    reply_port = miniport_create_unbound(0);
-    send_port = miniport_create_bound(my_address, 1000);
+    listen_port = miniport_create_unbound(0);
+    send_port = miniport_create_bound(my_address, 0);
 
     minimsg_send(listen_port, send_port, text, textlen);
-    listen_port = miniport_create_unbound(1000);
     minimsg_receive(listen_port, &from, buffer, &length);
-    printf("%s", buffer); //should not print
+    printf("%s", buffer);
 
     return 0;
 }
