@@ -60,7 +60,10 @@ network_send_test3
   - In this case, the message should be dropped.
 
 network_forward
-  -
+  - This forwards messages from one computer to another
+  - Forwards all incoming traffic to a user defined hostname
+  - Interfaces directly with network5, receives messages sent by network5 and
+    sends to hostname
 
 ================================================================================
 
