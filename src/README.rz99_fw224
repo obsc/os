@@ -8,8 +8,32 @@ Minimsg
 minimsg.h
   - added minimsg_handle for the network handler to call
 minimsg.c
-  -
+  - minimsg_handle assumes interrupts are disabled
+  - minimsg_handle does sanity checks, and enqueues the network_interrupt_arg_t
+    onto the correct port (dropped if port isn't made yet)
 
+  - two arrays for unbound and bound ports, with a mutex of each
+  - unbound port has a queue for data, with a lock on the queue and a counting
+    semaphore for receiving threads to wait on
+
+  - create_bound and create_unbound return NULL on failure
+  - create_bound fails when all bound ports are taken up and takes O(1) time
+    for the first iteration through the array
+
+  - when destroying an unbound port, all data enqueued onto the queue is
+    automatically freed.
+
+  - send and receive have failure returns of -1
+  - send fails on null inputs, msg too large, or failure to malloc a header
+  - send assumes network_send_pkt sends whole packet (all or nothing). If
+    network_send_pkt fails, we assume nothing was sent, otherwise we assume
+    the whole packet was sent
+
+  - In receive, if payload is too large, we only memcpy the buffer size (*len).
+  - If we fail to construct a bound port for replies, we return -1 but have a
+    *len representing how much we copied.
+  - constructs the reply bound port with the source address in the header
+  - receive frees the network_interrupt_arg_t
 
 ================================================================================
 Minithread
