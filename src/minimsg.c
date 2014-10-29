@@ -273,6 +273,7 @@ minimsg_send(miniport_t local_unbound_port, miniport_t local_bound_port, minimsg
         return 0;
     }
     free(header);
+    // Assumes that we have transmitted the whole message if successful
     return len;
 }
 
@@ -289,6 +290,7 @@ minimsg_receive(miniport_t local_unbound_port, miniport_t* new_local_bound_port,
 	void *node;
 	mini_header_t header;
 	network_interrupt_arg_t *data;
+    network_address_t source_address;
     int source_port;
 
     // Null check
@@ -308,9 +310,10 @@ minimsg_receive(miniport_t local_unbound_port, miniport_t* new_local_bound_port,
 
 	data = (network_interrupt_arg_t *) node;
 	header = (mini_header_t) data->buffer;
+    unpack_address(header->source_address, source_address);
     source_port = unpack_unsigned_short(header->source_port);
 
-    *new_local_bound_port = miniport_create_bound(data->sender, source_port);
+    *new_local_bound_port = miniport_create_bound(source_address, source_port);
 
     // Failed to get a new bound port
     if ( *new_local_bound_port == NULL ) {
