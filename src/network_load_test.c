@@ -19,7 +19,6 @@ int
 receive(int* arg) {
     char buffer[BUFFER_SIZE];
     int length;
-    int i;
     miniport_t port;
     miniport_t from;
 
@@ -49,10 +48,12 @@ transmit(int* arg) {
     dest = miniport_create_bound(addr, 1);
 
     for (i=0; i<MAX_COUNT; i++) {
-        printf("Sending packet %d.\n", i+1);
-        sprintf(buffer, "Count is %d.\n", i+1);
+        printf("Sending packet %d.\n", i);
+        sprintf(buffer, "Count is %d.\n", i);
         length = strlen(buffer) + 1;
+
         minithread_sleep_with_timeout(1);
+
         minimsg_send(port, dest, buffer, length);
     }
 
@@ -60,21 +61,27 @@ transmit(int* arg) {
 }
 
 int
-main(int argc, char** argv) {
+spawner_receive (int *arg) {
     int i;
+    for (i=0; i<MAX_COUNT; i++) {
+        minithread_fork(receive, NULL);
+    }
+    return 0;
+}
+
+int
+main(int argc, char** argv) {
     short fromport, toport;
     fromport = atoi(argv[1]);
     toport = atoi(argv[2]);
-    network_udp_ports(fromport,toport); 
+    network_udp_ports(fromport,toport);
 
     if (argc > 3) {
         hostname = argv[3];
         minithread_system_initialize(transmit, NULL);
     }
     else {
-        for (i=0; i<MAX_COUNT; i++) {
-            minithread_system_initialize(receive, NULL);
-        }
+        minithread_system_initialize(spawner_receive, NULL);
     }
 
     return -1;
