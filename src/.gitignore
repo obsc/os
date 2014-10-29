@@ -18,6 +18,7 @@ test_alarm
 network_port_stress_test
 network_send_test
 network_send_test2
+network_send_test3
 network_forward
 .depend
 *.o

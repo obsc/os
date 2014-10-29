@@ -33,7 +33,7 @@ receive(int* arg) {
     length = BUFFER_SIZE;
     printf("I am receiver %i\n", cur_id);
     minimsg_receive(port, &from, buffer, &length);
-    printf("Receiver %i, %s\n", cur_id, buffer);
+    printf("Receiver %i, %s", cur_id, buffer);
     miniport_destroy(from);
 
     return 0;

@@ -37,6 +37,7 @@ thread(int* arg) {
 
     minimsg_send(listen_port, send_port, text, textlen);
     listen_port = miniport_create_unbound(1000);
+    printf("waiting\n");
     minimsg_receive(listen_port, &from, buffer, &length);
     printf("%s", buffer); //should not print
 
