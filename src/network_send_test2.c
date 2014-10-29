@@ -2,6 +2,9 @@
  * sends two messages while three threads
  * are waiting. Test for correct order:
  * (a,b,c waiting in order, a,b get messages)
+ *
+ *    USAGE: ./network_send_test2 <port>
+ * 
  */
 
 #include "defs.h"
@@ -33,7 +36,7 @@ receive(int* arg) {
     length = BUFFER_SIZE;
     printf("I am receiver %i\n", cur_id);
     minimsg_receive(port, &from, buffer, &length);
-    printf("Receiver %i, %s\n", cur_id, buffer);
+    printf("Receiver %i, %s", cur_id, buffer);
     miniport_destroy(from);
 
     return 0;
@@ -79,10 +82,9 @@ spawner(int* arg) {
 
 int
 main(int argc, char** argv) {
-    short fromport, toport;
+    short fromport;
     fromport = atoi(argv[1]);
-    toport = atoi(argv[2]);
-    network_udp_ports(fromport,toport);
+    network_udp_ports(fromport,fromport);
     minithread_system_initialize(spawner, NULL);
     return -1;
 }

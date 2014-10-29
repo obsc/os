@@ -1,7 +1,9 @@
 /* network test for send
- * 1. send a message to a port 
+ *    send a message to a port
  *    and then delete the port and recreate as well as listen on it
  *    behavior: message should be dropped
+ *
+ *    USAGE: ./network_send_test3 <port>
  */
 
 #include "minithread.h"
@@ -35,8 +37,10 @@ thread(int* arg) {
     send_port = miniport_create_bound(my_address, 0);
 
     minimsg_send(receive_port, send_port, text, textlen);
+    minithread_sleep_with_timeout(1000);
     miniport_destroy(receive_port);
     receive_port = miniport_create_unbound(0);
+    printf("waiting\n");
     minimsg_receive(receive_port, &from, buffer, &length);
     printf("%s", buffer); //should not print
 

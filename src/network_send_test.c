@@ -2,6 +2,8 @@
  * 1. send a message to an uncreated port 
  *    and then create the port and listen on it
  *    behavior: message should be dropped
+ *
+ *    USAGE: ./network_send_test1 <port>
  */
 
 #include "minithread.h"
@@ -37,6 +39,7 @@ thread(int* arg) {
 
     minimsg_send(listen_port, send_port, text, textlen);
     listen_port = miniport_create_unbound(1000);
+    printf("waiting\n");
     minimsg_receive(listen_port, &from, buffer, &length);
     printf("%s", buffer); //should not print
 
