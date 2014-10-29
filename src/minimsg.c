@@ -227,7 +227,7 @@ miniport_destroy(miniport_t miniport) {
         semaphore_V(mutex_unbound); // Release lock
 
         while (queue_dequeue(miniport->u.unbound.incoming_data, &data) == 0) {
-            free((network_interrupt_arg_t) data);
+            free((network_interrupt_arg_t *) data);
         }
         queue_free(miniport->u.unbound.incoming_data);
         semaphore_destroy(miniport->u.unbound.lock);
@@ -255,16 +255,16 @@ minimsg_send(miniport_t local_unbound_port, miniport_t local_bound_port, minimsg
 	network_address_t my_address;
 	mini_header_t header;
 	// Null checks
-	if ( !local_unbound_port || !local_bound_port || msg == NULL ) return 0;
+	if ( !local_unbound_port || !local_bound_port || msg == NULL ) return -1;
 
     // Size check
-    if (len + sizeof(struct mini_header) > MINIMSG_MAX_MSG_SIZE) return 0;
+    if (len + sizeof(struct mini_header) > MINIMSG_MAX_MSG_SIZE) return -1;
 
 	network_get_my_address(my_address); // Get my address
     // Construct a header to send
 	header = (mini_header_t) malloc (sizeof(struct mini_header));
 
-    if ( !header ) return 0;
+    if ( !header ) return -1;
 
 	header->protocol = PROTOCOL_MINIDATAGRAM;
 	// Pack source and destination
@@ -276,7 +276,7 @@ minimsg_send(miniport_t local_unbound_port, miniport_t local_bound_port, minimsg
     // Frees the header after sending the packet
     if (network_send_pkt(local_bound_port->u.bound.remote_address, sizeof(struct mini_header), (char *) header, len, msg) == -1) {
         free(header);
-        return 0;
+        return -1;
     }
     free(header);
     // Assumes that we have transmitted the whole message if successful
@@ -304,7 +304,7 @@ minimsg_receive(miniport_t local_unbound_port, miniport_t* new_local_bound_port,
     if ( !local_unbound_port ) {
 		*new_local_bound_port = NULL;
 		*len = 0;
-		return 0;
+		return -1;
 	}
 
     // Wait until ready
