@@ -129,6 +129,7 @@ new_unbound(int port_number) {
     semaphore_initialize(port->u.unbound.lock, 1);
     semaphore_initialize(port->u.unbound.ready, 0);
 
+    // Successfully created an unbound port
     unbound_ports[port_number] = port;
 }
 
@@ -150,6 +151,7 @@ new_bound(int bound_id, network_address_t addr, int remote_unbound_port) {
     port->u.bound.remote_address[1] = addr[1];
     port->u.bound.remote_unbound_port = remote_unbound_port;
 
+    // Successfully created a bound port
     bound_ports[bound_id] = port;
 }
 
@@ -225,10 +227,10 @@ miniport_destroy(miniport_t miniport) {
         semaphore_V(mutex_unbound); // Release lock
 
         while (queue_dequeue(miniport->u.unbound.incoming_data, &data) == 0) {
-            free((network_interrupt_arg_t) data);
+            free((network_interrupt_arg_t *) data);
         }
         queue_free(miniport->u.unbound.incoming_data);
-        semaphore_destroy(miniport->u.unbound.lock); // TODO: Maybe remove?
+        semaphore_destroy(miniport->u.unbound.lock);
         semaphore_destroy(miniport->u.unbound.ready);
     } else if (miniport->port_type == BOUND) {
         // Sets to array value to NULL and free
@@ -253,16 +255,16 @@ minimsg_send(miniport_t local_unbound_port, miniport_t local_bound_port, minimsg
 	network_address_t my_address;
 	mini_header_t header;
 	// Null checks
-	if ( !local_unbound_port || !local_bound_port || msg == NULL ) return 0;
+	if ( !local_unbound_port || !local_bound_port || msg == NULL ) return -1;
 
     // Size check
-    if (len + sizeof(struct mini_header) > MINIMSG_MAX_MSG_SIZE) return 0;
+    if (len + sizeof(struct mini_header) > MINIMSG_MAX_MSG_SIZE) return -1;
 
 	network_get_my_address(my_address); // Get my address
     // Construct a header to send
 	header = (mini_header_t) malloc (sizeof(struct mini_header));
 
-    if ( !header ) return 0;
+    if ( !header ) return -1;
 
 	header->protocol = PROTOCOL_MINIDATAGRAM;
 	// Pack source and destination
@@ -274,7 +276,7 @@ minimsg_send(miniport_t local_unbound_port, miniport_t local_bound_port, minimsg
     // Frees the header after sending the packet
     if (network_send_pkt(local_bound_port->u.bound.remote_address, sizeof(struct mini_header), (char *) header, len, msg) == -1) {
         free(header);
-        return 0;
+        return -1;
     }
     free(header);
     // Assumes that we have transmitted the whole message if successful
@@ -293,6 +295,7 @@ int
 minimsg_receive(miniport_t local_unbound_port, miniport_t* new_local_bound_port, minimsg_t msg, int *len) {
 	void *node;
 	mini_header_t header;
+    int payload_size;
 	network_interrupt_arg_t *data;
     network_address_t source_address;
     int source_port;
@@ -301,18 +304,28 @@ minimsg_receive(miniport_t local_unbound_port, miniport_t* new_local_bound_port,
     if ( !local_unbound_port ) {
 		*new_local_bound_port = NULL;
 		*len = 0;
-		return 0;
+		return -1;
 	}
 
     // Wait until ready
 	semaphore_P(local_unbound_port->u.unbound.ready);
 
-    // Lock incoming data queue
+    // Lock incoming data queue to get data
     semaphore_P(local_unbound_port->u.unbound.lock);
 	queue_dequeue(local_unbound_port->u.unbound.incoming_data, &node);
     semaphore_V(local_unbound_port->u.unbound.lock);
 
 	data = (network_interrupt_arg_t *) node;
+
+    payload_size = data->size - sizeof(struct mini_header);
+    // We have less payload than the allocated buffer
+    if (payload_size < *len) {
+        *len = payload_size;
+    }
+    // Copies data over to user buffer
+    memcpy(msg, data->buffer + sizeof(struct mini_header), *len);
+
+    // Try to construct bound port
 	header = (mini_header_t) data->buffer;
     unpack_address(header->source_address, source_address);
     source_port = unpack_unsigned_short(header->source_port);
@@ -321,14 +334,11 @@ minimsg_receive(miniport_t local_unbound_port, miniport_t* new_local_bound_port,
 
     // Failed to get a new bound port
     if ( *new_local_bound_port == NULL ) {
-        *len = 0;
-        return 0;
+        free(data);
+        return -1;
     }
 
-    *len = data->size - sizeof(struct mini_header);
-
-	memcpy(msg, data->buffer + sizeof(struct mini_header), *len);
-
+    // Successfully created bound port
 	free(data);
 	return *len;
 }
