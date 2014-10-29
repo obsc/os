@@ -17,26 +17,24 @@
 #define MAX_COUNT 2
 
 char* hostname;
-int receiver_num;
 
 int
 receive(int* arg) {
     char buffer[BUFFER_SIZE];
     int length;
-    int i;
+    int cur_id;
     miniport_t port;
     miniport_t from;
 
+    cur_id = *arg;
+
     port = miniport_create_unbound(1);
 
-    for (i=0; i<MAX_COUNT; i++) {
-        length = BUFFER_SIZE;
-        printf("I am receiver %i\n", receiver_num);
-        receiver_num +=1;
-        minimsg_receive(port, &from, buffer, &length);
-        printf("%s", buffer);
-        miniport_destroy(from);
-    }
+    length = BUFFER_SIZE;
+    printf("I am receiver %i\n", cur_id);
+    minimsg_receive(port, &from, buffer, &length);
+    printf("Receiver %i, %s\n", cur_id, buffer);
+    miniport_destroy(from);
 
     return 0;
 }
@@ -50,9 +48,7 @@ transmit(int* arg) {
     miniport_t port;
     miniport_t dest;
 
-    AbortOnCondition(network_translate_hostname(hostname, addr) < 0,
-                     "Could not resolve hostname, exiting.");
-
+    network_get_my_address(addr);
     port = miniport_create_unbound(0);
     dest = miniport_create_bound(addr, 1);
 
@@ -68,11 +64,17 @@ transmit(int* arg) {
 
 int
 spawner(int* arg) {
-    minithread_fork(receiver, NULL);
-    minithread_fork(receiver, NULL);
-    minithread_fork(receiver, NULL);
-    minithread_yield();
+    int a,b,c;
+    a = 1;
+    b = 2;
+    c = 3;
+
+    minithread_fork(receive, &a);
+    minithread_fork(receive, &b);
+    minithread_fork(receive, &c);
+    minithread_sleep_with_timeout(1000);
     minithread_fork(transmit, NULL);
+    return 0;
 }
 
 int
@@ -80,9 +82,7 @@ main(int argc, char** argv) {
     short fromport, toport;
     fromport = atoi(argv[1]);
     toport = atoi(argv[2]);
-    network_udp_ports(fromport,toport); 
-    hostname = argv[3];
-    receiver_num = 1;
+    network_udp_ports(fromport,toport);
     minithread_system_initialize(spawner, NULL);
     return -1;
 }
