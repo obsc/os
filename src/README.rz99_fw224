@@ -47,17 +47,23 @@ Test cases
 
 network_port_stress_test
   - Creates enough ports to overflow the max number of unbound and bound ports
-  - and then destroy them. Stress tests the creation of ports and
-  - overflow behavior.
+    and then destroy them. Stress tests the creation of ports and
+    overflow behavior.
 network_send_test
   - Sends a message to an uncreated port. Then, create the port and listen on it.
   - Expects the message to be dropped.
 network_send_test2
   - Sends two messages to three receiving threads. Tests for the order in which
-  - the messages are received, (a,b,c waiting for messages, a,b will get them).
+    the messages are received, (a,b,c waiting for messages, a,b will get them).
 network_send_test3
   - Sends a message to a port. Then, delete the port and create it again.
   - In this case, the message should be dropped.
+
+network_load_test
+  - This tests heavy loads on the same port in a network
+  - Receiver spawns 1000 threads and receives on the same unbound port number
+  - Sender spawns 1 thread and sends 1000 messages (with 1 millisecond sleep)
+  - Expects that we send all 1000 eventually and receive all 1000 with no loss 
 
 network_forward
   - This forwards messages from one computer to another

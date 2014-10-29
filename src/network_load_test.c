@@ -1,4 +1,17 @@
 /* network load test
+
+    Tests heavy network load on one port and multiple threads.
+    On the receiving side, we spawn 1000 threads all waiting on the same
+    unbound port number.
+    On the sending side, we send 1000 messages.
+
+    USAGE: ./network_load_test <souceport> <destport> [<hostname>]
+
+    sourceport = udp port to listen on.
+    destport   = udp port to send to.
+
+    Listening process if not given a hostname. Sending process if given a
+    hostname.
 */
 
 #include "defs.h"
