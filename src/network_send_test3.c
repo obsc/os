@@ -1,7 +1,9 @@
 /* network test for send
- * 1. send a message to a port
+ *    send a message to a port
  *    and then delete the port and recreate as well as listen on it
  *    behavior: message should be dropped
+ *
+ *    USAGE: ./network_send_test3 <port>
  */
 
 #include "minithread.h"

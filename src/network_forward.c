@@ -1,4 +1,18 @@
 /* network forwarding program
+    
+    fowards all incoming traffic to another machine.
+
+    USAGE: ./network_forward <souceport> <destport> <hostname>
+
+    sourceport = udp port to listen on.
+    destport   = udp port to send to.
+    hostname   = hostname to forward all traffic to
+
+
+    This best interfaces with network5:
+    start a listening server: ./network5 <a> <b>
+    start a forwarding server: ./network_forwarding <c> <a> <listening hostname>
+    start a sending client: ./network5 <d> <c> <forwarding hostname>
 */
 
 #include "defs.h"

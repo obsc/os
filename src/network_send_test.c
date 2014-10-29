@@ -2,6 +2,8 @@
  * 1. send a message to an uncreated port 
  *    and then create the port and listen on it
  *    behavior: message should be dropped
+ *
+ *    USAGE: ./network_send_test1 <port>
  */
 
 #include "minithread.h"
