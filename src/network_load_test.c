@@ -24,7 +24,7 @@
 #include <string.h>
 
 #define BUFFER_SIZE 256
-#define MAX_COUNT 1000
+#define MAX_COUNT 100
 
 char* hostname;
 
@@ -69,6 +69,8 @@ transmit(int* arg) {
 
         minimsg_send(port, dest, buffer, length);
     }
+
+    miniport_destroy(dest);
 
     return 0;
 }
