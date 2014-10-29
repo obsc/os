@@ -199,6 +199,7 @@ void minithread_start(minithread_t t) {
 
     if (t->status != READY && t->status != ZOMBIE) {
         t->status = READY;
+        t->level = 0;
         old_level = set_interrupt_level(DISABLED);
         multilevel_queue_enqueue(ready_queue, t->level, t);
         set_interrupt_level(old_level);

@@ -217,6 +217,7 @@ miniport_create_bound(network_address_t addr, int remote_unbound_port_number) {
  */
 void
 miniport_destroy(miniport_t miniport) {
+    void * data;
     if ( !miniport ) return;
 
     if (miniport->port_type == UNBOUND) {
@@ -225,6 +226,9 @@ miniport_destroy(miniport_t miniport) {
         unbound_ports[miniport->port_number] = NULL;
         semaphore_V(mutex_unbound); // Release lock
 
+        while (queue_dequeue(miniport->u.unbound.incoming_data, &data) == 0) {
+            free((network_interrupt_arg_t) data);
+        }
         queue_free(miniport->u.unbound.incoming_data);
         semaphore_destroy(miniport->u.unbound.lock);
         semaphore_destroy(miniport->u.unbound.ready);
