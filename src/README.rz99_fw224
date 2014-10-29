@@ -22,12 +22,18 @@ minithread.c
 Test cases
 
 network_port_stress_test
-  -
+  - Creates enough ports to overflow the max number of unbound and bound ports
+  - and then destroy them. Stress tests the creation of ports and
+  - overflow behavior.
 network_send_test
-  -
+  - Sends a message to an uncreated port. Then, create the port and listen on it.
+  - Expects the message to be dropped.
 network_send_test2
-  -
-
+  - Sends two messages to three receiving threads. Tests for the order in which
+  - the messages are received, (a,b,c waiting for messages, a,b will get them).
+network_send_test3
+  - Sends a message to a port. Then, delete the port and create it again.
+  - In this case, the message should be dropped.
 network_forward
   -
 
