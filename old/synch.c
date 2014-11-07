@@ -41,6 +41,7 @@ semaphore_t semaphore_create() {
  *      Deallocate a semaphore.
  */
 void semaphore_destroy(semaphore_t sem) {
+    if ( !sem ) return;
     queue_free(sem->waiting);
     free(sem);
 }

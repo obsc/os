@@ -1,3 +1,9 @@
+network1
+network2
+network3
+network4
+network5
+network6
 test1
 test2
 test3
@@ -9,6 +15,12 @@ mqueue_test
 shop
 test_int
 test_alarm
+network_port_stress_test
+network_load_test
+network_send_test
+network_send_test2
+network_send_test3
+network_forward
 .depend
 *.o
 

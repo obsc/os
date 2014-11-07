@@ -1,126 +1,75 @@
 Rene Zhang - rz99
 Fukang Wen - fw224
 
-Implementation details of Project 2 for CS4411 - Fall 2014
+Implementation details of Project 3 for CS4411 - Fall 2014
 ================================================================================
-Alarm
+Minimsg
 
-alarm.h
-  - added initialize_alarms() which initializes the alarm priority queue
-    structure
-  - added check_alarms() which is called every interrupt and runs any possible
-    alarms
-alarm.c
-  - time is held in milliseconds
-  - alarm structure keeps track of function, argument, and time it should be run
-  - deregister searches through the priority queue, deletes and frees the node
-    if it exists, otherwise we assume that the alarm has already been freed
-  - register and deregister both run in worst case O(n)
-  - check_alarms checks the earliest alarm, triggers it if time is up and then
-    repeats. This does not check every element in the queue everytime, so it
-    usually acts within O(1).
-  - However, it will trigger every alarm it can possibly do so it can take up to
-    O(n) in those cases.
-  - alarms are ran instantly inside interrupt handler, which means we must
-    assume that they run fast without blocking, io or any long computation
-test_alarm.c
-  - tests for the alarm and sleeping
-    - Normally, this is impossible because user threads cannot directly register
-      alarms
-  - two threads set up alarms so that "HELLO" is printed once a second
-    - alarms registered in arbitrary order with sleeps in between.
+minimsg.h
+  - added minimsg_handle for the network handler to call
+minimsg.c
+  - minimsg_handle assumes interrupts are disabled
+  - minimsg_handle does sanity checks, and enqueues the network_interrupt_arg_t
+    onto the correct port (dropped if port isn't made yet)
 
-================================================================================
-Pqueue
+  - two arrays for unbound and bound ports, with a mutex of each
+  - unbound port has a queue for data, with a lock on the queue and a counting
+    semaphore for receiving threads to wait on
 
-This is a file we added to act as a priority queue for alarms
+  - create_bound and create_unbound return NULL on failure
+  - create_bound fails when all bound ports are taken up and takes O(1) time
+    for the first iteration through the array
 
-pqueue.h
-  - The interface for this is mostly the same as the interface for queue.h
-    - The only difference is that we also need to provide a priority
-  - We also provide a pqueue_peek function to allow viewing of the head
-    of the priority queue without having to dequeue first
-pqueue.c
-  - This is implemented similarly to queue.c
-  - enqueue iterates over the queue until it finds a location that has a higher
-    priority
-  - enqueue, free and delete run in O(n)
-  - new, dequeue, peek, length run in O(1)
-pqueue_test.c
-  - unit tests for priority queue
+  - when destroying an unbound port, all data enqueued onto the queue is
+    automatically freed.
 
-================================================================================
-Multilevel_queue
+  - send and receive have failure returns of -1
+  - send fails on null inputs, msg too large, or failure to malloc a header
+  - send assumes network_send_pkt sends whole packet (all or nothing). If
+    network_send_pkt fails, we assume nothing was sent, otherwise we assume
+    the whole packet was sent
 
-multilevel_queue.h
-  - No change other than adding a length function
-multilevel_queue.c
-  - in new, we malloc the multiqueue, then the array of queues, then each queue
-    in the array. If any of these mallocs fail, we free up all the successful
-    mallocs previously and return NULL
-  - enqueue and dequeue both fail if passed a nonexistant level (too high/low)
-  - dequeue starts at the input level and then continues to check levels in
-    increasing order. If it reaches the last level, it wraps around to 0.
-mqueue_test.c
-  - unit tests for multilevel_queue
-
-================================================================================
-Synch
-
-synch.h
-  - No changes made
-synch.c
-  - Modified semaphore P and V to be interrupt safe
-    - disabled interrupts through entire body
+  - In receive, if payload is too large, we only memcpy the buffer size (*len).
+  - If we fail to construct a bound port for replies, we return -1 but have a
+    *len representing how much we copied.
+  - constructs the reply bound port with the source address in the header
+  - receive frees the network_interrupt_arg_t
 
 ================================================================================
 Minithread
 
-minithread.h
-  - added macro for PERIOD in milliseconds
-  - added a time_ticks to allow alarm to interface with the clock in minithread
 minithread.c
-  - schedule, reaper, interrupts, sleeps
+  - Added initializing network and minimsgs
+  - Added network_handler
 
-scheduler
-  - multilevel scheduling
-  - At any time, we pick randomly between the 4 levels of the queue 50/25/15/10
-    rate. Then we try to dequeue from there and run that thread. 
-  - if no thread is runnable, we have a while(1) loop in our system initialize
-    thread
-    - this can be interrupted and then a new thread could be run when available
-  - we keep track of the quanta that the current thread has used up. After
-    all the quanta has been used up, we forcefully start a new thread
-  - however, when yielding, sleeping, stopping, the thread will come back on
-    the same quanta level, with all its quanta refreshed. 
-
-reaper
-  - Our reaper thread P's on a garbage semaphore and then cleans up that
-    piece of garbage.
-  - interrupts disabled when dequeueing off zombie queue
-
-interrupts
-  - interrupts disabled inside handler
-  - We keep track of the time as a long
-    - time_ticks represents how many PERIODS has passed
-    - incremented by 1 every interrupt
-  - We also attempt to run any available alarms during the interrupt
-  - If we are running a thread, we increment quanta and kick the thread out if
-    its used up all its available quanta.
-  - If we are idling in the system thread, we switch out if there is another
-    available thread to switch to. 
-
-sleep
-  - We sleep by constructing and initializing a semaphore. We then set an alarm
-    for waking ourselves up and then P the semaphore
-    - The alarm wakes the thread up by V-ing the semaphore
-  - After being woken up, we free the semaphore to prevent memory leaks
-
-test_int.c
-  - test for our scheduling
-  - two threads constantly running and not yielding printing incrementing
-    numbers after a delay
-  - both threads should start out very interleaved (quanta level 0) and then
-    slowly reach a point where one executes for a while (8 quantas, level 3)
-    and then swaps
 ================================================================================
+Test cases
+
+network_port_stress_test
+  - Creates enough ports to overflow the max number of unbound and bound ports
+    and then destroy them. Stress tests the creation of ports and
+    overflow behavior.
+network_send_test
+  - Sends a message to an uncreated port. Then, create the port and listen on it.
+  - Expects the message to be dropped.
+network_send_test2
+  - Sends two messages to three receiving threads. Tests for the order in which
+    the messages are received, (a,b,c waiting for messages, a,b will get them).
+network_send_test3
+  - Sends a message to a port. Then, delete the port and create it again.
+  - In this case, the message should be dropped.
+
+network_load_test
+  - This tests heavy loads on the same port in a network
+  - Receiver spawns 1000 threads and receives on the same unbound port number
+  - Sender spawns 1 thread and sends 1000 messages (with 1 millisecond sleep)
+  - Expects that we send all 1000 eventually and receive all 1000 with no loss 
+
+network_forward
+  - This forwards messages from one computer to another
+  - Forwards all incoming traffic to a user defined hostname
+  - Interfaces directly with network5, receives messages sent by network5 and
+    sends to hostname
+
+================================================================================
+

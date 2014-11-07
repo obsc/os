@@ -13,7 +13,6 @@
 
 #include "machineprimitives.h"
 
-#define PERIOD 100  // Represents how long each clock tick is
 
 /*
  * struct minithread:
@@ -21,10 +20,7 @@
  *  You must define the thread control block as a struct minithread.
  */
 
-typedef enum {NEW = 1, WAITING, READY, RUNNING, ZOMBIE} status_t;
 typedef struct minithread *minithread_t;
-
-long time_ticks; // Current time in number of interrupt ticks
 
 /*
  * minithread_t
@@ -32,7 +28,7 @@ long time_ticks; // Current time in number of interrupt ticks
  *  Create and schedule a new thread of control so
  *  that it starts executing inside proc_t with
  *  initial argument arg.
- */
+ */ 
 extern minithread_t minithread_fork(proc_t proc, arg_t arg);
 
 
