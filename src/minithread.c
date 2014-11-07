@@ -12,6 +12,7 @@
 #include "interrupts.h"
 #include "minithread.h"
 #include "minimsg.h"
+#include "minisocket.h"
 #include "miniheader.h"
 #include "synch.h"
 #include "alarm.h"
@@ -307,8 +308,7 @@ network_handler(network_interrupt_arg_t *arg) {
     if (arg->buffer[0] == PROTOCOL_MINIDATAGRAM) {
         minimsg_handle(arg);
     } else if (arg->buffer[0] == PROTOCOL_MINISTREAM) {
-        // Ministream logic here
-        // Currently just drops the packet
+        minisocket_handle(arg);
     }
 
     set_interrupt_level(old_level);

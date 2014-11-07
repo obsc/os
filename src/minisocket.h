@@ -33,10 +33,13 @@ enum minisocket_error {
   SOCKET_OUTOFMEMORY    /* function could not complete because of insufficient memory */
 };
 
+/* Handler for receiving a message on a minisocket */
+extern void minisocket_handle(network_interrupt_arg_t *arg);
+
 /* Initializes the minisocket layer. */
 void minisocket_initialize();
 
-/* 
+/*
  * Listen for a connection from somebody else. When communication link is
  * created return a minisocket_t through which the communication can be made
  * from now on.
