@@ -6,16 +6,15 @@
 struct minisocket
 {
   int dummy; /* delete this field */
-  /* put your definition of minisockets here */
 };
 
 /* Initializes the minisocket layer. */
-void minisocket_initialize()
-{
+void
+minisocket_initialize() {
 
 }
 
-/* 
+/*
  * Listen for a connection from somebody else. When communication link is
  * created return a minisocket_t through which the communication can be made
  * from now on.
@@ -26,9 +25,9 @@ void minisocket_initialize()
  * Return value: the minisocket_t created, otherwise NULL with the errorcode
  * stored in the "error" variable.
  */
-minisocket_t minisocket_server_create(int port, minisocket_error *error)
-{
-
+minisocket_t
+minisocket_server_create(int port, minisocket_error *error) {
+return 0;
 }
 
 
@@ -37,7 +36,7 @@ minisocket_t minisocket_server_create(int port, minisocket_error *error)
  * established create a minisocket through which the communication can be made
  * from now on.
  *
- * The first argument is the network address of the remote machine. 
+ * The first argument is the network address of the remote machine.
  *
  * The argument "port" is the port number on the remote machine to which the
  * connection is made. The port number of the local machine is one of the free
@@ -46,13 +45,13 @@ minisocket_t minisocket_server_create(int port, minisocket_error *error)
  * Return value: the minisocket_t created, otherwise NULL with the errorcode
  * stored in the "error" variable.
  */
-minisocket_t minisocket_client_create(network_address_t addr, int port, minisocket_error *error)
-{
-
+minisocket_t
+minisocket_client_create(network_address_t addr, int port, minisocket_error *error) {
+return 0;
 }
 
 
-/* 
+/*
  * Send a message to the other end of the socket.
  *
  * The send call should block until the remote host has ACKnowledged receipt of
@@ -71,9 +70,9 @@ minisocket_t minisocket_client_create(network_address_t addr, int port, minisock
  * Return value: returns the number of successfully transmitted bytes. Sets the
  *               error code and returns -1 if an error is encountered.
  */
-int minisocket_send(minisocket_t socket, minimsg_t msg, int len, minisocket_error *error)
-{
-
+int
+minisocket_send(minisocket_t socket, minimsg_t msg, int len, minisocket_error *error) {
+return 0;
 }
 
 /*
@@ -86,9 +85,9 @@ int minisocket_send(minisocket_t socket, minimsg_t msg, int len, minisocket_erro
  * Return value: -1 in case of error and sets the error code, the number of
  *           bytes received otherwise
  */
-int minisocket_receive(minisocket_t socket, minimsg_t msg, int max_len, minisocket_error *error)
-{
-
+int
+minisocket_receive(minisocket_t socket, minimsg_t msg, int max_len, minisocket_error *error) {
+return 0;
 }
 
 /* Close a connection. If minisocket_close is issued, any send or receive should
@@ -96,7 +95,7 @@ int minisocket_receive(minisocket_t socket, minimsg_t msg, int max_len, minisock
  * send or receive in progress. The minisocket is destroyed by minisocket_close
  * function.  The function should never fail.
  */
-void minisocket_close(minisocket_t socket)
-{
+void
+minisocket_close(minisocket_t socket) {
 
 }

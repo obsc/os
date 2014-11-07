@@ -15,7 +15,7 @@ all: test1 test2 test3 buffer sieve mqueue_test queue_test pqueue_test test_int 
 # running "make clean" will remove all files ignored by git.  To ignore more
 # files, you should add them to the file .gitignore
 clean:
-  git clean -fdX
+	git clean -fdX
 
 ################################################################################
 # Everything below this line can be safely ignored.
@@ -43,16 +43,16 @@ OBJ =                              \
     network.o
 
 %: %.o start.o end.o $(OBJ) $(SYSTEMOBJ)
-  $(CC) $(LIB) -o $@ start.o $(filter-out start.o end.o $(SYSTEMOBJ), $^) end.o $(SYSTEMOBJ) $(LFLAGS)
+	$(CC) $(LIB) -o $@ start.o $(filter-out start.o end.o $(SYSTEMOBJ), $^) end.o $(SYSTEMOBJ) $(LFLAGS)
 
 %.o: %.c
-  $(CC) $(CFLAGS) -c $<
+	$(CC) $(CFLAGS) -c $<
 
 machineprimitives_x86_64_asm.o: machineprimitives_x86_64_asm.S
-  $(CC) -c machineprimitives_x86_64_asm.S -o machineprimitives_x86_64_asm.o
+	$(CC) -c machineprimitives_x86_64_asm.S -o machineprimitives_x86_64_asm.o
 
 .depend:
-  gcc -MM *.c > .depend
+	gcc -MM *.c > .depend
 
 .SUFFIXES:
 .PHONY: default all clean
