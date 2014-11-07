@@ -14,9 +14,12 @@
 #include "network.h"
 #include "minimsg.h"
 
+#define NUMPORTS 32768
+
+enum {SERVER = 1, CLIENT};
+
 typedef struct minisocket* minisocket_t;
 typedef enum minisocket_error minisocket_error;
-
 
 enum minisocket_error {
   SOCKET_NOERROR=0,

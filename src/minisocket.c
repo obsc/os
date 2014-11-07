@@ -1,17 +1,68 @@
 /*
  *	Implementation of minisockets.
  */
+#include "defs.h"
 #include "minisocket.h"
+#include "miniheader.h"
+#include "network.h"
+#include "queue.h"
+#include "synch.h"
 
-struct minisocket
-{
-  int dummy; /* delete this field */
+#define validServer(p) p >= 0 && p < NUMPORTS
+
+struct minisocket {
+    char port_type;
+    int port_number;
 };
+
+semaphore_t mutex_server; // Lock for server sockets
+semaphore_t mutex_client; // Lock for client sockets
+
+minisocket_t server_ports[NUMPORTS]; // Array of all the server sockets
+minisocket_t client_ports[NUMPORTS]; // Array of all the client sockets
+int next_client_id; // Next client port id to use
+
+/*
+ * Handler for receiving a message on a socket
+ * Assumes interrupts are disabled throughout
+ */
+void
+minisocket_handle(network_interrupt_arg_t *arg) {
+
+}
+
+/* Increments the client id
+ */
+void
+increment_client_id() {
+    if (++next_client_id >= NUMPORTS) {
+        next_client_id = 0;
+    }
+}
 
 /* Initializes the minisocket layer. */
 void
 minisocket_initialize() {
+    int i;
+    // Initialize global id counter
+    next_client_id = 0;
+    // Initialize both arrays to NULL
+    for (i = 0; i < NUMPORTS; i++) {
+        server_ports[i] = NULL;
+        client_ports[i] = NULL;
+    }
+    // Initialize mutices
+    mutex_server = semaphore_create();
+    mutex_client = semaphore_create();
+    // Null check
+    if ( !mutex_server || !mutex_client ) {
+        semaphore_destroy(mutex_server);
+        semaphore_destroy(mutex_client);
+        return;
+    }
 
+    semaphore_initialize(mutex_server, 1);
+    semaphore_initialize(mutex_client, 1);
 }
 
 /*

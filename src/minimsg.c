@@ -1,13 +1,12 @@
 /*
  *  Implementation of minimsgs and miniports.
  */
-#include <stdlib.h>
+#include "defs.h"
 #include "minimsg.h"
 #include "miniheader.h"
 #include "network.h"
 #include "queue.h"
 #include "synch.h"
-#include "interrupts.h"
 
 #define validUnbound(p) p >= 0 && p < NUMPORTS
 
@@ -80,7 +79,7 @@ minimsg_initialize() {
     int i;
     // Initialize global id counter
     next_bound_id = 0;
-    // Initializes both tables to 0
+    // Initializes both arrays to NULL
     for (i = 0; i < NUMPORTS; i++) {
         unbound_ports[i] = NULL;
         bound_ports[i] = NULL;
