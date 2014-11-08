@@ -12,8 +12,8 @@
 
 #define BASE_DELAY 100
 
-enum { S_LISTENING = 1, S_RESPONDING, S_CONNECTED, S_CLOSING }; // Server state
-enum { C_ESTABLISHING = 1, C_CONNECTED, C_CLOSING }; // Client state
+enum { LISTEN = 1, SYN-RECEIVED, S_ESTABLISHED, S_CLOSING }; // Server state
+enum { SYN-SENT = 1, C_ESTABLISHED, C_CLOSING }; // Client state
 
 struct minisocket {
     char socket_type;
@@ -29,7 +29,7 @@ struct minisocket {
     int timeout; // Current delay
     alarm_id retry_alarm; // Alarm for resending packets
 
-    semaphore_t lock;
+    semaphore_t lock; // Lock on the minisocket
 
     union {
         struct {
@@ -91,25 +91,70 @@ minisocket_initialize() {
     semaphore_initialize(mutex_client, 1);
 }
 
-/* Constructs a new server socket
- * Returns -1 upon memory failure
+mini_header_reliable_t
+create_header(minisocket_t socket, minisocket_error *error) {
+    header = (mini_header_reliable_t) malloc(sizeof(struct mini_header_reliable));
+    if (!header) {
+        *error = SOCKET_OUTOFMEMORY;
+        return -1;
+    }
+
+    header->protocol = PROTOCOL_MINISTREAM;
+
+    network_get_my_address(my_address); // Get my address
+    // Pack source and destination
+    pack_address(header->source_address, my_address);
+    pack_unsigned_short(header->source_port, socket->port_number);
+    pack_address(header->destination_address, socket->remote_address);
+    pack_unsigned_short(header->destination_port, socket->remote_port);
+    // Pack seq and ack numbers
+    pack_unsigned_int(header->seq_number, socket->seq);
+    pack_unsigned_int(header->ack_number, socket->ack);
+
+    *error = SOCKET_NOERROR;
+    return header;
+}
+
+/*
+ * Creates a new socket. Returns null upon failure
  */
-int
-new_server(int port) {
+minisocket_t
+create_socket(int port) {
     minisocket_t socket = (minisocket_t) malloc (sizeof(struct minisocket));
 
-    if ( !socket ) return -1;
+    if ( !socket ) return NULL;
 
     // Generic port data
-    socket->socket_type = SERVER;
     socket->port_number = port;
 
     socket->seq = 1;
     socket->ack = 0;
     socket->num_sent = 0;
     socket->timeout= BASE_DELAY;
+
+    socket->lock = semaphore_create();
+    if ( !socket->lock ) {
+        free(socket);
+        return NULL;
+    }
+    semaphore_initialize(socket, 1);
+
+    return socket;
+}
+
+/* Constructs a new server socket
+ * Returns -1 upon memory failure
+ */
+int
+new_server(int port) {
+    minisocket_t socket = create_socket(port);
+
+    if ( !socket ) return -1;
+
+    // Socket type
+    socket->socket_type = SERVER;
     // TODO: MORE STUFF
-    socket->u.server.server_state = S_LISTENING;
+    socket->u.server.server_state = LISTEN;
 
     // Successfully created a server
     server_ports[port] = socket;
@@ -121,24 +166,18 @@ new_server(int port) {
  */
 int
 new_client(int client_id, network_address_t addr, int port) {
-    minisocket_t socket = (minisocket_t) malloc (sizeof(struct minisocket));
+    minisocket_t socket = create_socket(client_id + NUMPORTS);
 
     if ( !socket ) return -1;
 
-    // Generic port data
+    // Socket type
     socket->socket_type = CLIENT;
-    socket->port_number = client_id + NUMPORTS;
-
-    socket->seq = 1;
-    socket->ack = 0;
-    socket->num_sent = 0;
-    socket->timeout = BASE_DELAY;
 
     socket->remote_address[0] = addr[0];
     socket->remote_address[1] = addr[1];
     socket->remote_port = port;
     // TODO: MORE STUFF
-    socket->u.client.client_state = C_ESTABLISHING;
+    socket->u.client.client_state = SYN-SENT;
 
     // Successfully created a client
     client_ports[client_id] = socket;
@@ -152,11 +191,11 @@ minisocket_t
 server_handshake(minisocket_t socket, minisocket_error *error) {
     while (1) {
         switch (socket->u.server.server_state) {
-            case S_LISTENING: // Listening for Syn
+            case LISTEN: // Listening for Syn
                 break;
-            case S_RESPONDING: // Sending Synacks
+            case SYN-RECEIVED: // Sending Synacks
                 break;
-            case S_CONNECTED: // Received Ack
+            case S_ESTABLISHED: // Received Ack
                 *error = SOCKET_NOERROR;
                 return socket;
             case S_CLOSING: // Socket closed
@@ -172,9 +211,9 @@ minisocket_t
 client_handshake(minisocket_t socket, minisocket_error *error) {
     while (1) {
         switch (socket->u.client.client_state) {
-            case C_ESTABLISHING: // Sending Syn
+            case SYN-SENT: // Sending Syn
                 break;
-            case C_CONNECTED: // Received Synack
+            case C_ESTABLISHED: // Received Synack
                 *error = SOCKET_NOERROR;
                 return socket;
             case C_CLOSING: // Socket closed
@@ -268,25 +307,6 @@ minisocket_client_create(network_address_t addr, int port, minisocket_error *err
     return NULL;
 }
 
-mini_header_reliable_t create_header(minisocket_t socket, minisocket_error *error) {
-    header = (mini_header_reliable_t) malloc(sizeof(struct mini_header_reliable));
-    if (!header) {
-        *error = SOCKET_OUTOFMEMORY;
-        return -1;
-    }
-
-    header->protocol = PROTOCOL_MINISTREAM;
-
-    network_get_my_address(my_address); // Get my address
-    // Pack source and destination
-    pack_address(header->source_address, my_address);
-    pack_unsigned_short(header->source_port, socket->port_number);
-    pack_address(header->destination_address, socket->remote_address);
-    pack_unsigned_short(header->destination_port, socket->remote_port);
-    pack_unsigned_int(header->seq_number, socket->seq);
-    pack_unsigned_int(header->ack_number, socket->ack);
-    return header;
-}
 /*
  * Send a message to the other end of the socket.
  *
