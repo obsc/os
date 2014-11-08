@@ -353,6 +353,7 @@ void minithread_system_initialize(proc_t mainproc, arg_t mainarg) {
     // Initialize network
     network_initialize(network_handler);
     minimsg_initialize();
+    minisocket_initialize();
     // Switch into our first thread
     minithread_switch(&system_stack, &(cur_thread->top));
     // Idles
