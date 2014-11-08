@@ -29,6 +29,8 @@ struct minisocket {
     int timeout; // Current delay
     alarm_id retry_alarm; // Alarm for resending packets
 
+    semaphore_t lock;
+
     union {
         struct {
             char server_state;
@@ -266,7 +268,25 @@ minisocket_client_create(network_address_t addr, int port, minisocket_error *err
     return NULL;
 }
 
+mini_header_reliable_t create_header(minisocket_t socket, minisocket_error *error) {
+    header = (mini_header_reliable_t) malloc(sizeof(struct mini_header_reliable));
+    if (!header) {
+        *error = SOCKET_OUTOFMEMORY;
+        return -1;
+    }
 
+    header->protocol = PROTOCOL_MINISTREAM;
+
+    network_get_my_address(my_address); // Get my address
+    // Pack source and destination
+    pack_address(header->source_address, my_address);
+    pack_unsigned_short(header->source_port, socket->port_number);
+    pack_address(header->destination_address, socket->remote_address);
+    pack_unsigned_short(header->destination_port, socket->remote_port);
+    pack_unsigned_int(header->seq_number, socket->seq);
+    pack_unsigned_int(header->ack_number, socket->ack);
+    return header;
+}
 /*
  * Send a message to the other end of the socket.
  *
@@ -288,7 +308,15 @@ minisocket_client_create(network_address_t addr, int port, minisocket_error *err
  */
 int
 minisocket_send(minisocket_t socket, minimsg_t msg, int len, minisocket_error *error) {
-return 0;
+    mini_header_reliable_t header;
+    network_address_t my_address;
+    if (!socket || !msg || !len) {
+        *error = SOCKET_INVALIDPARAMS;
+        return -1;
+    }
+
+    
+
 }
 
 /*
