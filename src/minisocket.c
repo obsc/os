@@ -144,16 +144,26 @@ create_socket(int port) {
     socket->seq = 1;
     socket->ack = 0;
 
+    socket->send_transition_count = 0;
+
+    socket->send_state = SEND_SENDING;
+
     socket->lock = semaphore_create();
     socket->control_transition = semaphore_create();
-    if ( !socket->lock || socket->control_transition ) {
+    socket->send_lock = semaphore_create();
+    socket->send_transition = semaphore_create();
+    if ( !socket->lock || !socket->control_transition || !socket->send_lock || !socket->send_transition) {
         free(lock);
         free(control_transition);
+        free(send_lock);
+        free(send_transition);
         free(socket);
         return NULL;
     }
     semaphore_initialize(socket->lock, 1);
     semaphore_initialize(socket->control_transition, 0);
+    semaphore_initialize(socket->send_lock, 1);
+    semaphore_initialize(socket->send_transition, 0);
 
     return socket;
 }
