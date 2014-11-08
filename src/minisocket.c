@@ -8,8 +8,8 @@
 #include "queue.h"
 #include "synch.h"
 
-enum { LISTENING = 1, RESPONDING, CONNECTED, CLOSING } // Server state
-enum { ESTABLISHING = 1, CONNECTED, CLOSING } // Client state
+enum { S_LISTENING = 1, S_RESPONDING, S_CONNECTED, S_CLOSING }; // Server state
+enum { C_ESTABLISHING = 1, C_CONNECTED, C_CLOSING }; // Client state
 
 struct minisocket {
     char socket_type;
@@ -28,7 +28,7 @@ struct minisocket {
             char server_state;
         } server;
         struct {
-            int client_state;
+            char client_state;
         } client;
     } u;
 };
@@ -100,7 +100,7 @@ new_server(int port) {
     socket->ack = 0;
     socket->retries = 0;
     // TODO: MORE STUFF
-    socket->u.server.server_state = LISTENING;
+    socket->u.server.server_state = S_LISTENING;
 
     // Successfully created a server
     server_ports[port] = socket;
@@ -124,10 +124,11 @@ new_client(int client_id, network_address_t addr, int port) {
     socket->ack = 0;
     socket->retries = 0;
 
-    socket->remote_address = addr;
+    socket->remote_address[0] = addr[0];
+    socket->remote_address[1] = addr[1];
     socket->remote_port = port;
     // TODO: MORE STUFF
-    socket->u.server.client_state = ESTABLISHING;
+    socket->u.client.client_state = C_ESTABLISHING;
 
     // Successfully created a client
     client_ports[client_id] = socket;
@@ -186,7 +187,7 @@ minisocket_server_create(int port, minisocket_error *error) {
     // Suceeded in creating new socket
     semaphore_V(mutex_server); // Release lock
 
-    return server_handshake(server_ports[port], *error);
+    return server_handshake(server_ports[port], error);
 }
 
 
@@ -226,7 +227,7 @@ minisocket_client_create(network_address_t addr, int port, minisocket_error *err
 
             semaphore_V(mutex_client); // Release lock
 
-            client_handshake(client_ports[cur_id], *error);
+            client_handshake(client_ports[cur_id], error);
         }
         increment_client_id();
     }
