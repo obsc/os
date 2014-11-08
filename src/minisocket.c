@@ -9,6 +9,7 @@
 #include "queue.h"
 #include "synch.h"
 #include "alarm.h"
+#include "interrupts.h"
 
 enum { LISTEN = 1, SYN_RECEIVED, S_ESTABLISHED, S_CLOSING }; // Server state
 enum { SYN_SENT = 1, C_ESTABLISHED, C_CLOSING }; // Client state
@@ -223,13 +224,13 @@ new_client(int client_id, network_address_t addr, int port) {
 
 void
 control_reset(void *sock) {
-    socket_t socket = (socket_t) sock;
+    minisocket_t socket = (minisocket_t) sock;
     semaphore_P(socket->lock);
     if (socket->transitioned == 0) {
         socket->transitioned = 1;
-        Semaphore_V(socket->control_transition);
+        semaphore_V(socket->control_transition);
     }
-    semaphore_v(socket->lock);
+    semaphore_V(socket->lock);
 }
 
 /* Listens and blocks until connection successfully made with a client
@@ -281,8 +282,7 @@ client_handshake(minisocket_t socket, minisocket_error *error) {
                 if (*error != SOCKET_NOERROR) return NULL;
                 header->message_type = MSG_SYN; // Syn packet type
 
-                network_send_pkt(socket->remote_address, sizeof(struct mini_header_reliable),
-                                header, 0, dummy);
+                network_send_pkt(socket->remote_address, sizeof(struct mini_header_reliable), (char *) header, 0, dummy);
 
                 free(header);
                 retry_alarm = register_alarm(timeout, control_reset, socket); // Set up alarm
@@ -318,7 +318,7 @@ client_handshake(minisocket_t socket, minisocket_error *error) {
  */
 minisocket_t
 minisocket_server_create(int port, minisocket_error *error) {
-    socket_t socket;
+    minisocket_t socket;
 
     // Out of range check
     if ( port < 0 || port >= NUMPORTS ) {
@@ -373,7 +373,7 @@ minisocket_t
 minisocket_client_create(network_address_t addr, int port, minisocket_error *error) {
     int i;
     int cur_id;
-    socket_t socket;
+    minisocket_t socket;
 
     // Out of range check
     if ( port < 0 || port >= NUMPORTS ) {
@@ -471,12 +471,12 @@ minisocket_send(minisocket_t socket, minimsg_t msg, int len, minisocket_error *e
 
     while (1) {
         switch (socket->send_state) {
-            case SEND_ACK: 
+            case SEND_ACK:
                 *error = SOCKET_NOERROR;
                 semaphore_V(socket->send_lock);
                 return size;
-            case SEND_SENDING: 
-                if (socket->num_sent >= 7) {
+            case SEND_SENDING:
+                if (num_sent >= 7) {
                     *error = SOCKET_SENDERROR;
                     semaphore_V(socket->send_lock);
                     return -1;
@@ -493,7 +493,7 @@ minisocket_send(minisocket_t socket, minimsg_t msg, int len, minisocket_error *e
                     set_interrupt_level(old_level);
                     return -1;
                 }
-                retry_alarm = register_alarm(socket->timeout, send_reset, socket);                
+                retry_alarm = register_alarm(timeout, send_reset, socket);
                 set_interrupt_level(old_level);
                 semaphore_P(socket->send_transition);
                 semaphore_P(socket->lock);
