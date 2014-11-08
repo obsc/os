@@ -416,9 +416,6 @@ minisocket_send(minisocket_t socket, minimsg_t msg, int len, minisocket_error *e
     socket->seq = socket->seq + 1;
     semaphore_V(socket->lock);
 
-    header = create_header(socket, error);
-    if (!header) return -1;
-
     if (MAX_NETWORK_PKT_SIZE - sizeof(struct mini_header_reliable) < len) {
         size = MAX_NETWORK_PKT_SIZE - sizeof(struct mini_header_reliable);
     } else {
@@ -428,7 +425,6 @@ minisocket_send(minisocket_t socket, minimsg_t msg, int len, minisocket_error *e
     while (1) {
         switch (socket->send_state) {
             case SEND_ACK: 
-                free(header);
                 *error = SOCKET_NOERROR;
                 semaphore_V(socket->send_lock);
                 return size;
@@ -438,6 +434,10 @@ minisocket_send(minisocket_t socket, minimsg_t msg, int len, minisocket_error *e
                     semaphore_V(socket->send_lock);
                     return -1;
                 }
+                semaphore_P(socket->lock);
+                header = create_header(socket, error);
+                semaphore_V(socket->lock);
+                if (!header) return -1;
                 old_level = set_interrupt_level(DISABLED);
                 if (network_send_pkt(socket->remote_address, sizeof(struct mini_header_reliable), (char *) header, size, msg) == -1) {
                     free(header);
@@ -449,12 +449,15 @@ minisocket_send(minisocket_t socket, minimsg_t msg, int len, minisocket_error *e
                 retry_alarm = register_alarm(socket->timeout, send_reset, socket);                
                 set_interrupt_level(old_level);
                 semaphore_P(socket->send_transition);
+                semaphore_P(socket->lock);
+                socket->send_transition_count = 0;
+                semaphore_V(socket->lock);
                 deregister_alarm(retry_alarm);
                 num_sent += 1;
                 timeout = timeout * 2;
+                free(header);
                 break;
             case SEND_CLOSE:
-                free(header);
                 *error = SOCKET_SENDERROR;
                 semaphore_V(socket->send_lock);
                 return -1;
