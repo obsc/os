@@ -251,26 +251,26 @@ miniport_destroy(miniport_t miniport) {
  */
 int
 minimsg_send(miniport_t local_unbound_port, miniport_t local_bound_port, minimsg_t msg, int len) {
-	network_address_t my_address;
-	mini_header_t header;
-	// Null checks
-	if ( !local_unbound_port || !local_bound_port || msg == NULL ) return -1;
+    network_address_t my_address;
+    mini_header_t header;
+    // Null checks
+    if ( !local_unbound_port || !local_bound_port || msg == NULL ) return -1;
 
     // Size check
     if (len + sizeof(struct mini_header) > MINIMSG_MAX_MSG_SIZE) return -1;
 
-	network_get_my_address(my_address); // Get my address
+    network_get_my_address(my_address); // Get my address
     // Construct a header to send
-	header = (mini_header_t) malloc (sizeof(struct mini_header));
+    header = (mini_header_t) malloc (sizeof(struct mini_header));
 
     if ( !header ) return -1;
 
-	header->protocol = PROTOCOL_MINIDATAGRAM;
-	// Pack source and destination
+    header->protocol = PROTOCOL_MINIDATAGRAM;
+    // Pack source and destination
     pack_address(header->source_address, my_address);
-	pack_unsigned_short(header->source_port, local_unbound_port->port_number);
-	pack_address(header->destination_address, local_bound_port->u.bound.remote_address);
-	pack_unsigned_short(header->destination_port, local_bound_port->u.bound.remote_unbound_port);
+    pack_unsigned_short(header->source_port, local_unbound_port->port_number);
+    pack_address(header->destination_address, local_bound_port->u.bound.remote_address);
+    pack_unsigned_short(header->destination_port, local_bound_port->u.bound.remote_unbound_port);
 
     // Frees the header after sending the packet
     if (network_send_pkt(local_bound_port->u.bound.remote_address, sizeof(struct mini_header), (char *) header, len, msg) == -1) {
@@ -292,29 +292,29 @@ minimsg_send(miniport_t local_unbound_port, miniport_t local_bound_port, minimsg
  */
 int
 minimsg_receive(miniport_t local_unbound_port, miniport_t* new_local_bound_port, minimsg_t msg, int *len) {
-	void *node;
-	mini_header_t header;
+    void *node;
+    mini_header_t header;
     int payload_size;
-	network_interrupt_arg_t *data;
+    network_interrupt_arg_t *data;
     network_address_t source_address;
     int source_port;
 
     // Null check
     if ( !local_unbound_port ) {
-		*new_local_bound_port = NULL;
-		*len = 0;
-		return -1;
-	}
+        *new_local_bound_port = NULL;
+        *len = 0;
+        return -1;
+    }
 
     // Wait until ready
-	semaphore_P(local_unbound_port->u.unbound.ready);
+    semaphore_P(local_unbound_port->u.unbound.ready);
 
     // Lock incoming data queue to get data
     semaphore_P(local_unbound_port->u.unbound.lock);
-	queue_dequeue(local_unbound_port->u.unbound.incoming_data, &node);
+    queue_dequeue(local_unbound_port->u.unbound.incoming_data, &node);
     semaphore_V(local_unbound_port->u.unbound.lock);
 
-	data = (network_interrupt_arg_t *) node;
+    data = (network_interrupt_arg_t *) node;
 
     payload_size = data->size - sizeof(struct mini_header);
     // We have less payload than the allocated buffer
@@ -325,7 +325,7 @@ minimsg_receive(miniport_t local_unbound_port, miniport_t* new_local_bound_port,
     memcpy(msg, data->buffer + sizeof(struct mini_header), *len);
 
     // Try to construct bound port
-	header = (mini_header_t) data->buffer;
+    header = (mini_header_t) data->buffer;
     unpack_address(header->source_address, source_address);
     source_port = unpack_unsigned_short(header->source_port);
 
@@ -338,7 +338,7 @@ minimsg_receive(miniport_t local_unbound_port, miniport_t* new_local_bound_port,
     }
 
     // Successfully created bound port
-	free(data);
-	return *len;
+    free(data);
+    return *len;
 }
 

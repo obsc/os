@@ -8,11 +8,29 @@
 #include "queue.h"
 #include "synch.h"
 
-#define validServer(p) p >= 0 && p < NUMPORTS
+enum { S_LISTENING = 1, S_RESPONDING, S_CONNECTED, S_CLOSING }; // Server state
+enum { C_ESTABLISHING = 1, C_CONNECTED, C_CLOSING }; // Client state
 
 struct minisocket {
-    char port_type;
+    char socket_type;
     int port_number;
+    // Remote connection
+    network_address_t remote_address;
+    int remote_port;
+
+    int seq; // SEQ number
+    int ack; // ACK number
+
+    int retries; // Number of times we have retried
+
+    union {
+        struct {
+            char server_state;
+        } server;
+        struct {
+            char client_state;
+        } client;
+    } u;
 };
 
 semaphore_t mutex_server; // Lock for server sockets
@@ -65,6 +83,76 @@ minisocket_initialize() {
     semaphore_initialize(mutex_client, 1);
 }
 
+/* Constructs a new server socket
+ * Returns -1 upon memory failure
+ */
+int
+new_server(int port) {
+    minisocket_t socket = (minisocket_t) malloc (sizeof(struct minisocket));
+
+    if ( !socket ) return -1;
+
+    // Generic port data
+    socket->socket_type = SERVER;
+    socket->port_number = port;
+
+    socket->seq = 1;
+    socket->ack = 0;
+    socket->retries = 0;
+    // TODO: MORE STUFF
+    socket->u.server.server_state = S_LISTENING;
+
+    // Successfully created a server
+    server_ports[port] = socket;
+    return 0;
+}
+
+/* Constructs a new client socket
+ * Returns -1 upon memory failure
+ */
+int
+new_client(int client_id, network_address_t addr, int port) {
+    minisocket_t socket = (minisocket_t) malloc (sizeof(struct minisocket));
+
+    if ( !socket ) return -1;
+
+    // Generic port data
+    socket->socket_type = CLIENT;
+    socket->port_number = client_id + NUMPORTS;
+
+    socket->seq = 1;
+    socket->ack = 0;
+    socket->retries = 0;
+
+    socket->remote_address[0] = addr[0];
+    socket->remote_address[1] = addr[1];
+    socket->remote_port = port;
+    // TODO: MORE STUFF
+    socket->u.client.client_state = C_ESTABLISHING;
+
+    // Successfully created a client
+    client_ports[client_id] = socket;
+    return 0;
+}
+
+/* Listens and blocks until connection successfully made with a client
+ * Returns a minisocket upon success
+ */
+minisocket_t
+server_handshake(minisocket_t socket, minisocket_error *error) {
+    *error = SOCKET_NOERROR;
+    return socket;
+}
+
+/* Tries to connect to a server
+ * Returns a minisocket upon success
+ */
+minisocket_t
+client_handshake(minisocket_t socket, minisocket_error *error) {
+    *error = SOCKET_NOERROR;
+    return socket;
+}
+
 /*
  * Listen for a connection from somebody else. When communication link is
  * created return a minisocket_t through which the communication can be made
@@ -78,7 +166,28 @@ minisocket_initialize() {
  */
 minisocket_t
 minisocket_server_create(int port, minisocket_error *error) {
-return 0;
+    // Out of range check
+    if ( port < 0 || port >= NUMPORTS ) {
+        *error = SOCKET_INVALIDPARAMS;
+        return NULL;
+    }
+
+    semaphore_P(mutex_server); // Acquire lock
+    if (server_ports[port] == NULL) { // Create new socket if didn't exist
+        if (new_server(port) == -1) { // Failed in creating new socket
+            semaphore_V(mutex_server);
+            *error = SOCKET_OUTOFMEMORY;
+            return NULL;
+        }
+    } else { // Port already exists
+        semaphore_V(mutex_server); // Release lock
+        *error = SOCKET_PORTINUSE;
+        return NULL;
+    }
+    // Suceeded in creating new socket
+    semaphore_V(mutex_server); // Release lock
+
+    return server_handshake(server_ports[port], error);
 }
 
 
@@ -98,7 +207,35 @@ return 0;
  */
 minisocket_t
 minisocket_client_create(network_address_t addr, int port, minisocket_error *error) {
-return 0;
+    int i;
+    int cur_id;
+
+    // Out of range check
+    if ( port < 0 || port >= NUMPORTS ) {
+        *error = SOCKET_INVALIDPARAMS;
+        return NULL;
+    }
+
+    semaphore_P(mutex_client); // Acquire lock
+    for (i = 0; i < NUMPORTS; i++) { // Loop once through entire array
+        // The first time through the array, everything is null
+        // so this should terminate in O(1) time
+        if (client_ports[next_client_id] == NULL) { // Found new empty location
+            cur_id = next_client_id;
+            increment_client_id();
+            new_client(cur_id, addr, port);
+
+            semaphore_V(mutex_client); // Release lock
+
+            client_handshake(client_ports[cur_id], error);
+        }
+        increment_client_id();
+    }
+    // All ports are taken
+    semaphore_V(mutex_client); // Release lock
+
+    *error = SOCKET_NOMOREPORTS;
+    return NULL;
 }
 
 
