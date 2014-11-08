@@ -12,8 +12,8 @@
 
 #define BASE_DELAY 100
 
-enum { LISTEN = 1, SYN-RECEIVED, S_ESTABLISHED, S_CLOSING }; // Server state
-enum { SYN-SENT = 1, C_ESTABLISHED, C_CLOSING }; // Client state
+enum { LISTEN = 1, SYN_RECEIVED, S_ESTABLISHED, S_CLOSING }; // Server state
+enum { SYN_SENT = 1, C_ESTABLISHED, C_CLOSING }; // Client state
 
 struct minisocket {
     char socket_type;
@@ -93,10 +93,13 @@ minisocket_initialize() {
 
 mini_header_reliable_t
 create_header(minisocket_t socket, minisocket_error *error) {
+    mini_header_reliable_t header;
+    network_address_t my_address;
+
     header = (mini_header_reliable_t) malloc(sizeof(struct mini_header_reliable));
     if (!header) {
         *error = SOCKET_OUTOFMEMORY;
-        return -1;
+        return NULL;
     }
 
     header->protocol = PROTOCOL_MINISTREAM;
@@ -137,7 +140,7 @@ create_socket(int port) {
         free(socket);
         return NULL;
     }
-    semaphore_initialize(socket, 1);
+    semaphore_initialize(socket->lock, 1);
 
     return socket;
 }
@@ -177,7 +180,7 @@ new_client(int client_id, network_address_t addr, int port) {
     socket->remote_address[1] = addr[1];
     socket->remote_port = port;
     // TODO: MORE STUFF
-    socket->u.client.client_state = SYN-SENT;
+    socket->u.client.client_state = SYN_SENT;
 
     // Successfully created a client
     client_ports[client_id] = socket;
@@ -193,7 +196,7 @@ server_handshake(minisocket_t socket, minisocket_error *error) {
         switch (socket->u.server.server_state) {
             case LISTEN: // Listening for Syn
                 break;
-            case SYN-RECEIVED: // Sending Synacks
+            case SYN_RECEIVED: // Sending Synacks
                 break;
             case S_ESTABLISHED: // Received Ack
                 *error = SOCKET_NOERROR;
@@ -211,7 +214,7 @@ minisocket_t
 client_handshake(minisocket_t socket, minisocket_error *error) {
     while (1) {
         switch (socket->u.client.client_state) {
-            case SYN-SENT: // Sending Syn
+            case SYN_SENT: // Sending Syn
                 break;
             case C_ESTABLISHED: // Received Synack
                 *error = SOCKET_NOERROR;
@@ -335,7 +338,6 @@ minisocket_send(minisocket_t socket, minimsg_t msg, int len, minisocket_error *e
         return -1;
     }
 
-    
 
 }
 
