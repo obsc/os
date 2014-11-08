@@ -11,7 +11,7 @@
 #define validServer(p) p >= 0 && p < NUMPORTS
 
 struct minisocket {
-    char port_type;
+    char socket_type;
     int port_number;
 };
 
@@ -65,6 +65,44 @@ minisocket_initialize() {
     semaphore_initialize(mutex_client, 1);
 }
 
+/* Constructs a new server socket
+ * Returns -1 upon memory failure
+ */
+int
+new_server(int port) {
+    minisocket_t socket = (minisocket_t) malloc (sizeof(struct minisocket));
+
+    if ( !socket ) return -1;
+
+    // Generic port data
+    socket->socket_type = SERVER;
+    socket->port_number = port;
+    // TODO: MORE STUFF
+
+    // Successfully created a server
+    server_ports[port] = socket;
+    return 0;
+}
+
+/* Constructs a new client socket
+ * Returns -1 upon memory failure
+ */
+int
+new_client(int client_id) {
+    minisocket_t socket = (minisocket_t) malloc (sizeof(struct minisocket));
+
+    if ( !socket ) return -1;
+
+    // Generic port data
+    socket->socket_type = CLIENT;
+    socket->port_number = client_id + NUMPORTS;
+    // TODO: MORE STUFF
+
+    // Successfully created a client
+    client_ports[client_id] = socket;
+    return 0;
+}
+
 /*
  * Listen for a connection from somebody else. When communication link is
  * created return a minisocket_t through which the communication can be made
@@ -78,7 +116,31 @@ minisocket_initialize() {
  */
 minisocket_t
 minisocket_server_create(int port, minisocket_error *error) {
-return 0;
+    // Out of range check
+    if (port < 0 || port >= NUMPORTS) {
+        *error = SOCKET_INVALIDPARAMS;
+        return NULL;
+    }
+
+    semaphore_P(mutex_server); // Acquire lock
+    if (server_ports[port] == NULL) { // Create new socket if didn't exist
+        if (new_server(port) == -1) { // Failed in creating new socket
+            semaphore_V(mutex_server);
+            *error = SOCKET_OUTOFMEMORY;
+            return NULL;
+        }
+    } else { // Port already exists
+        semaphore_V(mutex_server); // Release lock
+        *error = SOCKET_PORTINUSE;
+        return NULL;
+    }
+    // Suceeded in creating new socket
+    semaphore_V(mutex_server); // Release lock
+
+    // Wait for client
+
+    *error = SOCKET_NOERROR;
+    return server_ports[port];
 }
 
 
