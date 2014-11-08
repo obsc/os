@@ -5,6 +5,8 @@
 #ifndef __STREAM_H__
 #define __STREAM_H__
 
+#include "network.h"
+
 /*
  * stream_t is a pointer to an internally maintained stream
  */

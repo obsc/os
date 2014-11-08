@@ -2,12 +2,12 @@
  * Stream implementation
  */
 
+#include "defs.h"
+#include "network.h"
 #include "queue.h"
 #include "stream.h"
 #include "synch.h"
 #include "miniheader.h"
-#include <stdlib.h>
-#include <stdio.h>
 
 struct stream
 {
@@ -62,7 +62,7 @@ struct stream
  */
 int stream_add(stream_t stream, network_interrupt_arg_t* next) {
     semaphore_P(stream->lock);
-    if (queue_enqueue(stream, next) == 0) {
+    if (queue_append(stream->data, next) == 0) {
         if (isEmpty(stream) == 0) {
             semaphore_V(stream->has_data);
         }
@@ -81,7 +81,6 @@ int stream_add(stream_t stream, network_interrupt_arg_t* next) {
  */
 int stream_take(stream_t stream, int request, char * output) {
     int start_read;
-    char *message[request];
     void *node;
     int request_left;
     int size_current_node;
@@ -97,25 +96,24 @@ int stream_take(stream_t stream, int request, char * output) {
 
         queue_peek(stream->data, &node);
         current_chunk = (network_interrupt_arg_t *) node;
-        start_read = sizeof(mini_header_reliable) + stream->index;
+        start_read = sizeof(struct mini_header_reliable) + stream->index;
         size_current_node = current_chunk->size - start_read;
 
         if (request_left >= size_current_node) {
-            memcpy(message + message_iterator, current_chunk->buffer + start_read, size_current_node);
+            memcpy(output + message_iterator, current_chunk->buffer + start_read, size_current_node);
             message_iterator = message_iterator + size_current_node;
             stream->index = 0;
             request_left = request_left - size_current_node;
-            queue_dequeue(stream, &node);
+            queue_dequeue(stream->data, &node);
             free(current_chunk);
         } else {
-            memcpy(message + message_iterator, current_chunk->buffer + start_read, request_left);
+            memcpy(output + message_iterator, current_chunk->buffer + start_read, request_left);
             message_iterator = message_iterator + request_left;
             stream->index = stream->index + request_left;
             request_left = 0;
         }
     }
 
-    output = message;
     if (isEmpty(stream) == 0) {
         semaphore_V(stream->has_data);
     }
@@ -139,4 +137,5 @@ int stream_destroy(stream_t stream) {
     semaphore_destroy(stream->has_data);
     queue_free(stream->data);
     free(stream);
+    return 0;
 }
