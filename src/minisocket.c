@@ -149,14 +149,17 @@ create_socket(int port) {
     socket->send_state = SEND_SENDING;
 
     socket->lock = semaphore_create();
+
+    socket->transitioned = 0;
     socket->control_transition = semaphore_create();
     socket->send_lock = semaphore_create();
     socket->send_transition = semaphore_create();
-    if ( !socket->lock || !socket->control_transition || !socket->send_lock || !socket->send_transition) {
-        free(lock);
-        free(control_transition);
-        free(send_lock);
-        free(send_transition);
+    if ( !socket->lock || !socket->control_transition ||
+         !socket->send_lock || !socket->send_transition ) {
+        free(socket->lock);
+        free(socket->control_transition);
+        free(socket->send_lock);
+        free(socket->send_transition);
         free(socket);
         return NULL;
     }
@@ -166,6 +169,16 @@ create_socket(int port) {
     semaphore_initialize(socket->send_transition, 0);
 
     return socket;
+}
+
+/*
+ * Destroys a socket
+ */
+void
+destroy_socket(minisocket_t socket) {
+    free(socket->lock);
+    free(socket->control_transition);
+    free(socket);
 }
 
 /* Constructs a new server socket
@@ -220,13 +233,15 @@ control_reset(void *sock) {
 }
 
 /* Listens and blocks until connection successfully made with a client
- * Returns a minisocket upon success
+ * Returns a minisocket upon success, otherwise NULL
  */
 minisocket_t
 server_handshake(minisocket_t socket, minisocket_error *error) {
     while (1) {
         switch (socket->u.server.server_state) {
             case LISTEN: // Listening for Syn
+                semaphore_P(socket->control_transition);
+                socket->transitioned = 0;
                 break;
             case SYN_RECEIVED: // Sending Synacks
                 break;
@@ -240,7 +255,7 @@ server_handshake(minisocket_t socket, minisocket_error *error) {
 }
 
 /* Tries to connect to a server
- * Returns a minisocket upon success
+ * Returns a minisocket upon success, otherwise NULL
  */
 minisocket_t
 client_handshake(minisocket_t socket, minisocket_error *error) {
@@ -270,13 +285,13 @@ client_handshake(minisocket_t socket, minisocket_error *error) {
                                 header, 0, dummy);
 
                 free(header);
-                retry_alarm = register_alarm(timeout, control_reset, socket);
+                retry_alarm = register_alarm(timeout, control_reset, socket); // Set up alarm
                 semaphore_V(socket->lock);
 
                 num_sent++;
                 timeout *= 2;
 
-                semaphore_P(control_transition);
+                semaphore_P(socket->control_transition);
                 deregister_alarm(retry_alarm);
                 socket->transitioned = 0;
                 break;
@@ -303,6 +318,8 @@ client_handshake(minisocket_t socket, minisocket_error *error) {
  */
 minisocket_t
 minisocket_server_create(int port, minisocket_error *error) {
+    socket_t socket;
+
     // Out of range check
     if ( port < 0 || port >= NUMPORTS ) {
         *error = SOCKET_INVALIDPARAMS;
@@ -324,7 +341,17 @@ minisocket_server_create(int port, minisocket_error *error) {
     // Suceeded in creating new socket
     semaphore_V(mutex_server); // Release lock
 
-    return server_handshake(server_ports[port], error);
+    socket = server_handshake(server_ports[port], error);
+
+    if ( !socket ) { // Handshake failed
+        semaphore_P(mutex_server);
+        destroy_socket(server_ports[port]);
+        server_ports[port] = NULL;
+        semaphore_V(mutex_server);
+        return NULL;
+    } else {
+        return socket;
+    }
 }
 
 
@@ -346,6 +373,7 @@ minisocket_t
 minisocket_client_create(network_address_t addr, int port, minisocket_error *error) {
     int i;
     int cur_id;
+    socket_t socket;
 
     // Out of range check
     if ( port < 0 || port >= NUMPORTS ) {
@@ -364,7 +392,16 @@ minisocket_client_create(network_address_t addr, int port, minisocket_error *err
 
             semaphore_V(mutex_client); // Release lock
 
-            client_handshake(client_ports[cur_id], error);
+            socket = client_handshake(client_ports[cur_id], error);
+            if ( !socket ) { // Handshake failed
+                semaphore_P(mutex_client);
+                destroy_socket(client_ports[cur_id]);
+                client_ports[cur_id] = NULL;
+                semaphore_V(mutex_client);
+                return NULL;
+            } else {
+                return socket; 
+            }
         }
         increment_client_id();
     }
