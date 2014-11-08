@@ -4,9 +4,13 @@
 #include "defs.h"
 #include "minisocket.h"
 #include "miniheader.h"
+#include "minimsg.h"
 #include "network.h"
 #include "queue.h"
 #include "synch.h"
+#include "alarm.h"
+
+#define BASE_DELAY 100
 
 enum { S_LISTENING = 1, S_RESPONDING, S_CONNECTED, S_CLOSING }; // Server state
 enum { C_ESTABLISHING = 1, C_CONNECTED, C_CLOSING }; // Client state
@@ -21,7 +25,9 @@ struct minisocket {
     int seq; // SEQ number
     int ack; // ACK number
 
-    int retries; // Number of times we have retried
+    int num_sent; // Number of times we have sent the same packet
+    int timeout; // Current delay
+    alarm_id retry_alarm; // Alarm for resending packets
 
     union {
         struct {
@@ -98,7 +104,8 @@ new_server(int port) {
 
     socket->seq = 1;
     socket->ack = 0;
-    socket->retries = 0;
+    socket->num_sent = 0;
+    socket->timeout= BASE_DELAY;
     // TODO: MORE STUFF
     socket->u.server.server_state = S_LISTENING;
 
@@ -122,7 +129,8 @@ new_client(int client_id, network_address_t addr, int port) {
 
     socket->seq = 1;
     socket->ack = 0;
-    socket->retries = 0;
+    socket->num_sent = 0;
+    socket->timeout = BASE_DELAY;
 
     socket->remote_address[0] = addr[0];
     socket->remote_address[1] = addr[1];
@@ -140,8 +148,19 @@ new_client(int client_id, network_address_t addr, int port) {
  */
 minisocket_t
 server_handshake(minisocket_t socket, minisocket_error *error) {
-    *error = SOCKET_NOERROR;
-    return socket;
+    while (1) {
+        switch (socket->u.server.server_state) {
+            case S_LISTENING: // Listening for Syn
+                break;
+            case S_RESPONDING: // Sending Synacks
+                break;
+            case S_CONNECTED: // Received Ack
+                *error = SOCKET_NOERROR;
+                return socket;
+            case S_CLOSING: // Socket closed
+                break;
+        }
+    }
 }
 
 /* Tries to connect to a server
@@ -149,8 +168,17 @@ server_handshake(minisocket_t socket, minisocket_error *error) {
  */
 minisocket_t
 client_handshake(minisocket_t socket, minisocket_error *error) {
-    *error = SOCKET_NOERROR;
-    return socket;
+    while (1) {
+        switch (socket->u.client.client_state) {
+            case C_ESTABLISHING: // Sending Syn
+                break;
+            case C_CONNECTED: // Received Synack
+                *error = SOCKET_NOERROR;
+                return socket;
+            case C_CLOSING: // Socket closed
+                break;
+        }
+    }
 }
 
 /*

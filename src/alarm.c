@@ -43,6 +43,9 @@ register_alarm(int delay, alarm_handler_t alarm, void *arg) {
 int
 deregister_alarm(alarm_id alarm) {
     interrupt_level_t old_level;
+
+    if ( !alarm ) return -1;
+
     old_level = set_interrupt_level(DISABLED);
     if (pqueue_delete(alarm_pqueue, alarm) == 0) {
         free(alarm); // Only frees if alarm is found
