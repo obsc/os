@@ -12,14 +12,9 @@
 
 #define BASE_DELAY 100
 
-<<<<<<< HEAD
-enum { S_LISTENING = 1, S_RESPONDING, S_CONNECTED, S_CLOSING }; // Server state
-enum { C_ESTABLISHING = 1, C_CONNECTED, C_CLOSING }; // Client state
-enum { SEND_INIT = 1, SEND_SENDING, SEND_CLOSE}; // Send state
-=======
+enum { SEND_ACK = 1, SEND_SENDING, SEND_CLOSE}; // Send state
 enum { LISTEN = 1, SYN_RECEIVED, S_ESTABLISHED, S_CLOSING }; // Server state
 enum { SYN_SENT = 1, C_ESTABLISHED, C_CLOSING }; // Client state
->>>>>>> b08bc85fe45dfc5599c2b88b4c9a48ee00cc9e44
 
 struct minisocket {
     char socket_type;
@@ -35,12 +30,9 @@ struct minisocket {
     int timeout; // Current delay
     alarm_id retry_alarm; // Alarm for resending packets
 
-<<<<<<< HEAD
-    semaphore_t lock;
-    semaphore_t send_lock;
-=======
+
     semaphore_t lock; // Lock on the minisocket
->>>>>>> b08bc85fe45dfc5599c2b88b4c9a48ee00cc9e44
+    semaphore_t send_lock;
 
     char send_state;
     union {
@@ -344,6 +336,7 @@ minisocket_client_create(network_address_t addr, int port, minisocket_error *err
 int
 minisocket_send(minisocket_t socket, minimsg_t msg, int len, minisocket_error *error) {
     mini_header_reliable_t header;
+    int size;
 
     if (!socket || !msg || !len) {
         *error = SOCKET_INVALIDPARAMS;
@@ -357,6 +350,24 @@ minisocket_send(minisocket_t socket, minimsg_t msg, int len, minisocket_error *e
     header = create_header(socket, error);
     if (!header) return -1;
 
+    if (MAX_NETWORK_PKT_SIZE - sizeof(struct mini_header_reliable) < len) {
+        size = MAX_NETWORK_PKT_SIZE - sizeof(struct mini_header_reliable);
+    } else {
+        size = len;
+    }
+
+    semaphore_P(socket->send_lock);
+    while (1) {
+        switch (socket->send_state) {
+            case SEND_ACK: 
+                break;
+            case SEND_SENDING: 
+                *error = SOCKET_NOERROR;
+                return socket;
+            case SEND_CLOSE:
+                break;
+        }
+    }
     return 0;
 
 
