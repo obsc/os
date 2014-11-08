@@ -265,8 +265,7 @@ server_handshake(minisocket_t socket, minisocket_error *error) {
                 if (*error != SOCKET_NOERROR) return NULL;
                 header->message_type = MSG_SYNACK; // Synack packet type
 
-                network_send_pkt(socket->remote_address, sizeof(struct mini_header_reliable),
-                                header, 0, dummy);
+                network_send_pkt(socket->remote_address, sizeof(struct mini_header_reliable), (char *) header, 0, dummy);
 
                 free(header);
                 retry_alarm = register_alarm(timeout, control_reset, socket); // Set up alarm
