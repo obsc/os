@@ -15,6 +15,8 @@
 #include "minimsg.h"
 
 #define NUMPORTS 32768
+#define BASE_DELAY 100
+#define MAX_TIMEOUTS 7
 
 enum {SERVER = 1, CLIENT};
 
