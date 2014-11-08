@@ -238,19 +238,52 @@ control_reset(void *sock) {
  */
 minisocket_t
 server_handshake(minisocket_t socket, minisocket_error *error) {
+    mini_header_reliable_t header;
+    int num_sent;
+    int timeout;
+    alarm_id retry_alarm;
+
     while (1) {
         switch (socket->u.server.server_state) {
             case LISTEN: // Listening for Syn
+                num_sent = 0;
+                timeout = BASE_DELAY;
+                retry_alarm = NULL;
                 semaphore_P(socket->control_transition);
+                socket->ack = 1;
                 socket->transitioned = 0;
                 break;
             case SYN_RECEIVED: // Sending Synacks
+                if (num_sent >= MAX_TIMEOUTS) { // Timeout too many times
+                    socket->ack = 0;
+                    socket->u.server.server_state = LISTEN;
+                    break;
+                }
+
+                semaphore_P(socket->lock);
+                header = create_header(socket, error); // Creates a header
+                if (*error != SOCKET_NOERROR) return NULL;
+                header->message_type = MSG_SYNACK; // Synack packet type
+
+                network_send_pkt(socket->remote_address, sizeof(struct mini_header_reliable),
+                                header, 0, dummy);
+
+                free(header);
+                retry_alarm = register_alarm(timeout, control_reset, socket); // Set up alarm
+                semaphore_V(socket->lock);
+
+                num_sent++;
+                timeout *= 2;
+
+                semaphore_P(socket->control_transition);
+                deregister_alarm(retry_alarm);
+                socket->transitioned = 0;
                 break;
             case S_ESTABLISHED: // Received Ack
                 *error = SOCKET_NOERROR;
                 return socket;
-            case S_CLOSING: // Socket closed
-                break;
+            case S_CLOSING: // Socket closed, this should not happen in here
+                return NULL;
         }
     }
 }
