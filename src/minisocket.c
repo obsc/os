@@ -14,6 +14,7 @@
 
 enum { S_LISTENING = 1, S_RESPONDING, S_CONNECTED, S_CLOSING }; // Server state
 enum { C_ESTABLISHING = 1, C_CONNECTED, C_CLOSING }; // Client state
+enum { SEND_INIT = 1, SEND_SENDING, SEND_CLOSE}; // Send state
 
 struct minisocket {
     char socket_type;
@@ -30,7 +31,9 @@ struct minisocket {
     alarm_id retry_alarm; // Alarm for resending packets
 
     semaphore_t lock;
+    semaphore_t send_lock;
 
+    char send_state;
     union {
         struct {
             char server_state;
@@ -309,11 +312,20 @@ mini_header_reliable_t create_header(minisocket_t socket, minisocket_error *erro
 int
 minisocket_send(minisocket_t socket, minimsg_t msg, int len, minisocket_error *error) {
     mini_header_reliable_t header;
-    network_address_t my_address;
+
     if (!socket || !msg || !len) {
         *error = SOCKET_INVALIDPARAMS;
         return -1;
     }
+
+    semaphore_P(socket->lock);
+    socket->seq = socket->seq + 1;
+    semaphore_V(socket->lock);
+
+    header = create_header(socket, error);
+    if (!header) return -1;
+
+    return 0;
 
     
 
