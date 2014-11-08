@@ -265,8 +265,7 @@ server_handshake(minisocket_t socket, minisocket_error *error) {
                 if (*error != SOCKET_NOERROR) return NULL;
                 header->message_type = MSG_SYNACK; // Synack packet type
 
-                network_send_pkt(socket->remote_address, sizeof(struct mini_header_reliable),
-                                header, 0, dummy);
+                network_send_pkt(socket->remote_address, sizeof(struct mini_header_reliable), (char *) header, 0, dummy);
 
                 free(header);
                 retry_alarm = register_alarm(timeout, control_reset, socket); // Set up alarm
@@ -516,18 +515,12 @@ minisocket_send(minisocket_t socket, minimsg_t msg, int len, minisocket_error *e
                 }
                 semaphore_P(socket->lock);
                 header = create_header(socket, error);
-                semaphore_V(socket->lock);
                 if (!header) return -1;
                 old_level = set_interrupt_level(DISABLED);
-                if (network_send_pkt(socket->remote_address, sizeof(struct mini_header_reliable), (char *) header, size, msg) == -1) {
-                    free(header);
-                    *error = SOCKET_SENDERROR;
-                    semaphore_V(socket->send_lock);
-                    set_interrupt_level(old_level);
-                    return -1;
-                }
+                network_send_pkt(socket->remote_address, sizeof(struct mini_header_reliable), (char *) header, size, msg);
                 retry_alarm = register_alarm(timeout, send_reset, socket);
                 set_interrupt_level(old_level);
+                semaphore_V(socket->lock);
                 semaphore_P(socket->send_transition);
                 semaphore_P(socket->lock);
                 socket->send_transition_count = 0;
