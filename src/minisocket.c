@@ -181,7 +181,7 @@ handle_synack(minisocket_t socket, network_address_t source, int source_port) {
  * Handles ack packets
  */
 void
-handle_ack(minisocket_t socket, network_address_t source, int source_port, int ack) {
+handle_ack(minisocket_t socket, network_address_t source, int source_port, int ack, int seq, network_interrupt_arg_t *arg) {
     // Source validation
     if ( socket->remote_port != source_port ||
          !network_compare_network_addresses(socket->remote_address, source) ) {
@@ -193,6 +193,26 @@ handle_ack(minisocket_t socket, network_address_t source, int source_port, int a
         if (ack == 1) { // Drop non-ack 1 packets
             socket->u.server.server_state = S_ESTABLISHED;
             socket_transition(socket);
+        }
+    }
+
+    if (ack == socket->seq) {
+        if (socket->send_state == SEND_SENDING) {
+            socket->send_state = SEND_ACK;
+            if (socket->send_transition_count != 1) {
+                semaphore_V(socket->send_transition);  
+            }
+            socket->send_transition_count = 1;
+        }
+    }
+    if (arg->size > sizeof(struct mini_header_reliable)) {
+        if (seq - 1 == socket->ack) {
+            socket->ack += 1;
+            stream_add(socket->stream, arg);
+            semaphore_V(socket->received_data);
+            reply(socket, MSG_ACK);
+        } else {
+            reply(socket, MSG_ACK);
         }
     }
 }
@@ -257,10 +277,7 @@ minisocket_handle(network_interrupt_arg_t *arg) {
                 handle_synack(socket, source, source_port);
             break;
         case MSG_ACK:
-            handle_ack(socket, source, source_port, ack);
-            if (arg->size > sizeof(struct mini_header_reliable)) {
-                handle_data();
-            }
+            handle_ack(socket, source, source_port, ack, seq, arg);
             break;
         case MSG_FIN:
             handle_fin(socket, source, source_port);
