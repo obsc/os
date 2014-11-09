@@ -58,13 +58,79 @@ int next_client_id; // Next client port id to use
 
 char *dummy; // Represents a dummy bytearray to pass to send pkt
 
+void
+control_reset(void *sock) {
+    minisocket_t socket = (minisocket_t) sock;
+    semaphore_P(socket->lock);
+    if (socket->transitioned == 0) {
+        socket->transitioned = 1;
+        semaphore_V(socket->control_transition);
+    }
+    semaphore_V(socket->lock);
+}
+
+void
+handle_syn(int port) {
+    minisocket_t socket;
+
+    if ( port >= 0 && port < NUMPORTS ) { // Server port
+        socket = server_ports[port];
+    } else {
+        return;
+    }
+
+    if (socket->u.server.server_state == LISTEN) {
+        socket->u.server.server_state = SYN_RECEIVED;
+        if (socket->transitioned == 0) {
+            socket->transitioned = 1;
+            semaphore_V(socket->control_transition);
+        }
+    }
+}
+
+void
+handle_synack(int port) {
+    minisocket_t socket;
+
+    if ( port >= NUMPORTS && port < 2 * NUMPORTS ) { // Client port
+        socket = client_ports[port -  NUMPORTS];
+    } else {
+        return;
+    }
+
+    if (socket->u.client.client_state == SYN_SENT) {
+        socket->u.client.client_state = C_ESTABLISHED;
+        if (socket->transitioned == 0) {
+            socket->transitioned = 1;
+            semaphore_V(socket->control_transition);
+        }
+    }
+}
+
 /*
  * Handler for receiving a message on a socket
  * Assumes interrupts are disabled throughout
  */
 void
 minisocket_handle(network_interrupt_arg_t *arg) {
+    mini_header_reliable_t header;
+    int port;
 
+    header = (mini_header_reliable_t) arg->buffer;
+    port = unpack_unsigned_short(header->destination_port);
+
+    switch (header->message_type) {
+        case MSG_SYN:
+            handle_syn(port);
+            break;
+        case MSG_SYNACK:
+            handle_synack(port);
+            break;
+        case MSG_ACK:
+            break;
+        case MSG_FIN:
+            break;
+    }
 }
 
 /* Increments the client id
@@ -220,17 +286,6 @@ new_client(int client_id, network_address_t addr, int port) {
     // Successfully created a client
     client_ports[client_id] = socket;
     return 0;
-}
-
-void
-control_reset(void *sock) {
-    minisocket_t socket = (minisocket_t) sock;
-    semaphore_P(socket->lock);
-    if (socket->transitioned == 0) {
-        socket->transitioned = 1;
-        semaphore_V(socket->control_transition);
-    }
-    semaphore_V(socket->lock);
 }
 
 /* Listens and blocks until connection successfully made with a client
