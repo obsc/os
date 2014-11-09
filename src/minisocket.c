@@ -135,7 +135,7 @@ handle_syn(minisocket_t socket, network_address_t source, int source_port) {
     switch (socket->u.server.server_state) {
         // Syn to listening port
         case LISTEN:
-             socket->u.server.server_state = SYN_RECEIVED;
+            socket->u.server.server_state = SYN_RECEIVED;
             socket->remote_address[0] = source[0];
             socket->remote_address[1] = source[1];
             socket->remote_port = source_port;
@@ -143,13 +143,14 @@ handle_syn(minisocket_t socket, network_address_t source, int source_port) {
             socket_transition(socket);
             return;
         // Syn to busy port
+        case SYN_RECEIVED:
         case S_ESTABLISHED:
             // Source validation
             if ( socket->remote_port != source_port ||
                  !network_compare_network_addresses(socket->remote_address, source) ) {
+                reply(socket, MSG_FIN); // Port busy
                 return;
             }
-            reply(socket, MSG_FIN);
             return;
         // Drops Syn packet otherwise
         default:
@@ -210,10 +211,8 @@ handle_ack(minisocket_t socket, network_address_t source, int source_port, int a
             socket->ack += 1;
             stream_add(socket->stream, arg);
             semaphore_V(socket->received_data);
-            reply(socket, MSG_ACK);
-        } else {
-            reply(socket, MSG_ACK);
         }
+        reply(socket, MSG_ACK);
     }
 }
 
@@ -227,14 +226,6 @@ handle_fin(minisocket_t socket, network_address_t source, int source_port) {
          !network_compare_network_addresses(socket->remote_address, source) ) {
         return;
     }
-}
-
-/*
- * Handles ack packets with data
- */
-void
-handle_data() {
-    
 }
 
 
@@ -260,8 +251,10 @@ minisocket_handle(network_interrupt_arg_t *arg) {
     ack = unpack_unsigned_int(header->ack_number);
 
     if ( port >= 0 && port < NUMPORTS ) { // Server port
+        if ( !server_ports[port] ) return;
         socket = server_ports[port];
     } else if ( port >= NUMPORTS && port < 2 * NUMPORTS ) { // Client port
+        if ( !client_ports[port - NUMPORTS] ) return;
         socket = client_ports[port -  NUMPORTS];
     } else {
         return;
@@ -386,6 +379,10 @@ void
 destroy_socket(minisocket_t socket) {
     free(socket->lock);
     free(socket->control_transition);
+    free(socket->send_lock);
+    free(socket->send_transition);
+    free(socket->received_data);
+    free(socket->stream);
     free(socket);
 }
 
@@ -716,7 +713,7 @@ minisocket_send(minisocket_t socket, minimsg_t msg, int len, minisocket_error *e
                 if (len_left > 0) socket->seq++;
                 break;
             case SEND_SENDING:
-                if (num_sent >= 7) {
+                if (num_sent >= MAX_TIMEOUTS) {
                     *error = SOCKET_SENDERROR;
                     semaphore_V(socket->send_lock);
                     return -1;
