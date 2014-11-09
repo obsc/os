@@ -36,4 +36,9 @@ extern int stream_take(stream_t, int, char *);
  */
 extern int stream_destroy(stream_t);
 
+ /*
+  * Returns 1 if stream is empty, 0 if not
+  */
+extern int stream_is_empty(stream_t);
+
 #endif  /* __STREAM_H__ */

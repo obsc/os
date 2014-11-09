@@ -10,10 +10,12 @@
 #include "synch.h"
 #include "alarm.h"
 #include "interrupts.h"
+#include "stream.h"
 
 enum { LISTEN = 1, SYN_RECEIVED, S_ESTABLISHED, S_CLOSING }; // Server state
 enum { SYN_SENT = 1, C_ESTABLISHED, C_CLOSING }; // Client state
 enum { SEND_ACK = 1, SEND_SENDING, SEND_CLOSE}; // Send state
+enum { RECEIVE_RECEIVING = 1, RECEIVE_CLOSE}; // Receive state
 
 struct minisocket {
     char socket_type;
@@ -26,6 +28,8 @@ struct minisocket {
     int ack; // ACK number
 
     semaphore_t lock; // Lock on the minisocket
+
+    stream_t stream; // Stream on this socket
     
     // Control logic
     int transitioned; // boolean representing state of transition semaphore
@@ -38,6 +42,9 @@ struct minisocket {
     char send_state;
 
     // Receive logic
+    char receive_state;
+    semaphore_t received_data;
+    int receive_waiting_count;
 
     union {
         struct {
@@ -240,18 +247,29 @@ create_socket(int port) {
 
     socket->send_state = SEND_SENDING;
 
+    socket->receive_state = RECEIVE_RECEIVING;
+
+    socket->receive_waiting_count = 0;
+
+    socket->received_data = semaphore_create();
+
     socket->lock = semaphore_create();
 
     socket->transitioned = 0;
     socket->control_transition = semaphore_create();
     socket->send_lock = semaphore_create();
     socket->send_transition = semaphore_create();
+
+    socket->stream = stream_new();
     if ( !socket->lock || !socket->control_transition ||
-         !socket->send_lock || !socket->send_transition ) {
+         !socket->send_lock || !socket->send_transition ||
+         !socket->received_data || !socket->stream ) {
         free(socket->lock);
         free(socket->control_transition);
         free(socket->send_lock);
         free(socket->send_transition);
+        free(socket->received_data);
+        free(socket->stream);
         free(socket);
         return NULL;
     }
@@ -259,6 +277,7 @@ create_socket(int port) {
     semaphore_initialize(socket->control_transition, 0);
     semaphore_initialize(socket->send_lock, 1);
     semaphore_initialize(socket->send_transition, 0);
+    semaphore_initialize(socket->received_data, 0);
 
     return socket;
 }
@@ -561,32 +580,46 @@ minisocket_send(minisocket_t socket, minimsg_t msg, int len, minisocket_error *e
     int timeout;
     int num_sent;
     alarm_id retry_alarm;
+    int message_iterator;
+    int len_left;
+
+    if (len == 0) {
+        *error = SOCKET_NOERROR;
+        return 0;
+    }
 
     semaphore_P(socket->send_lock);
 
-    if (!socket || !msg || !len) {
+    if (!error) return -1;
+
+    if (!socket || !msg) {
         *error = SOCKET_INVALIDPARAMS;
         return -1;
     }
 
     timeout = BASE_DELAY;
     num_sent = 0;
+    len_left = len;
+    message_iterator = 0;
     semaphore_P(socket->lock);
     socket->seq = socket->seq + 1;
     semaphore_V(socket->lock);
 
-    if (MAX_NETWORK_PKT_SIZE - sizeof(struct mini_header_reliable) < len) {
-        size = MAX_NETWORK_PKT_SIZE - sizeof(struct mini_header_reliable);
-    } else {
-        size = len;
-    }
+    
 
-    while (1) {
+    while (len_left > 0) {
+        if (MAX_NETWORK_PKT_SIZE - sizeof(struct mini_header_reliable) < len_left) {
+            size = MAX_NETWORK_PKT_SIZE - sizeof(struct mini_header_reliable);
+        } else {
+            size = len_left;
+        }
         switch (socket->send_state) {
             case SEND_ACK:
-                *error = SOCKET_NOERROR;
-                semaphore_V(socket->send_lock);
-                return size;
+                message_iterator += size;
+                len_left -= size;
+                num_sent = 0;
+                timeout = BASE_DELAY;
+                break;                
             case SEND_SENDING:
                 if (num_sent >= 7) {
                     *error = SOCKET_SENDERROR;
@@ -597,7 +630,7 @@ minisocket_send(minisocket_t socket, minimsg_t msg, int len, minisocket_error *e
                 header = create_header(socket, error);
                 if (!header) return -1;
                 old_level = set_interrupt_level(DISABLED);
-                network_send_pkt(socket->remote_address, sizeof(struct mini_header_reliable), (char *) header, size, msg);
+                network_send_pkt(socket->remote_address, sizeof(struct mini_header_reliable), (char *) header, size, msg+message_iterator);
                 retry_alarm = register_alarm(timeout, send_reset, socket);
                 set_interrupt_level(old_level);
                 semaphore_V(socket->lock);
@@ -616,7 +649,8 @@ minisocket_send(minisocket_t socket, minimsg_t msg, int len, minisocket_error *e
                 return -1;
         }
     }
-    return -1;
+    semaphore_V(socket->send_lock);
+    return message_iterator;
 
 
 }
@@ -633,7 +667,37 @@ minisocket_send(minisocket_t socket, minimsg_t msg, int len, minisocket_error *e
  */
 int
 minisocket_receive(minisocket_t socket, minimsg_t msg, int max_len, minisocket_error *error) {
-return 0;
+    int output;
+
+    if (!error) return -1;
+    if (!socket || !msg) {
+        *error = SOCKET_INVALIDPARAMS;
+        return -1;
+    }
+    semaphore_P(socket->lock);
+    socket->receive_waiting_count += 1;
+    semaphore_V(socket->lock);
+    semaphore_P(socket->received_data);
+
+    switch (socket->receive_state) {
+        case RECEIVE_RECEIVING:
+            output = stream_take(socket->stream, max_len, msg);
+            if (output != -1) {
+                *error = SOCKET_NOERROR;
+            }
+            *error = SOCKET_RECEIVEERROR;
+            if (stream_is_empty(socket->stream) == 0) {
+                semaphore_V(socket->received_data);
+            }
+            semaphore_P(socket->lock);
+            socket->receive_waiting_count -= 1;
+            semaphore_V(socket->lock);
+            return output;
+        case RECEIVE_CLOSE:
+            *error = SOCKET_RECEIVEERROR;
+            return -1;
+    }
+    return -1;
 }
 
 /* Close a connection. If minisocket_close is issued, any send or receive should

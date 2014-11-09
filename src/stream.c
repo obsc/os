@@ -13,7 +13,6 @@ struct stream
 {
     int index; //index at current message
     queue_t data;
-    semaphore_t has_data;
     semaphore_t lock;
     //TO DO: maybe add num waiting 
 };
@@ -25,23 +24,18 @@ struct stream
     queue_t q;
     stream_t s;
     semaphore_t lock;
-    semaphore_t has_data;
     s = (stream_t) malloc (sizeof(struct stream));
     lock = semaphore_create();
-    has_data = semaphore_create();
     q = queue_new();
-    if (!q || !lock || !has_data || !s) {
+    if (!q || !lock || !s) {
         free(s);
         free(q);
         free(lock);
-        free(has_data);
         return NULL;
     }
     semaphore_initialize(lock, 1);
-    semaphore_initialize(has_data, 0);
     s->data = q;
     s->index = 0;
-    s->has_data = has_data;
     s->lock = lock;
     return s;
  }
@@ -49,10 +43,13 @@ struct stream
  /*
   * Returns 1 if stream is empty, 0 if not
   */
- int isEmpty(stream_t stream) {
+ int stream_is_empty(stream_t stream) {
+    semaphore_P(stream->lock);
     if (queue_length(stream->data) == 0) {
+        semaphore_V(stream->lock);
         return 1;
     }
+    semaphore_V(stream->lock);
     return 0;
  }
 
@@ -63,9 +60,6 @@ struct stream
 int stream_add(stream_t stream, network_interrupt_arg_t* next) {
     semaphore_P(stream->lock);
     if (queue_append(stream->data, next) == 0) {
-        if (isEmpty(stream) == 0) {
-            semaphore_V(stream->has_data);
-        }
         semaphore_V(stream->lock);
         return 0;
     }
@@ -87,36 +81,39 @@ int stream_take(stream_t stream, int request, char * output) {
     int message_iterator;
     network_interrupt_arg_t *current_chunk;
 
-    semaphore_P(stream->has_data);
-    semaphore_P(stream->lock);
     message_iterator = 0;
     request_left = request;
 
-    while (request_left != 0 && isEmpty(stream) == 0) {
+    semaphore_P(stream->lock);
+    while (request_left != 0 && stream_is_empty(stream) == 0) {
 
-        queue_peek(stream->data, &node);
-        current_chunk = (network_interrupt_arg_t *) node;
         start_read = sizeof(struct mini_header_reliable) + stream->index;
+        queue_peek(stream->data, &node);
+        semaphore_V(stream->lock);
+        current_chunk = (network_interrupt_arg_t *) node;
         size_current_node = current_chunk->size - start_read;
 
         if (request_left >= size_current_node) {
             memcpy(output + message_iterator, current_chunk->buffer + start_read, size_current_node);
             message_iterator = message_iterator + size_current_node;
-            stream->index = 0;
             request_left = request_left - size_current_node;
+            semaphore_P(stream->lock);
+            stream->index = 0;
             queue_dequeue(stream->data, &node);
+            semaphore_V(stream->lock);
             free(current_chunk);
         } else {
             memcpy(output + message_iterator, current_chunk->buffer + start_read, request_left);
             message_iterator = message_iterator + request_left;
+            semaphore_P(stream->lock);
             stream->index = stream->index + request_left;
+            semaphore_V(stream->lock);
             request_left = 0;
         }
+        semaphore_P(stream->lock);
     }
 
-    if (isEmpty(stream) == 0) {
-        semaphore_V(stream->has_data);
-    }
+
     semaphore_V(stream->lock);
 
     return message_iterator;
@@ -128,13 +125,12 @@ int stream_take(stream_t stream, int request, char * output) {
 int stream_destroy(stream_t stream) {
     void * node;
     network_interrupt_arg_t *next;
-    while (isEmpty(stream) == 0) {
+    while (stream_is_empty(stream) == 0) {
         queue_dequeue(stream->data, &node);
         next = (network_interrupt_arg_t *) node;
         free(next);
     }
     semaphore_destroy(stream->lock);
-    semaphore_destroy(stream->has_data);
     queue_free(stream->data);
     free(stream);
     return 0;
