@@ -59,9 +59,12 @@ char* GetErrorDescription(int errorcode){
 int transmit(int* arg) {
   minisocket_t socket;
   minisocket_error error;
-  minithread_t receiver;
 
-  receiver = minithread_fork(receive, NULL);
+  printf("starting transmit\n");
+
+  minithread_fork(receive, NULL);
+
+  printf("continuing transmit\n");
 
   socket = minisocket_server_create(port,&error);
   if (socket==NULL){
@@ -82,6 +85,8 @@ int receive(int* arg) {
   minisocket_t socket;
   minisocket_error error;
 
+  printf("starting receive\n");
+
   /* 
    * It is crucial that this minithread_yield() works properly
    * (i.e. it really gives the processor to another thread)
@@ -89,9 +94,11 @@ int receive(int* arg) {
    * fail (there is nobody to connect to).
    */
   minithread_yield();
-  
+
+  printf("continuing receive\n");
+
   network_get_my_address(my_address);
-  
+
   /* create a network connection to the local machine */
   socket = minisocket_client_create(my_address, port,&error);
   if (socket==NULL){
