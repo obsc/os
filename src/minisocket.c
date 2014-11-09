@@ -206,9 +206,7 @@ handle_ack(minisocket_t socket, network_address_t source, int source_port, int a
         }
     }
     if (arg->size > sizeof(struct mini_header_reliable)) {
-        printf("dataack: %i\n", seq);
         if (seq - 1 == socket->ack) {
-            printf("added\n");
             socket->ack += 1;
             stream_add(socket->stream, arg);
             semaphore_V(socket->received_data);
@@ -776,11 +774,9 @@ minisocket_receive(minisocket_t socket, minimsg_t msg, int max_len, minisocket_e
     socket->receive_waiting_count += 1;
     semaphore_V(socket->lock);
     semaphore_P(socket->received_data);
-    printf("got data\n");
 
     switch (socket->receive_state) {
         case RECEIVE_RECEIVING:
-            printf("taking\n");
             output = stream_take(socket->stream, max_len, msg);
             if (output != -1) {
                 *error = SOCKET_NOERROR;
