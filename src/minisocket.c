@@ -70,17 +70,21 @@ control_reset(void *sock) {
 }
 
 void
-handle_syn(int port) {
+handle_syn(int dest_port, network_address_t source_addr, int source_port) {
     minisocket_t socket;
 
-    if ( port >= 0 && port < NUMPORTS ) { // Server port
-        socket = server_ports[port];
+    if ( dest_port >= 0 && dest_port < NUMPORTS ) { // Server port
+        socket = server_ports[dest_port];
     } else {
         return;
     }
 
     if (socket->u.server.server_state == LISTEN) {
         socket->u.server.server_state = SYN_RECEIVED;
+        socket->remote_address[0] = source_addr[0];
+        socket->remote_address[1] = source_addr[1];
+        socket->source_port = source_port;
+
         if (socket->transitioned == 0) {
             socket->transitioned = 1;
             semaphore_V(socket->control_transition);
@@ -89,12 +93,17 @@ handle_syn(int port) {
 }
 
 void
-handle_synack(int port) {
+handle_synack(int dest_port, network_address_t source_addr, int source_port) {
     minisocket_t socket;
 
-    if ( port >= NUMPORTS && port < 2 * NUMPORTS ) { // Client port
-        socket = client_ports[port -  NUMPORTS];
+    if ( dest_port >= NUMPORTS && port < 2 * NUMPORTS ) { // Client port
+        socket = client_ports[dest_port -  NUMPORTS];
     } else {
+        return;
+    }
+
+    if ( socket->source_address != source_addr ||
+         socket->source_port != source_port ) {
         return;
     }
 
@@ -114,17 +123,21 @@ handle_synack(int port) {
 void
 minisocket_handle(network_interrupt_arg_t *arg) {
     mini_header_reliable_t header;
-    int port;
+    network_address_t source_addr;
+    int source_port;
+    int dest_port;
 
     header = (mini_header_reliable_t) arg->buffer;
-    port = unpack_unsigned_short(header->destination_port);
+    unpack_address(header->source_address, source_addr);
+    source_port = unpack_unsigned_short(header->source_port);
+    dest_port = unpack_unsigned_short(header->destination_port);
 
     switch (header->message_type) {
         case MSG_SYN:
-            handle_syn(port);
+            handle_syn(dest_port, source_addr, source_port);
             break;
         case MSG_SYNACK:
-            handle_synack(port);
+            handle_synack(dest_port, source_addr, source_port);
             break;
         case MSG_ACK:
             break;
