@@ -66,13 +66,18 @@ int next_client_id; // Next client port id to use
 char *dummy; // Represents a dummy bytearray to pass to send pkt
 
 void
-control_reset(void *sock) {
-    minisocket_t socket = (minisocket_t) sock;
-    semaphore_P(socket->lock);
+socket_transition(minisocket_t socket) {
     if (socket->transitioned == 0) {
         socket->transitioned = 1;
         semaphore_V(socket->control_transition);
     }
+}
+
+void
+control_reset(void *sock) {
+    minisocket_t socket = (minisocket_t) sock;
+    semaphore_P(socket->lock);
+    socket_transition(socket);
     semaphore_V(socket->lock);
 }
 
@@ -135,10 +140,7 @@ handle_syn(minisocket_t socket, network_address_t source, int source_port) {
             socket->remote_address[1] = source[1];
             socket->remote_port = source_port;
     
-            if (socket->transitioned == 0) {
-                socket->transitioned = 1;
-                semaphore_V(socket->control_transition);
-            }
+            socket_transition(socket);
             return;
         // Syn to busy port
         case S_ESTABLISHED:
@@ -169,28 +171,29 @@ handle_synack(minisocket_t socket, network_address_t source, int source_port) {
     if (socket->u.client.client_state == SYN_SENT) {
         socket->u.client.client_state = C_ESTABLISHED;
         if (socket->ack == 0) socket->ack = 1;
-        if (socket->transitioned == 0) {
-            socket->transitioned = 1;
-            semaphore_V(socket->control_transition);
-        }
+        socket_transition(socket);
     }
 
     reply(socket, MSG_ACK); // Ack the packet
 }
 
 /*
- * Handles empty ack packets
+ * Handles ack packets
  */
 void
-handle_ack(minisocket_t socket, network_address_t source, int source_port) {
+handle_ack(minisocket_t socket, network_address_t source, int source_port, int ack) {
     // Source validation
     if ( socket->remote_port != source_port ||
          !network_compare_network_addresses(socket->remote_address, source) ) {
         return;
     }
 
-    if ( socket->socket_type == SERVER && socket->u.server.server_state == SYN_RECEIVED) {
-        
+    // Waiting for ack on synack
+    if (socket->socket_type == SERVER && socket->u.server.server_state == SYN_RECEIVED) {
+        if (ack == 1) { // Drop non-ack 1 packets
+            socket->u.server.server_state = S_ESTABLISHED;
+            socket_transition(socket);
+        }
     }
 }
 
@@ -226,11 +229,15 @@ minisocket_handle(network_interrupt_arg_t *arg) {
     int source_port;
     int port;
     minisocket_t socket;
+    int seq;
+    int ack;
 
     header = (mini_header_reliable_t) arg->buffer;
     unpack_address(header->source_address, source);
     source_port = unpack_unsigned_short(header->source_port);
     port = unpack_unsigned_short(header->destination_port);
+    seq = unpack_unsigned_int(header->seq_number);
+    ack = unpack_unsigned_int(header->ack_number);
 
     if ( port >= 0 && port < NUMPORTS ) { // Server port
         socket = server_ports[port];
@@ -250,9 +257,8 @@ minisocket_handle(network_interrupt_arg_t *arg) {
                 handle_synack(socket, source, source_port);
             break;
         case MSG_ACK:
-            if (arg->size <= sizeof(struct mini_header_reliable)) {
-                handle_ack(socket, source, source_port);
-            } else {
+            handle_ack(socket, source, source_port, ack);
+            if (arg->size > sizeof(struct mini_header_reliable)) {
                 handle_data();
             }
             break;
