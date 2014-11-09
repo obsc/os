@@ -60,8 +60,11 @@ struct stream
  */
 int stream_add(stream_t stream, network_interrupt_arg_t* next) {
     if (!stream || !next) return -1;
+    printf("stream add\n");
     semaphore_P(stream->lock);
+    printf("adding to data\n");
     if (queue_append(stream->data, next) == 0) {
+        printf("added to data\n");
         semaphore_V(stream->lock);
         return 0;
     }
@@ -84,11 +87,13 @@ int stream_take(stream_t stream, int request, char * output) {
     network_interrupt_arg_t *current_chunk;
 
     if (!stream || !output) return -1;
+    printf("stream take\n");
 
     message_iterator = 0;
     request_left = request;
 
     semaphore_P(stream->lock);
+    printf("stream taking\n");
     while (request_left != 0 && stream_is_empty(stream) == 0) {
 
         start_read = sizeof(struct mini_header_reliable) + stream->index;
@@ -117,9 +122,9 @@ int stream_take(stream_t stream, int request, char * output) {
         semaphore_P(stream->lock);
     }
 
-
     semaphore_V(stream->lock);
 
+    printf("stream taken\n");
     return message_iterator;
 }
 

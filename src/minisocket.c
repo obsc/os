@@ -196,7 +196,7 @@ handle_ack(minisocket_t socket, network_address_t source, int source_port, int a
         }
     }
 
-    if (ack == socket->seq) {
+    if (ack == socket->seq && ack > 1) {
         if (socket->send_state == SEND_SENDING) {
             socket->send_state = SEND_ACK;
             if (socket->send_transition_count != 1) {
@@ -206,7 +206,9 @@ handle_ack(minisocket_t socket, network_address_t source, int source_port, int a
         }
     }
     if (arg->size > sizeof(struct mini_header_reliable)) {
+        printf("dataack: %i\n", seq);
         if (seq - 1 == socket->ack) {
+            printf("added\n");
             socket->ack += 1;
             stream_add(socket->stream, arg);
             semaphore_V(socket->received_data);
@@ -698,11 +700,7 @@ minisocket_send(minisocket_t socket, minimsg_t msg, int len, minisocket_error *e
     num_sent = 0;
     len_left = len;
     message_iterator = 0;
-    semaphore_P(socket->lock);
-    socket->seq = socket->seq + 1;
-    semaphore_V(socket->lock);
-
-    
+    socket->seq++;
 
     while (len_left > 0) {
         if (MAX_NETWORK_PKT_SIZE - sizeof(struct mini_header_reliable) < len_left) {
@@ -716,7 +714,9 @@ minisocket_send(minisocket_t socket, minimsg_t msg, int len, minisocket_error *e
                 len_left -= size;
                 num_sent = 0;
                 timeout = BASE_DELAY;
-                break;                
+                socket->send_state = SEND_SENDING;
+                if (len_left > 0) socket->seq++;
+                break;
             case SEND_SENDING:
                 if (num_sent >= 7) {
                     *error = SOCKET_SENDERROR;
@@ -726,6 +726,7 @@ minisocket_send(minisocket_t socket, minimsg_t msg, int len, minisocket_error *e
                 semaphore_P(socket->lock);
                 header = create_header(socket, error);
                 if (!header) return -1;
+                header->message_type = MSG_ACK;
                 old_level = set_interrupt_level(DISABLED);
                 network_send_pkt(socket->remote_address, sizeof(struct mini_header_reliable), (char *) header, size, msg+message_iterator);
                 retry_alarm = register_alarm(timeout, send_reset, socket);
@@ -775,9 +776,11 @@ minisocket_receive(minisocket_t socket, minimsg_t msg, int max_len, minisocket_e
     socket->receive_waiting_count += 1;
     semaphore_V(socket->lock);
     semaphore_P(socket->received_data);
+    printf("got data\n");
 
     switch (socket->receive_state) {
         case RECEIVE_RECEIVING:
+            printf("taking\n");
             output = stream_take(socket->stream, max_len, msg);
             if (output != -1) {
                 *error = SOCKET_NOERROR;
