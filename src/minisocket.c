@@ -116,7 +116,7 @@ handle_ack(minisocket_t socket, network_address_t source, int source_port) {
         return;
     }
 
-    if ( socket->socket_type == SERVER )
+   // if ( socket->socket_type == SERVER )
 }
 
 void
