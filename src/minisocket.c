@@ -70,15 +70,7 @@ control_reset(void *sock) {
 }
 
 void
-handle_syn(int dest_port, network_address_t source, int source_port) {
-    minisocket_t socket;
-
-    if ( dest_port >= 0 && dest_port < NUMPORTS ) { // Server port
-        socket = server_ports[dest_port];
-    } else {
-        return;
-    }
-
+handle_syn(minisocket_t socket, network_address_t source, int source_port) {
     if (socket->u.server.server_state == LISTEN) {
         socket->u.server.server_state = SYN_RECEIVED;
         socket->remote_address[0] = source[0];
@@ -93,15 +85,8 @@ handle_syn(int dest_port, network_address_t source, int source_port) {
 }
 
 void
-handle_synack(int dest_port, network_address_t source, int source_port) {
-    minisocket_t socket;
-
-    if ( dest_port >= NUMPORTS && dest_port < 2 * NUMPORTS ) { // Client port
-        socket = client_ports[dest_port -  NUMPORTS];
-    } else {
-        return;
-    }
-
+handle_synack(minisocket_t socket, network_address_t source, int source_port) {
+    // Source validation
     if ( socket->remote_port != source_port ||
          !network_compare_network_addresses(socket->remote_address, source) ) {
         return;
@@ -116,6 +101,22 @@ handle_synack(int dest_port, network_address_t source, int source_port) {
     }
 }
 
+void
+handle_ack(minisocket_t socket, network_address_t source, int source_port) {
+    // Source validation
+    if ( socket->remote_port != source_port ||
+         !network_compare_network_addresses(socket->remote_address, source) ) {
+        return;
+    }
+
+    if ( socket->socket_type == SERVER )
+}
+
+void
+handle_fin(minisocket_t socket, network_address_t source, int source_port) {
+
+}
+
 /*
  * Handler for receiving a message on a socket
  * Assumes interrupts are disabled throughout
@@ -125,23 +126,34 @@ minisocket_handle(network_interrupt_arg_t *arg) {
     mini_header_reliable_t header;
     network_address_t source;
     int source_port;
-    int dest_port;
+    int port;
+    minisocket_t socket;
 
     header = (mini_header_reliable_t) arg->buffer;
     unpack_address(header->source_address, source);
     source_port = unpack_unsigned_short(header->source_port);
-    dest_port = unpack_unsigned_short(header->destination_port);
+    port = unpack_unsigned_short(header->destination_port);
+
+    if ( port >= 0 && port < NUMPORTS ) { // Server port
+        socket = server_ports[port];
+    } else if ( port >= NUMPORTS && port < 2 * NUMPORTS ) { // Client port
+        socket = client_ports[port -  NUMPORTS];
+    } else {
+        return;
+    }
 
     switch (header->message_type) {
         case MSG_SYN:
-            handle_syn(dest_port, source, source_port);
+            handle_syn(socket, source, source_port);
             break;
         case MSG_SYNACK:
-            handle_synack(dest_port, source, source_port);
+            handle_synack(socket, source, source_port);
             break;
         case MSG_ACK:
+            handle_ack(socket, source, source_port);
             break;
         case MSG_FIN:
+            handle_fin(socket, source, source_port);
             break;
     }
 }
