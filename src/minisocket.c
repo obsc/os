@@ -76,21 +76,88 @@ control_reset(void *sock) {
     semaphore_V(socket->lock);
 }
 
-void
-handle_syn(minisocket_t socket, network_address_t source, int source_port) {
-    if (socket->u.server.server_state == LISTEN) {
-        socket->u.server.server_state = SYN_RECEIVED;
-        socket->remote_address[0] = source[0];
-        socket->remote_address[1] = source[1];
-        socket->remote_port = source_port;
+/*
+ * Returns a reliable header
+ */
+mini_header_reliable_t
+create_header(minisocket_t socket, minisocket_error *error) {
+    mini_header_reliable_t header;
+    network_address_t my_address;
 
-        if (socket->transitioned == 0) {
-            socket->transitioned = 1;
-            semaphore_V(socket->control_transition);
-        }
+    header = (mini_header_reliable_t) malloc(sizeof(struct mini_header_reliable));
+    if (!header) {
+        *error = SOCKET_OUTOFMEMORY;
+        return NULL;
+    }
+
+    header->protocol = PROTOCOL_MINISTREAM;
+
+    network_get_my_address(my_address); // Get my address
+    // Pack source and destination
+    pack_address(header->source_address, my_address);
+    pack_unsigned_short(header->source_port, socket->port_number);
+    pack_address(header->destination_address, socket->remote_address);
+    pack_unsigned_short(header->destination_port, socket->remote_port);
+    // Pack seq and ack numbers
+    pack_unsigned_int(header->seq_number, socket->seq);
+    pack_unsigned_int(header->ack_number, socket->ack);
+
+    *error = SOCKET_NOERROR;
+    return header;
+}
+
+/*
+ * Replies to remote with current socket state (empty message)
+ */
+void
+reply(minisocket_t socket, char message_type) {
+    minisocket_error err;
+    mini_header_reliable_t header;
+
+    header = create_header(socket, &err);
+    if ( err == SOCKET_NOERROR ) {
+        header->message_type = message_type;
+        network_send_pkt(socket->remote_address, sizeof(struct mini_header_reliable), (char *) header, 0, dummy);
+        free(header);
     }
 }
 
+/*
+ * Handles Syn packets (only server)
+ */
+void
+handle_syn(minisocket_t socket, network_address_t source, int source_port) {
+    switch (socket->u.server.server_state) {
+        // Syn to listening port
+        case LISTEN:
+             socket->u.server.server_state = SYN_RECEIVED;
+            socket->remote_address[0] = source[0];
+            socket->remote_address[1] = source[1];
+            socket->remote_port = source_port;
+    
+            if (socket->transitioned == 0) {
+                socket->transitioned = 1;
+                semaphore_V(socket->control_transition);
+            }
+            return;
+        // Syn to busy port
+        case S_ESTABLISHED:
+            // Source validation
+            if ( socket->remote_port != source_port ||
+                 !network_compare_network_addresses(socket->remote_address, source) ) {
+                return;
+            }
+            reply(socket, MSG_FIN);
+            return;
+        // Drops Syn packet otherwise
+        default:
+            return;
+    }   
+}
+
+/*
+ * Handles Synack packets (only client)
+ */
 void
 handle_synack(minisocket_t socket, network_address_t source, int source_port) {
     // Source validation
@@ -101,13 +168,19 @@ handle_synack(minisocket_t socket, network_address_t source, int source_port) {
 
     if (socket->u.client.client_state == SYN_SENT) {
         socket->u.client.client_state = C_ESTABLISHED;
+        if (socket->ack == 0) socket->ack = 1;
         if (socket->transitioned == 0) {
             socket->transitioned = 1;
             semaphore_V(socket->control_transition);
         }
     }
+
+    reply(socket, MSG_ACK); // Ack the packet
 }
 
+/*
+ * Handles empty ack packets
+ */
 void
 handle_ack(minisocket_t socket, network_address_t source, int source_port) {
     // Source validation
@@ -116,13 +189,31 @@ handle_ack(minisocket_t socket, network_address_t source, int source_port) {
         return;
     }
 
-   // if ( socket->socket_type == SERVER )
+    if ( socket->socket_type == SERVER && socket->u.server.server_state == SYN_RECEIVED) {
+        
+    }
 }
 
+/*
+ * Handles fin packets
+ */
 void
 handle_fin(minisocket_t socket, network_address_t source, int source_port) {
-
+    // Source validation
+    if ( socket->remote_port != source_port ||
+         !network_compare_network_addresses(socket->remote_address, source) ) {
+        return;
+    }
 }
+
+/*
+ * Handles ack packets with data
+ */
+void
+handle_data() {
+    
+}
+
 
 /*
  * Handler for receiving a message on a socket
@@ -151,17 +242,27 @@ minisocket_handle(network_interrupt_arg_t *arg) {
 
     switch (header->message_type) {
         case MSG_SYN:
-            handle_syn(socket, source, source_port);
+            if (socket->socket_type == SERVER)
+                handle_syn(socket, source, source_port);
             break;
         case MSG_SYNACK:
-            handle_synack(socket, source, source_port);
+            if (socket->socket_type == CLIENT)
+                handle_synack(socket, source, source_port);
             break;
         case MSG_ACK:
-            handle_ack(socket, source, source_port);
+            if (arg->size <= sizeof(struct mini_header_reliable)) {
+                handle_ack(socket, source, source_port);
+            } else {
+                handle_data();
+            }
             break;
         case MSG_FIN:
             handle_fin(socket, source, source_port);
             break;
+    }
+
+    if (!(header->message_type == MSG_ACK && arg->size > sizeof(struct mini_header_reliable))) {
+        free(arg);
     }
 }
 
@@ -199,33 +300,6 @@ minisocket_initialize() {
 
     semaphore_initialize(mutex_server, 1);
     semaphore_initialize(mutex_client, 1);
-}
-
-mini_header_reliable_t
-create_header(minisocket_t socket, minisocket_error *error) {
-    mini_header_reliable_t header;
-    network_address_t my_address;
-
-    header = (mini_header_reliable_t) malloc(sizeof(struct mini_header_reliable));
-    if (!header) {
-        *error = SOCKET_OUTOFMEMORY;
-        return NULL;
-    }
-
-    header->protocol = PROTOCOL_MINISTREAM;
-
-    network_get_my_address(my_address); // Get my address
-    // Pack source and destination
-    pack_address(header->source_address, my_address);
-    pack_unsigned_short(header->source_port, socket->port_number);
-    pack_address(header->destination_address, socket->remote_address);
-    pack_unsigned_short(header->destination_port, socket->remote_port);
-    // Pack seq and ack numbers
-    pack_unsigned_int(header->seq_number, socket->seq);
-    pack_unsigned_int(header->ack_number, socket->ack);
-
-    *error = SOCKET_NOERROR;
-    return header;
 }
 
 /*
