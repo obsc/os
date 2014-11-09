@@ -37,7 +37,7 @@ extern int stream_take(stream_t, int, char *);
 extern int stream_destroy(stream_t);
 
  /*
-  * Returns 1 if stream is empty, 0 if not
+  * Returns 1 if stream is empty, 0 if not, and -1 for error
   */
 extern int stream_is_empty(stream_t);
 

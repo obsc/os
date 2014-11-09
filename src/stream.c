@@ -41,9 +41,10 @@ struct stream
  }
 
  /*
-  * Returns 1 if stream is empty, 0 if not
+  * Returns 1 if stream is empty, 0 if not, and -1 for error
   */
  int stream_is_empty(stream_t stream) {
+    if (!stream) return -1;
     semaphore_P(stream->lock);
     if (queue_length(stream->data) == 0) {
         semaphore_V(stream->lock);
@@ -58,6 +59,7 @@ struct stream
  * Returns 0 (success) or -1 (failure)
  */
 int stream_add(stream_t stream, network_interrupt_arg_t* next) {
+    if (!stream || !next) return -1;
     semaphore_P(stream->lock);
     if (queue_append(stream->data, next) == 0) {
         semaphore_V(stream->lock);
@@ -80,6 +82,8 @@ int stream_take(stream_t stream, int request, char * output) {
     int size_current_node;
     int message_iterator;
     network_interrupt_arg_t *current_chunk;
+
+    if (!stream || !output) return -1;
 
     message_iterator = 0;
     request_left = request;
