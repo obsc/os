@@ -818,6 +818,9 @@ minisocket_receive(minisocket_t socket, minimsg_t msg, int max_len, minisocket_e
     socket->receive_waiting_count += 1;
     if (socket->closing) {
         *error = SOCKET_RECEIVEERROR;
+        if (socket->receive_waiting_count == 0 && socket->send_waiting_count == 0) {
+            semaphore_V(socket->close_wait);
+        }
         semaphore_V(socket->lock);
         return -1;
     }
