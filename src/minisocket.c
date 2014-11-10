@@ -16,6 +16,7 @@ enum { LISTEN = 1, SYN_RECEIVED, S_ESTABLISHED, S_CLOSING }; // Server state
 enum { SYN_SENT = 1, C_ESTABLISHED, C_CLOSING }; // Client state
 enum { SEND_ACK = 1, SEND_SENDING, SEND_CLOSE}; // Send state
 enum { RECEIVE_RECEIVING = 1, RECEIVE_CLOSE}; // Receive state
+enum { CLOSE_CLOSING = 1, CLOSE_ACK} // Close state
 
 struct minisocket {
     char socket_type;
@@ -45,6 +46,11 @@ struct minisocket {
     char receive_state;
     semaphore_t received_data;
     int receive_waiting_count;
+
+    // Close logic
+    int closing;
+    char close_state;
+    
 
     union {
         struct {
@@ -689,6 +695,14 @@ minisocket_send(minisocket_t socket, minimsg_t msg, int len, minisocket_error *e
         return -1;
     }
 
+    semaphore_P(socket->lock);
+    if (socket->closing) {
+        *error = SOCKET_SENDERROR;
+        semaphore_V(socket->lock);
+        return -1;
+    }
+    semaphore_V(socket->lock);
+
     // only 1 send at any given time
     semaphore_P(socket->send_lock);
 
@@ -747,8 +761,8 @@ minisocket_send(minisocket_t socket, minimsg_t msg, int len, minisocket_error *e
                 }
                 header->message_type = MSG_ACK;
                 // create alarm to timeout
-                retry_alarm = register_alarm(timeout, send_reset, socket);
                 network_send_pkt(socket->remote_address, sizeof(struct mini_header_reliable), (char *) header, size, msg+message_iterator);
+                retry_alarm = register_alarm(timeout, send_reset, socket);
                 semaphore_V(socket->lock);
 
                 // wait for ack response or timeout signal
@@ -803,6 +817,11 @@ minisocket_receive(minisocket_t socket, minimsg_t msg, int max_len, minisocket_e
     // is waiting
     semaphore_P(socket->lock);
     socket->receive_waiting_count += 1;
+    if (socket->closing) {
+        *error = SOCKET_RECEIVEERROR;
+        semaphore_V(socket->lock);
+        return -1;
+    }
     semaphore_V(socket->lock);
 
     // wait until there is data
