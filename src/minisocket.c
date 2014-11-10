@@ -52,6 +52,8 @@ struct minisocket {
     // Close logic
     int closing;
     char close_state;
+    int send_transition_count;
+    semaphore_t close_transition;
     
 
     union {
@@ -384,15 +386,22 @@ create_socket(int port) {
     socket->receive_waiting_count = 0;
     socket->received_data = semaphore_create();
 
+    socket->closing = 0;
+    socket->close_state = CLOSE_CLOSING;
+    socket->close_transition = semaphore_create();
+    socket->close_transition_count = 0;
+
 
     if ( !socket->lock || !socket->control_transition ||
          !socket->send_lock || !socket->send_transition ||
-         !socket->received_data || !socket->stream ) {
+         !socket->received_data || !socket->stream ||
+         !socket->close_transition) {
         free(socket->lock);
         free(socket->control_transition);
         free(socket->send_lock);
         free(socket->send_transition);
         free(socket->received_data);
+        semaphore_destroy(socket->close_transition);
         stream_destroy(socket->stream);
         free(socket);
         return NULL;
@@ -402,6 +411,7 @@ create_socket(int port) {
     semaphore_initialize(socket->send_lock, 1);
     semaphore_initialize(socket->send_transition, 0);
     semaphore_initialize(socket->received_data, 0);
+    semaphore_initialize(socket->close_transition, 0);
 
     return socket;
 }
@@ -679,6 +689,16 @@ void send_reset(void *sock) {
     semaphore_V(socket->lock);
 }
 
+void close_reset(void *sock) {
+    minisocket_t socket = (minisocket_t) sock;
+    semaphore_P(socket->lock);
+    if (socket->close_transition_count == 0) {
+        socket->close_transition_count = 1;
+        semaphore_V(socket->close_transition);
+    }
+    semaphore_V(socket->lock);
+}
+
 /*
  * Send a message to the other end of the socket.
  *
@@ -888,5 +908,50 @@ minisocket_receive(minisocket_t socket, minimsg_t msg, int max_len, minisocket_e
  */
 void
 minisocket_close(minisocket_t socket) {
+    int done;
+    int num_sent
+    int timeout;
+    alarm_id retry_alarm;
 
+    timeout = BASE_DELAY;
+    num_sent = 0;
+    semaphore_P(socket->lock);
+    socket->seq++;
+    semaphore_V(socket->lock);
+
+    while (done != 1) {
+
+        switch (socket->close_state) {
+            // received ack, considered closed
+            case CLOSE_ACK:
+                done = 1;
+                break;
+            // attempts to send fin packet
+            case CLOSE_CLOSING:
+                if (num_sent >= MAX_TIMEOUTS) {
+                    done = 1;
+                    break;
+                }
+
+                // create header
+                semaphore_P(socket->lock);
+                reply(socket, MSG_FIN);
+                // create alarm to timeout
+                retry_alarm = register_alarm(timeout, close_reset, socket);
+                semaphore_V(socket->lock);
+
+                // wait for ack response or timeout signal
+                semaphore_P(socket->close_transition);
+                semaphore_P(socket->lock);
+                socket->close_transition_count = 0;
+                semaphore_V(socket->lock);
+
+                deregister_alarm(retry_alarm);
+
+                num_sent += 1;
+                timeout = timeout * 2;
+
+                break;
+        }
+    }
 }
