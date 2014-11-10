@@ -672,6 +672,9 @@ minisocket_send(minisocket_t socket, minimsg_t msg, int len, minisocket_error *e
     if (socket->closing) {
         *error = SOCKET_SENDERROR;
         socket->send_waiting_count -= 1;
+        if (socket->receive_waiting_count == 0 && socket->send_waiting_count == 0) {
+            semaphore_V(socket->close_wait);
+        }
         semaphore_V(socket->lock);
         return -1;
     }
@@ -765,6 +768,9 @@ minisocket_send(minisocket_t socket, minimsg_t msg, int len, minisocket_error *e
                 if (message_iterator == 0) {
                     semaphore_P(socket->lock);
                     socket->send_waiting_count -= 1;
+                    if (socket->receive_waiting_count == 0 && socket->send_waiting_count == 0) {
+                        semaphore_V(socket->close_wait);
+                    }
                     semaphore_V(socket->lock);
                     return -1;
                 } else {
