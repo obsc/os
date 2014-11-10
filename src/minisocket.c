@@ -43,6 +43,7 @@ struct minisocket {
     semaphore_t send_transition;
     int send_transition_count;
     semaphore_t send_lock;
+    int send_waiting_count;
 
     // Receive logic
     char receive_state;
@@ -52,7 +53,7 @@ struct minisocket {
     // Close logic
     int closing;
     char close_state;
-    int send_transition_count;
+    int close_transition_count;
     semaphore_t close_transition;
     
 
@@ -381,6 +382,7 @@ create_socket(int port) {
     socket->send_transition = semaphore_create();
     socket->send_transition_count = 0;
     socket->send_lock = semaphore_create();
+    socket->send_waiting_count = 0;
 
     socket->receive_state = RECEIVE_RECEIVING;
     socket->receive_waiting_count = 0;
@@ -742,8 +744,10 @@ minisocket_send(minisocket_t socket, minimsg_t msg, int len, minisocket_error *e
     }
 
     semaphore_P(socket->lock);
+    socket->send_waiting_count += 1;
     if (socket->closing) {
         *error = SOCKET_SENDERROR;
+        socket->send_waiting_count -= 1;
         semaphore_V(socket->lock);
         return -1;
     }
@@ -788,8 +792,14 @@ minisocket_send(minisocket_t socket, minimsg_t msg, int len, minisocket_error *e
                     *error = SOCKET_SENDERROR;
                     semaphore_V(socket->send_lock);
                     if (message_iterator == 0) {
+                        semaphore_P(socket->lock);
+                        socket->send_waiting_count -= 1;
+                        semaphore_V(socket->lock);
                         return -1;
                     } else {
+                        semaphore_P(socket->lock);
+                        socket->send_waiting_count -= 1;
+                        semaphore_V(socket->lock);
                         return message_iterator;
                     }
                 }
@@ -800,8 +810,14 @@ minisocket_send(minisocket_t socket, minimsg_t msg, int len, minisocket_error *e
                 if (!header) {
                     semaphore_V(socket->lock);
                     if (message_iterator == 0) {
+                        semaphore_P(socket->lock);
+                        socket->send_waiting_count -= 1;
+                        semaphore_V(socket->lock);
                         return -1;
                     } else {
+                        semaphore_P(socket->lock);
+                        socket->send_waiting_count -= 1;
+                        semaphore_V(socket->lock);
                         return message_iterator;
                     }
                 }
@@ -828,13 +844,22 @@ minisocket_send(minisocket_t socket, minimsg_t msg, int len, minisocket_error *e
                 *error = SOCKET_SENDERROR;
                 semaphore_V(socket->send_lock);
                 if (message_iterator == 0) {
+                    semaphore_P(socket->lock);
+                    socket->send_waiting_count -= 1;
+                    semaphore_V(socket->lock);
                     return -1;
                 } else {
+                    semaphore_P(socket->lock);
+                    socket->send_waiting_count -= 1;
+                    semaphore_V(socket->lock);
                     return message_iterator;
                 }
         }
     }
     semaphore_V(socket->send_lock);
+    semaphore_P(socket->lock);
+    socket->send_waiting_count -= 1;
+    semaphore_V(socket->lock);
     return message_iterator;
 
 
@@ -896,11 +921,21 @@ minisocket_receive(minisocket_t socket, minimsg_t msg, int max_len, minisocket_e
             return output;
         case RECEIVE_CLOSE:
             *error = SOCKET_RECEIVEERROR;
+            semaphore_P(socket->lock);
+            socket->receive_waiting_count -= 1;
+            semaphore_V(socket->lock);
             return -1;
     }
+    semaphore_P(socket->lock);
+    socket->receive_waiting_count -= 1;
+    semaphore_V(socket->lock);
     return -1;
 }
 
+
+void wait_close(minisocket_t socket) {
+    
+}
 /* Close a connection. If minisocket_close is issued, any send or receive should
  * fail.  As soon as the other side knows about the close, it should fail any
  * send or receive in progress. The minisocket is destroyed by minisocket_close
@@ -917,6 +952,7 @@ minisocket_close(minisocket_t socket) {
     num_sent = 0;
     semaphore_P(socket->lock);
     socket->seq++;
+    socket->closing = 1;
     semaphore_V(socket->lock);
 
     while (done != 1) {
