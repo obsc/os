@@ -88,13 +88,18 @@ int stream_take(stream_t stream, int request, char * output) {
     message_iterator = 0;
     request_left = request;
 
+    // stop when request is fulfuilled or stream is empty
     while (request_left != 0 && stream_is_empty(stream) == 0) {
+
         semaphore_P(stream->lock);
         start_read = sizeof(struct mini_header_reliable) + stream->index;
         queue_peek(stream->data, &node);
         semaphore_V(stream->lock);
         current_chunk = (network_interrupt_arg_t *) node;
         size_current_node = current_chunk->size - start_read;
+
+        // if request is larger than this node's data size, we take all of the data
+        // else we only take what we need
         if (request_left >= size_current_node) {
             memcpy(output + message_iterator, current_chunk->buffer + start_read, size_current_node);
             message_iterator = message_iterator + size_current_node;

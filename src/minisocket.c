@@ -727,7 +727,11 @@ minisocket_send(minisocket_t socket, minimsg_t msg, int len, minisocket_error *e
                 if (num_sent >= MAX_TIMEOUTS) {
                     *error = SOCKET_SENDERROR;
                     semaphore_V(socket->send_lock);
-                    return -1;
+                    if (message_iterator == 0) {
+                        return -1;
+                    } else {
+                        return message_iterator;
+                    }
                 }
 
                 // create header
@@ -735,7 +739,11 @@ minisocket_send(minisocket_t socket, minimsg_t msg, int len, minisocket_error *e
                 header = create_header(socket, error);
                 if (!header) {
                     semaphore_V(socket->lock);
-                    return -1;
+                    if (message_iterator == 0) {
+                        return -1;
+                    } else {
+                        return message_iterator;
+                    }
                 }
                 header->message_type = MSG_ACK;
                 // create alarm to timeout
@@ -759,7 +767,11 @@ minisocket_send(minisocket_t socket, minimsg_t msg, int len, minisocket_error *e
             case SEND_CLOSE:
                 *error = SOCKET_SENDERROR;
                 semaphore_V(socket->send_lock);
-                return -1;
+                if (message_iterator == 0) {
+                    return -1;
+                } else {
+                    return message_iterator;
+                }
         }
     }
     semaphore_V(socket->send_lock);
