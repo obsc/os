@@ -12,8 +12,10 @@
 #include "interrupts.h"
 #include "stream.h"
 
-enum { LISTEN = 1, SYN_RECEIVED, S_ESTABLISHED, S_CLOSING }; // Server state
-enum { SYN_SENT = 1, C_ESTABLISHED, C_CLOSING }; // Client state
+#define CLOSEDELAY 15000
+
+enum { LISTEN = 1, SYN_RECEIVED, S_ESTABLISHED }; // Server state
+enum { SYN_SENT = 1, C_ESTABLISHED, CLOSING }; // Client state
 enum { SEND_ACK = 1, SEND_SENDING, SEND_CLOSE}; // Send state
 enum { RECEIVE_RECEIVING = 1, RECEIVE_CLOSE}; // Receive state
 
@@ -36,15 +38,15 @@ struct minisocket {
     semaphore_t control_transition;
 
     // Send logic
+    char send_state;
     semaphore_t send_transition;
     int send_transition_count;
     semaphore_t send_lock;
-    char send_state;
 
     // Receive logic
     char receive_state;
-    semaphore_t received_data;
     int receive_waiting_count;
+    semaphore_t received_data;
 
     union {
         struct {
@@ -82,10 +84,10 @@ control_reset(void *sock) {
 }
 
 /*
- * Returns a reliable header
+ * Returns a reliable header to a destination 
  */
 mini_header_reliable_t
-create_header(minisocket_t socket, minisocket_error *error) {
+create_header_to_address(minisocket_t socket, network_address_t dest, int dest_port, minisocket_error *error) {
     mini_header_reliable_t header;
     network_address_t my_address;
 
@@ -101,8 +103,8 @@ create_header(minisocket_t socket, minisocket_error *error) {
     // Pack source and destination
     pack_address(header->source_address, my_address);
     pack_unsigned_short(header->source_port, socket->port_number);
-    pack_address(header->destination_address, socket->remote_address);
-    pack_unsigned_short(header->destination_port, socket->remote_port);
+    pack_address(header->destination_address, dest);
+    pack_unsigned_short(header->destination_port, dest_port);
     // Pack seq and ack numbers
     pack_unsigned_int(header->seq_number, socket->seq);
     pack_unsigned_int(header->ack_number, socket->ack);
@@ -112,19 +114,35 @@ create_header(minisocket_t socket, minisocket_error *error) {
 }
 
 /*
+ * Returns a reliable header
+ */
+mini_header_reliable_t
+create_header(minisocket_t socket, minisocket_error *error) {
+    return create_header_to_address(socket, socket->remote_address, socket->remote_port, error);
+}
+
+/*
+ * Replies to address
+ */
+void
+reply_to_address(minisocket_t socket, char message_type, network_address_t dest, int dest_port) {
+    minisocket_error err;
+    mini_header_reliable_t header;
+
+    header = create_header_to_address(socket, dest, dest_port, &err);
+    if ( err == SOCKET_NOERROR ) {
+        header->message_type = message_type;
+        network_send_pkt(dest, sizeof(struct mini_header_reliable), (char *) header, 0, dummy);
+        free(header);
+    }
+}
+
+/*
  * Replies to remote with current socket state (empty message)
  */
 void
 reply(minisocket_t socket, char message_type) {
-    minisocket_error err;
-    mini_header_reliable_t header;
-
-    header = create_header(socket, &err);
-    if ( err == SOCKET_NOERROR ) {
-        header->message_type = message_type;
-        network_send_pkt(socket->remote_address, sizeof(struct mini_header_reliable), (char *) header, 0, dummy);
-        free(header);
-    }
+    reply_to_address(socket, message_type, socket->remote_address, socket->remote_port);
 }
 
 /*
@@ -148,8 +166,7 @@ handle_syn(minisocket_t socket, network_address_t source, int source_port) {
             // Source validation
             if ( socket->remote_port != source_port ||
                  !network_compare_network_addresses(socket->remote_address, source) ) {
-                reply(socket, MSG_FIN); // Port busy
-                return;
+                reply_to_address(socket, MSG_FIN, source, source_port); // Port busy
             }
             return;
         // Drops Syn packet otherwise
@@ -226,6 +243,18 @@ handle_fin(minisocket_t socket, network_address_t source, int source_port) {
          !network_compare_network_addresses(socket->remote_address, source) ) {
         return;
     }
+
+    if ( socket->socket_type == CLIENT && socket->u.client.client_state == SYN_SENT ) {
+        socket->u.client.client_state = CLOSING;
+        socket_transition(socket);
+    }
+
+    if ( (socket->socket_type == CLIENT && socket->u.client.client_state == C_ESTABLISHED) ||
+         (socket->socket_type == SERVER && socket->u.server.server_state == S_ESTABLISHED) ) {
+        reply(socket, MSG_ACK);
+    }
+
+    
 }
 
 
@@ -333,24 +362,23 @@ create_socket(int port) {
     socket->seq = 1;
     socket->ack = 0;
 
-    socket->send_transition_count = 0;
-
-    socket->send_state = SEND_SENDING;
-
-    socket->receive_state = RECEIVE_RECEIVING;
-
-    socket->receive_waiting_count = 0;
-
-    socket->received_data = semaphore_create();
-
     socket->lock = semaphore_create();
+
+    socket->stream = stream_new();
 
     socket->transitioned = 0;
     socket->control_transition = semaphore_create();
-    socket->send_lock = semaphore_create();
+    
+    socket->send_state = SEND_SENDING;
     socket->send_transition = semaphore_create();
+    socket->send_transition_count = 0;
+    socket->send_lock = semaphore_create();
 
-    socket->stream = stream_new();
+    socket->receive_state = RECEIVE_RECEIVING;
+    socket->receive_waiting_count = 0;
+    socket->received_data = semaphore_create();
+
+
     if ( !socket->lock || !socket->control_transition ||
          !socket->send_lock || !socket->send_transition ||
          !socket->received_data || !socket->stream ) {
@@ -359,7 +387,7 @@ create_socket(int port) {
         free(socket->send_lock);
         free(socket->send_transition);
         free(socket->received_data);
-        free(socket->stream);
+        stream_destroy(socket->stream);
         free(socket);
         return NULL;
     }
@@ -382,7 +410,7 @@ destroy_socket(minisocket_t socket) {
     free(socket->send_lock);
     free(socket->send_transition);
     free(socket->received_data);
-    free(socket->stream);
+    stream_destroy(socket->stream);
     free(socket);
 }
 
@@ -474,8 +502,6 @@ server_handshake(minisocket_t socket, minisocket_error *error) {
             case S_ESTABLISHED: // Received Ack
                 *error = SOCKET_NOERROR;
                 return socket;
-            case S_CLOSING: // Socket closed, this should not happen in here
-                return NULL;
         }
     }
 }
@@ -523,7 +549,7 @@ client_handshake(minisocket_t socket, minisocket_error *error) {
             case C_ESTABLISHED: // Received Synack
                 *error = SOCKET_NOERROR;
                 return socket;
-            case C_CLOSING: // Socket closed
+            case CLOSING: // Socket closed
                 *error = SOCKET_BUSY;
                 return NULL;
         }
