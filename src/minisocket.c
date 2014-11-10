@@ -35,9 +35,7 @@ struct minisocket {
     stream_t stream; // Stream on this socket
 
     // Send logic
-    char send_state;
-    semaphore_t send_transition;
-    int send_transition_count;
+    state_t send_state;
     semaphore_t send_lock;
     int send_waiting_count;
 
@@ -201,12 +199,8 @@ handle_ack(minisocket_t socket, network_address_t source, int source_port, int a
     }
 
     if (ack == socket->seq && ack > 1) {
-        if (socket->send_state == SEND_SENDING) {
-            socket->send_state = SEND_ACK;
-            if (socket->send_transition_count != 1) {
-                semaphore_V(socket->send_transition);  
-            }
-            socket->send_transition_count = 1;
+        if (get_state(socket->send_state) == SEND_SENDING) {
+            transition_to(socket->send_state, SEND_ACK);
         }
     }
     if (arg->size > sizeof(struct mini_header_reliable)) {
@@ -351,9 +345,7 @@ create_socket(int port) {
 
     socket->stream = stream_new();
 
-    socket->send_state = SEND_SENDING;
-    socket->send_transition = semaphore_create();
-    socket->send_transition_count = 0;
+    socket->send_state = state_new(SEND_SENDING);
     socket->send_lock = semaphore_create();
     socket->send_waiting_count = 0;
 
@@ -368,22 +360,21 @@ create_socket(int port) {
     socket->close_wait = semaphore_create();
 
 
-    if ( !socket->lock || !socket->send_lock || !socket->send_transition ||
+    if ( !socket->lock || !socket->send_lock || !socket->send_state ||
          !socket->received_data || !socket->stream ||
          !socket->close_transition || !socket->close_wait) {
         semaphore_destroy(socket->lock);
         semaphore_destroy(socket->send_lock);
-        semaphore_destroy(socket->send_transition);
         semaphore_destroy(socket->received_data);
         semaphore_destroy(socket->close_transition);
         semaphore_destroy(socket->close_wait);
+        state_destroy(socket->send_state);
         stream_destroy(socket->stream);
         free(socket);
         return NULL;
     }
     semaphore_initialize(socket->lock, 1);
     semaphore_initialize(socket->send_lock, 1);
-    semaphore_initialize(socket->send_transition, 0);
     semaphore_initialize(socket->received_data, 0);
     semaphore_initialize(socket->close_transition, 0);
     semaphore_initialize(socket->close_wait, 0);
@@ -398,7 +389,7 @@ void
 destroy_socket(minisocket_t socket) {
     semaphore_destroy(socket->lock);
     semaphore_destroy(socket->send_lock);
-    semaphore_destroy(socket->send_transition);
+    state_destroy(socket->send_state);
     semaphore_destroy(socket->received_data);
     semaphore_destroy(socket->close_transition);
     semaphore_destroy(socket->close_wait);
@@ -473,13 +464,8 @@ server_handshake(minisocket_t socket, minisocket_error *error) {
                 }
 
                 semaphore_P(socket->lock);
-                header = create_header(socket, error); // Creates a header
-                if (*error != SOCKET_NOERROR) return NULL;
-                header->message_type = MSG_SYNACK; // Synack packet type
+                reply(socket, MSG_SYNACK);
 
-                network_send_pkt(socket->remote_address, sizeof(struct mini_header_reliable), (char *) header, 0, dummy);
-
-                free(header);
                 retry_alarm = register_alarm(timeout, transition_timer, socket->u.server.server_state); // Set up alarm
                 semaphore_V(socket->lock);
 
@@ -519,13 +505,8 @@ client_handshake(minisocket_t socket, minisocket_error *error) {
                 }
 
                 semaphore_P(socket->lock);
-                header = create_header(socket, error); // Creates a header
-                if (*error != SOCKET_NOERROR) return NULL;
-                header->message_type = MSG_SYN; // Syn packet type
+                reply(socket, MSG_SYN);
 
-                network_send_pkt(socket->remote_address, sizeof(struct mini_header_reliable), (char *) header, 0, dummy);
-
-                free(header);
                 retry_alarm = register_alarm(timeout, transition_timer, socket->u.client.client_state); // Set up alarm
                 semaphore_V(socket->lock);
 
@@ -747,14 +728,14 @@ minisocket_send(minisocket_t socket, minimsg_t msg, int len, minisocket_error *e
             size = len_left;
         }
 
-        switch (socket->send_state) {
+        switch (get_state(socket->send_state)) {
             // received ack, send successful
             case SEND_ACK:
                 message_iterator += size;
                 len_left -= size;
                 num_sent = 0;
                 timeout = BASE_DELAY;
-                socket->send_state = SEND_SENDING;
+                set_state(socket->send_state, SEND_SENDING);
                 // increase seq if there are data left to send
                 if (len_left > 0) socket->seq++;
                 break;
@@ -796,21 +777,16 @@ minisocket_send(minisocket_t socket, minimsg_t msg, int len, minisocket_error *e
                 header->message_type = MSG_ACK;
                 // create alarm to timeout
                 network_send_pkt(socket->remote_address, sizeof(struct mini_header_reliable), (char *) header, size, msg+message_iterator);
-                retry_alarm = register_alarm(timeout, send_reset, socket);
-                semaphore_V(socket->lock);
-
-                // wait for ack response or timeout signal
-                semaphore_P(socket->send_transition);
-                semaphore_P(socket->lock);
-                socket->send_transition_count = 0;
-                semaphore_V(socket->lock);
-
-                deregister_alarm(retry_alarm);
-
-                num_sent += 1;
-                timeout = timeout * 2;
                 free(header);
 
+                retry_alarm = register_alarm(timeout, transition_timer, socket->send_state);
+                semaphore_V(socket->lock);
+
+                num_sent++;
+                timeout *= 2;
+
+                wait_for_transition(socket->send_state);
+                deregister_alarm(retry_alarm);
                 break;
             case SEND_CLOSE:
                 *error = SOCKET_SENDERROR;
@@ -992,5 +968,15 @@ minisocket_close(minisocket_t socket) {
 
     wait_close(socket);
 
-    destroy_socket(socket);    
+    if (socket->socket_type == SERVER) {
+        semaphore_P(mutex_server);
+        server_ports[socket->port] = NULL;
+        destroy_socket(socket);
+        semaphore_V(mutex_server);
+    } else {
+        semaphore_P(mutex_client);
+        client_ports[socket->port - NUMPORTS] = NULL;
+        destroy_socket(socket);
+        semaphore_V(mutex_client);
+    }
 }
