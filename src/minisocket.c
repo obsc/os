@@ -45,10 +45,8 @@ struct minisocket {
     semaphore_t received_data;
 
     // Close logic
-    int closing;
-    char close_state;
-    int close_transition_count;
-    semaphore_t close_transition;
+    state_t close_state;
+    char closing; // Boolean representing if the socket is closing or not
     semaphore_t close_wait;
 
     union {
@@ -354,20 +352,17 @@ create_socket(int port) {
     socket->received_data = semaphore_create();
 
     socket->closing = 0;
-    socket->close_state = CLOSE_CLOSING;
-    socket->close_transition = semaphore_create();
-    socket->close_transition_count = 0;
+    socket->close_state = state_new(CLOSE_CLOSING);
     socket->close_wait = semaphore_create();
-
 
     if ( !socket->lock || !socket->send_lock || !socket->send_state ||
          !socket->received_data || !socket->stream ||
-         !socket->close_transition || !socket->close_wait) {
+         !socket->close_state || !socket->close_wait) {
         semaphore_destroy(socket->lock);
         semaphore_destroy(socket->send_lock);
         semaphore_destroy(socket->received_data);
-        semaphore_destroy(socket->close_transition);
         semaphore_destroy(socket->close_wait);
+        state_destroy(socket->close_state);
         state_destroy(socket->send_state);
         stream_destroy(socket->stream);
         free(socket);
@@ -376,7 +371,6 @@ create_socket(int port) {
     semaphore_initialize(socket->lock, 1);
     semaphore_initialize(socket->send_lock, 1);
     semaphore_initialize(socket->received_data, 0);
-    semaphore_initialize(socket->close_transition, 0);
     semaphore_initialize(socket->close_wait, 0);
 
     return socket;
@@ -389,10 +383,10 @@ void
 destroy_socket(minisocket_t socket) {
     semaphore_destroy(socket->lock);
     semaphore_destroy(socket->send_lock);
-    state_destroy(socket->send_state);
     semaphore_destroy(socket->received_data);
-    semaphore_destroy(socket->close_transition);
     semaphore_destroy(socket->close_wait);
+    state_destroy(socket->send_state);
+    state_destroy(socket->close_state);
     stream_destroy(socket->stream);
     free(socket);
 }
@@ -631,16 +625,6 @@ minisocket_client_create(network_address_t addr, int port, minisocket_error *err
 
     *error = SOCKET_NOMOREPORTS;
     return NULL;
-}
-
-void close_reset(void *sock) {
-    minisocket_t socket = (minisocket_t) sock;
-    semaphore_P(socket->lock);
-    if (socket->close_transition_count == 0) {
-        socket->close_transition_count = 1;
-        semaphore_V(socket->close_transition);
-    }
-    semaphore_V(socket->lock);
 }
 
 /*
@@ -916,7 +900,7 @@ minisocket_close(minisocket_t socket) {
 
     while (done != 1) {
 
-        switch (socket->close_state) {
+        switch (get_state(socket->close_state)) {
             // received ack, considered closed
             case CLOSE_ACK:
                 done = 1;
@@ -932,20 +916,15 @@ minisocket_close(minisocket_t socket) {
                 semaphore_P(socket->lock);
                 reply(socket, MSG_FIN);
                 // create alarm to timeout
-                retry_alarm = register_alarm(timeout, close_reset, socket);
+                retry_alarm = register_alarm(timeout, transition_timer, socket->close_state);
                 semaphore_V(socket->lock);
+
+                num_sent++;
+                timeout *= 2;
 
                 // wait for ack response or timeout signal
-                semaphore_P(socket->close_transition);
-                semaphore_P(socket->lock);
-                socket->close_transition_count = 0;
-                semaphore_V(socket->lock);
-
+                wait_for_transition(socket->close_state);
                 deregister_alarm(retry_alarm);
-
-                num_sent += 1;
-                timeout = timeout * 2;
-
                 break;
         }
     }
