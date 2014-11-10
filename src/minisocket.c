@@ -69,7 +69,7 @@ int next_client_id; // Next client port id to use
 char *dummy; // Represents a dummy bytearray to pass to send pkt
 
 /*
- * Returns a reliable header to a destination 
+ * Returns a reliable header to a destination
  */
 mini_header_reliable_t
 create_header_to_address(minisocket_t socket, network_address_t dest, int dest_port, minisocket_error *error) {
@@ -141,7 +141,7 @@ handle_syn(minisocket_t socket, network_address_t source, int source_port) {
             socket->remote_address[0] = source[0];
             socket->remote_address[1] = source[1];
             socket->remote_port = source_port;
-    
+
             transition_to(socket->u.server.server_state, SYN_RECEIVED);
             return;
         // Syn to busy port
@@ -156,7 +156,7 @@ handle_syn(minisocket_t socket, network_address_t source, int source_port) {
         // Drops Syn packet otherwise
         default:
             return;
-    }   
+    }
 }
 
 /*
@@ -588,7 +588,6 @@ minisocket_client_create(network_address_t addr, int port, minisocket_error *err
     int i;
     int cur_id;
     minisocket_t socket;
-
     // Out of range check
     if ( port < 0 || port >= NUMPORTS ) {
         *error = SOCKET_INVALIDPARAMS;
@@ -615,7 +614,7 @@ minisocket_client_create(network_address_t addr, int port, minisocket_error *err
                 semaphore_V(mutex_client);
                 return NULL;
             } else {
-                return socket; 
+                return socket;
             }
         }
         increment_client_id();

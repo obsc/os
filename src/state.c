@@ -22,6 +22,8 @@ state_t state_new(int default_state) {
         return NULL;
     }
 
+    s->cur_state = default_state;
+
     semaphore_initialize(s->transition, 0);
     return s;
 }
