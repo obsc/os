@@ -442,7 +442,6 @@ new_client(int client_id, network_address_t addr, int port) {
  */
 minisocket_t
 server_handshake(minisocket_t socket, minisocket_error *error) {
-    mini_header_reliable_t header;
     int num_sent;
     int timeout;
     alarm_id retry_alarm;
@@ -487,7 +486,6 @@ server_handshake(minisocket_t socket, minisocket_error *error) {
  */
 minisocket_t
 client_handshake(minisocket_t socket, minisocket_error *error) {
-    mini_header_reliable_t header;
     int num_sent;
     int timeout;
     alarm_id retry_alarm;
@@ -633,16 +631,6 @@ minisocket_client_create(network_address_t addr, int port, minisocket_error *err
 
     *error = SOCKET_NOMOREPORTS;
     return NULL;
-}
-
-void send_reset(void *sock) {
-    minisocket_t socket = (minisocket_t) sock;
-    semaphore_P(socket->lock);
-    if (socket->send_transition_count == 0) {
-        socket->send_transition_count = 1;
-        semaphore_V(socket->send_transition);
-    }
-    semaphore_V(socket->lock);
 }
 
 void close_reset(void *sock) {
@@ -890,15 +878,11 @@ minisocket_receive(minisocket_t socket, minimsg_t msg, int max_len, minisocket_e
 void wait_close(minisocket_t socket) {
     int acc;
     semaphore_P(socket->lock);
-    socket->send_state = SEND_FIN;
-    if (socket->send_transition_count == 0) {
-        socket->send_transition_count = 1;
-        semaphore_V(socket->send_transition);
-    }
+    transition_to(socket->send_state, SEND_CLOSE);
     for (acc = 0; acc < socket->send_waiting_count; acc++) {
         semaphore_V(socket->send_lock);
     }
-    socket->receive_state = RECEIVE_FIN;
+    socket->receive_state = RECEIVE_CLOSE;
     if (stream_is_empty(socket->stream) == 0) {
         semaphore_V(socket->received_data);
     }
@@ -970,12 +954,12 @@ minisocket_close(minisocket_t socket) {
 
     if (socket->socket_type == SERVER) {
         semaphore_P(mutex_server);
-        server_ports[socket->port] = NULL;
+        server_ports[socket->port_number] = NULL;
         destroy_socket(socket);
         semaphore_V(mutex_server);
     } else {
         semaphore_P(mutex_client);
-        client_ports[socket->port - NUMPORTS] = NULL;
+        client_ports[socket->port_number - NUMPORTS] = NULL;
         destroy_socket(socket);
         semaphore_V(mutex_client);
     }
