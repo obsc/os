@@ -38,6 +38,7 @@ OBJ =                              \
     multilevel_queue.o             \
     synch.o                        \
     stream.o                       \
+    state.o                        \
     miniheader.o                   \
     minimsg.o                      \
     minisocket.o                   \

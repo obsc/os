@@ -21,22 +21,19 @@ struct stream
  * Return an empty stream. Returns Null on error
  */
  stream_t stream_new() {
-    queue_t q;
-    stream_t s;
-    semaphore_t lock;
-    s = (stream_t) malloc (sizeof(struct stream));
-    lock = semaphore_create();
-    q = queue_new();
-    if (!q || !lock || !s) {
+    stream_t s = (stream_t) malloc (sizeof(struct stream));
+    if ( !s ) return NULL;
+
+    s->lock = semaphore_create();
+    s->data = queue_new();
+    if (!s->data || !s->lock) {
+        queue_free(s->data);
+        semaphore_destroy(s->lock);
         free(s);
-        free(q);
-        free(lock);
         return NULL;
     }
-    semaphore_initialize(lock, 1);
-    s->data = q;
+    semaphore_initialize(s->lock, 1);
     s->index = 0;
-    s->lock = lock;
     return s;
  }
 

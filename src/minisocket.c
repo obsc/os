@@ -11,6 +11,7 @@
 #include "alarm.h"
 #include "interrupts.h"
 #include "stream.h"
+#include "state.h"
 
 #define CLOSEDELAY 15000
 
@@ -18,7 +19,7 @@ enum { LISTEN = 1, SYN_RECEIVED, S_ESTABLISHED }; // Server state
 enum { SYN_SENT = 1, C_ESTABLISHED, CLOSING }; // Client state
 enum { SEND_ACK = 1, SEND_SENDING, SEND_CLOSE}; // Send state
 enum { RECEIVE_RECEIVING = 1, RECEIVE_CLOSE}; // Receive state
-enum { CLOSE_CLOSING = 1, CLOSE_ACK} // Close state
+enum { CLOSE_CLOSING = 1, CLOSE_ACK}; // Close state
 
 struct minisocket {
     char socket_type;
@@ -31,12 +32,7 @@ struct minisocket {
     int ack; // ACK number
 
     semaphore_t lock; // Lock on the minisocket
-
     stream_t stream; // Stream on this socket
-    
-    // Control logic
-    int transitioned; // boolean representing state of transition semaphore
-    semaphore_t control_transition;
 
     // Send logic
     char send_state;
@@ -56,14 +52,13 @@ struct minisocket {
     int close_transition_count;
     semaphore_t close_transition;
     semaphore_t close_wait;
-    
 
     union {
         struct {
-            char server_state;
+            state_t server_state;
         } server;
         struct {
-            char client_state;
+            state_t client_state;
         } client;
     } u;
 };
@@ -76,22 +71,6 @@ minisocket_t client_ports[NUMPORTS]; // Array of all the client sockets
 int next_client_id; // Next client port id to use
 
 char *dummy; // Represents a dummy bytearray to pass to send pkt
-
-void
-socket_transition(minisocket_t socket) {
-    if (socket->transitioned == 0) {
-        socket->transitioned = 1;
-        semaphore_V(socket->control_transition);
-    }
-}
-
-void
-control_reset(void *sock) {
-    minisocket_t socket = (minisocket_t) sock;
-    semaphore_P(socket->lock);
-    socket_transition(socket);
-    semaphore_V(socket->lock);
-}
 
 /*
  * Returns a reliable header to a destination 
@@ -160,15 +139,14 @@ reply(minisocket_t socket, char message_type) {
  */
 void
 handle_syn(minisocket_t socket, network_address_t source, int source_port) {
-    switch (socket->u.server.server_state) {
+    switch (get_state(socket->u.server.server_state)) {
         // Syn to listening port
         case LISTEN:
-            socket->u.server.server_state = SYN_RECEIVED;
             socket->remote_address[0] = source[0];
             socket->remote_address[1] = source[1];
             socket->remote_port = source_port;
     
-            socket_transition(socket);
+            transition_to(socket->u.server.server_state, SYN_RECEIVED);
             return;
         // Syn to busy port
         case SYN_RECEIVED:
@@ -196,10 +174,9 @@ handle_synack(minisocket_t socket, network_address_t source, int source_port) {
         return;
     }
 
-    if (socket->u.client.client_state == SYN_SENT) {
-        socket->u.client.client_state = C_ESTABLISHED;
+    if (get_state(socket->u.client.client_state) == SYN_SENT) {
         if (socket->ack == 0) socket->ack = 1;
-        socket_transition(socket);
+        transition_to(socket->u.client.client_state, C_ESTABLISHED);
     }
 
     reply(socket, MSG_ACK); // Ack the packet
@@ -217,10 +194,9 @@ handle_ack(minisocket_t socket, network_address_t source, int source_port, int a
     }
 
     // Waiting for ack on synack
-    if (socket->socket_type == SERVER && socket->u.server.server_state == SYN_RECEIVED) {
+    if (socket->socket_type == SERVER && get_state(socket->u.server.server_state) == SYN_RECEIVED) {
         if (ack == 1) { // Drop non-ack 1 packets
-            socket->u.server.server_state = S_ESTABLISHED;
-            socket_transition(socket);
+            transition_to(socket->u.server.server_state, S_ESTABLISHED);
         }
     }
 
@@ -254,17 +230,16 @@ handle_fin(minisocket_t socket, network_address_t source, int source_port) {
         return;
     }
 
-    if ( socket->socket_type == CLIENT && socket->u.client.client_state == SYN_SENT ) {
-        socket->u.client.client_state = CLOSING;
-        socket_transition(socket);
+    if ( socket->socket_type == CLIENT && get_state(socket->u.client.client_state) == SYN_SENT ) {
+        transition_to(socket->u.client.client_state, CLOSING);
     }
 
-    if ( (socket->socket_type == CLIENT && socket->u.client.client_state == C_ESTABLISHED) ||
-         (socket->socket_type == SERVER && socket->u.server.server_state == S_ESTABLISHED) ) {
+    if ( (socket->socket_type == CLIENT && get_state(socket->u.client.client_state) == C_ESTABLISHED) ||
+         (socket->socket_type == SERVER && get_state(socket->u.server.server_state) == S_ESTABLISHED) ) {
         reply(socket, MSG_ACK);
     }
 
-    
+
 }
 
 
@@ -376,9 +351,6 @@ create_socket(int port) {
 
     socket->stream = stream_new();
 
-    socket->transitioned = 0;
-    socket->control_transition = semaphore_create();
-    
     socket->send_state = SEND_SENDING;
     socket->send_transition = semaphore_create();
     socket->send_transition_count = 0;
@@ -396,15 +368,13 @@ create_socket(int port) {
     socket->close_wait = semaphore_create();
 
 
-    if ( !socket->lock || !socket->control_transition ||
-         !socket->send_lock || !socket->send_transition ||
+    if ( !socket->lock || !socket->send_lock || !socket->send_transition ||
          !socket->received_data || !socket->stream ||
          !socket->close_transition || !socket->close_wait) {
-        free(socket->lock);
-        free(socket->control_transition);
-        free(socket->send_lock);
-        free(socket->send_transition);
-        free(socket->received_data);
+        semaphore_destroy(socket->lock);
+        semaphore_destroy(socket->send_lock);
+        semaphore_destroy(socket->send_transition);
+        semaphore_destroy(socket->received_data);
         semaphore_destroy(socket->close_transition);
         semaphore_destroy(socket->close_wait);
         stream_destroy(socket->stream);
@@ -412,7 +382,6 @@ create_socket(int port) {
         return NULL;
     }
     semaphore_initialize(socket->lock, 1);
-    semaphore_initialize(socket->control_transition, 0);
     semaphore_initialize(socket->send_lock, 1);
     semaphore_initialize(socket->send_transition, 0);
     semaphore_initialize(socket->received_data, 0);
@@ -427,11 +396,10 @@ create_socket(int port) {
  */
 void
 destroy_socket(minisocket_t socket) {
-    free(socket->lock);
-    free(socket->control_transition);
-    free(socket->send_lock);
-    free(socket->send_transition);
-    free(socket->received_data);
+    semaphore_destroy(socket->lock);
+    semaphore_destroy(socket->send_lock);
+    semaphore_destroy(socket->send_transition);
+    semaphore_destroy(socket->received_data);
     stream_destroy(socket->stream);
     free(socket);
 }
@@ -446,8 +414,8 @@ new_server(int port) {
 
     // Socket type
     socket->socket_type = SERVER;
-    // TODO: MORE STUFF
-    socket->u.server.server_state = LISTEN;
+
+    socket->u.server.server_state = state_new(LISTEN);
 
     // Successfully created a server
     server_ports[port] = socket;
@@ -468,8 +436,8 @@ new_client(int client_id, network_address_t addr, int port) {
     socket->remote_address[0] = addr[0];
     socket->remote_address[1] = addr[1];
     socket->remote_port = port;
-    // TODO: MORE STUFF
-    socket->u.client.client_state = SYN_SENT;
+
+    socket->u.client.client_state = state_new(SYN_SENT);
 
     // Successfully created a client
     client_ports[client_id] = socket;
@@ -487,19 +455,18 @@ server_handshake(minisocket_t socket, minisocket_error *error) {
     alarm_id retry_alarm;
 
     while (1) {
-        switch (socket->u.server.server_state) {
+        switch (get_state(socket->u.server.server_state)) {
             case LISTEN: // Listening for Syn
                 num_sent = 0;
                 timeout = BASE_DELAY;
                 retry_alarm = NULL;
-                semaphore_P(socket->control_transition);
+                wait_for_transition(socket->u.server.server_state);
                 socket->ack = 1;
-                socket->transitioned = 0;
                 break;
             case SYN_RECEIVED: // Sending Synacks
                 if (num_sent >= MAX_TIMEOUTS) { // Timeout too many times
                     socket->ack = 0;
-                    socket->u.server.server_state = LISTEN;
+                    set_state(socket->u.server.server_state, LISTEN);
                     break;
                 }
 
@@ -511,15 +478,14 @@ server_handshake(minisocket_t socket, minisocket_error *error) {
                 network_send_pkt(socket->remote_address, sizeof(struct mini_header_reliable), (char *) header, 0, dummy);
 
                 free(header);
-                retry_alarm = register_alarm(timeout, control_reset, socket); // Set up alarm
+                retry_alarm = register_alarm(timeout, transition_timer, socket->u.server.server_state); // Set up alarm
                 semaphore_V(socket->lock);
 
                 num_sent++;
                 timeout *= 2;
 
-                semaphore_P(socket->control_transition);
+                wait_for_transition(socket->u.server.server_state);
                 deregister_alarm(retry_alarm);
-                socket->transitioned = 0;
                 break;
             case S_ESTABLISHED: // Received Ack
                 *error = SOCKET_NOERROR;
@@ -543,7 +509,7 @@ client_handshake(minisocket_t socket, minisocket_error *error) {
     retry_alarm = NULL;
 
     while (1) {
-        switch (socket->u.client.client_state) {
+        switch (get_state(socket->u.client.client_state)) {
             case SYN_SENT: // Sending Syn
                 if (num_sent >= MAX_TIMEOUTS) { // Timeout too many times
                     *error = SOCKET_NOSERVER;
@@ -558,15 +524,14 @@ client_handshake(minisocket_t socket, minisocket_error *error) {
                 network_send_pkt(socket->remote_address, sizeof(struct mini_header_reliable), (char *) header, 0, dummy);
 
                 free(header);
-                retry_alarm = register_alarm(timeout, control_reset, socket); // Set up alarm
+                retry_alarm = register_alarm(timeout, transition_timer, socket->u.client.client_state); // Set up alarm
                 semaphore_V(socket->lock);
 
                 num_sent++;
                 timeout *= 2;
 
-                semaphore_P(socket->control_transition);
+                wait_for_transition(socket->u.client.client_state);
                 deregister_alarm(retry_alarm);
-                socket->transitioned = 0;
                 break;
             case C_ESTABLISHED: // Received Synack
                 *error = SOCKET_NOERROR;
@@ -619,6 +584,7 @@ minisocket_server_create(int port, minisocket_error *error) {
     if ( !socket ) { // Handshake failed
         semaphore_P(mutex_server);
         destroy_socket(server_ports[port]);
+        state_destroy(server_ports[port]->u.server.server_state);
         server_ports[port] = NULL;
         semaphore_V(mutex_server);
         return NULL;
@@ -669,6 +635,7 @@ minisocket_client_create(network_address_t addr, int port, minisocket_error *err
             if ( !socket ) { // Handshake failed
                 semaphore_P(mutex_client);
                 destroy_socket(client_ports[cur_id]);
+                state_destroy(client_ports[cur_id]->u.client.client_state);
                 client_ports[cur_id] = NULL;
                 semaphore_V(mutex_client);
                 return NULL;
@@ -728,7 +695,6 @@ int
 minisocket_send(minisocket_t socket, minimsg_t msg, int len, minisocket_error *error) {
     mini_header_reliable_t header;
     int size;
-    interrupt_level_t old_level;
     int timeout;
     int num_sent;
     alarm_id retry_alarm;
@@ -975,7 +941,7 @@ void wait_close(minisocket_t socket) {
 void
 minisocket_close(minisocket_t socket) {
     int done;
-    int num_sent
+    int num_sent;
     int timeout;
     alarm_id retry_alarm;
 
