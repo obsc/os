@@ -128,6 +128,9 @@ int stream_take(stream_t stream, int request, char * output) {
 int stream_destroy(stream_t stream) {
     void * node;
     network_interrupt_arg_t *next;
+
+    if ( !stream ) return -1;
+
     while (stream_is_empty(stream) == 0) {
         queue_dequeue(stream->data, &node);
         next = (network_interrupt_arg_t *) node;
