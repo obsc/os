@@ -18,7 +18,7 @@ enum { LISTEN = 1, SYN_RECEIVED, S_ESTABLISHED }; // Server state
 enum { SYN_SENT = 1, C_ESTABLISHED, CLOSING }; // Client state
 enum { SEND_ACK = 1, SEND_SENDING, SEND_CLOSE}; // Send state
 enum { RECEIVE_RECEIVING = 1, RECEIVE_CLOSE}; // Receive state
-enum { CLOSE_CLOSING = 1, CLOSE_ACK} // Close state
+enum { CLOSE_CLOSING = 1, CLOSE_ACK}; // Close state
 
 struct minisocket {
     char socket_type;
@@ -55,7 +55,6 @@ struct minisocket {
     char close_state;
     int close_transition_count;
     semaphore_t close_transition;
-    
 
     union {
         struct {
@@ -724,7 +723,6 @@ int
 minisocket_send(minisocket_t socket, minimsg_t msg, int len, minisocket_error *error) {
     mini_header_reliable_t header;
     int size;
-    interrupt_level_t old_level;
     int timeout;
     int num_sent;
     alarm_id retry_alarm;
@@ -944,7 +942,7 @@ void wait_close(minisocket_t socket) {
 void
 minisocket_close(minisocket_t socket) {
     int done;
-    int num_sent
+    int num_sent;
     int timeout;
     alarm_id retry_alarm;
 
