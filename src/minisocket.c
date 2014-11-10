@@ -11,6 +11,7 @@
 #include "alarm.h"
 #include "interrupts.h"
 #include "stream.h"
+#include "state.h"
 
 #define CLOSEDELAY 15000
 
@@ -31,12 +32,10 @@ struct minisocket {
     int ack; // ACK number
 
     semaphore_t lock; // Lock on the minisocket
-
     stream_t stream; // Stream on this socket
-    
+
     // Control logic
-    int transitioned; // boolean representing state of transition semaphore
-    semaphore_t control_transition;
+    state_t control_state;
 
     // Send logic
     char send_state;
@@ -54,7 +53,6 @@ struct minisocket {
     char close_state;
     int send_transition_count;
     semaphore_t close_transition;
-    
 
     union {
         struct {
@@ -262,7 +260,7 @@ handle_fin(minisocket_t socket, network_address_t source, int source_port) {
         reply(socket, MSG_ACK);
     }
 
-    
+
 }
 
 
@@ -396,11 +394,11 @@ create_socket(int port) {
          !socket->send_lock || !socket->send_transition ||
          !socket->received_data || !socket->stream ||
          !socket->close_transition) {
-        free(socket->lock);
-        free(socket->control_transition);
-        free(socket->send_lock);
-        free(socket->send_transition);
-        free(socket->received_data);
+        semaphore_destroy(socket->lock);
+        semaphore_destroy(socket->control_transition);
+        semaphore_destroy(socket->send_lock);
+        semaphore_destroy(socket->send_transition);
+        semaphore_destroy(socket->received_data);
         semaphore_destroy(socket->close_transition);
         stream_destroy(socket->stream);
         free(socket);
@@ -421,11 +419,11 @@ create_socket(int port) {
  */
 void
 destroy_socket(minisocket_t socket) {
-    free(socket->lock);
-    free(socket->control_transition);
-    free(socket->send_lock);
-    free(socket->send_transition);
-    free(socket->received_data);
+    semaphore_destroy(socket->lock);
+    semaphore_destroy(socket->control_transition);
+    semaphore_destroy(socket->send_lock);
+    semaphore_destroy(socket->send_transition);
+    semaphore_destroy(socket->received_data);
     stream_destroy(socket->stream);
     free(socket);
 }
