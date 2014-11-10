@@ -677,64 +677,84 @@ minisocket_send(minisocket_t socket, minimsg_t msg, int len, minisocket_error *e
     int message_iterator;
     int len_left;
 
+    // if length is 0, send nothing and return
     if (len == 0) {
         *error = SOCKET_NOERROR;
         return 0;
     }
 
-    semaphore_P(socket->send_lock);
-
     if (!error) return -1;
-
     if (!socket || !msg) {
         *error = SOCKET_INVALIDPARAMS;
         return -1;
     }
 
+    // only 1 send at any given time
+    semaphore_P(socket->send_lock);
+
+    // initialize values
     timeout = BASE_DELAY;
     num_sent = 0;
     len_left = len;
     message_iterator = 0;
+    semaphore_P(socket->lock);
     socket->seq++;
+    semaphore_V(socket->lock);
 
+    // iterate until no more data to send
     while (len_left > 0) {
+
+        // find the size for this iteration of send
         if (MAX_NETWORK_PKT_SIZE - sizeof(struct mini_header_reliable) < len_left) {
             size = MAX_NETWORK_PKT_SIZE - sizeof(struct mini_header_reliable);
         } else {
             size = len_left;
         }
+
         switch (socket->send_state) {
+            // received ack, send successful
             case SEND_ACK:
                 message_iterator += size;
                 len_left -= size;
                 num_sent = 0;
                 timeout = BASE_DELAY;
                 socket->send_state = SEND_SENDING;
+                // increase seq if there are data left to send
                 if (len_left > 0) socket->seq++;
                 break;
+            // attempts to send current chunk
             case SEND_SENDING:
                 if (num_sent >= MAX_TIMEOUTS) {
                     *error = SOCKET_SENDERROR;
                     semaphore_V(socket->send_lock);
                     return -1;
                 }
+
+                // create header
                 semaphore_P(socket->lock);
                 header = create_header(socket, error);
-                if (!header) return -1;
+                if (!header) {
+                    semaphore_V(socket->lock);
+                    return -1;
+                }
                 header->message_type = MSG_ACK;
-                old_level = set_interrupt_level(DISABLED);
-                network_send_pkt(socket->remote_address, sizeof(struct mini_header_reliable), (char *) header, size, msg+message_iterator);
+                // create alarm to timeout
                 retry_alarm = register_alarm(timeout, send_reset, socket);
-                set_interrupt_level(old_level);
+                network_send_pkt(socket->remote_address, sizeof(struct mini_header_reliable), (char *) header, size, msg+message_iterator);
                 semaphore_V(socket->lock);
+
+                // wait for ack response or timeout signal
                 semaphore_P(socket->send_transition);
                 semaphore_P(socket->lock);
                 socket->send_transition_count = 0;
                 semaphore_V(socket->lock);
+
                 deregister_alarm(retry_alarm);
+
                 num_sent += 1;
                 timeout = timeout * 2;
                 free(header);
+
                 break;
             case SEND_CLOSE:
                 *error = SOCKET_SENDERROR;
@@ -767,24 +787,35 @@ minisocket_receive(minisocket_t socket, minimsg_t msg, int max_len, minisocket_e
         *error = SOCKET_INVALIDPARAMS;
         return -1;
     }
+
+    // is waiting
     semaphore_P(socket->lock);
     socket->receive_waiting_count += 1;
     semaphore_V(socket->lock);
+
+    // wait until there is data
     semaphore_P(socket->received_data);
 
     switch (socket->receive_state) {
         case RECEIVE_RECEIVING:
             output = stream_take(socket->stream, max_len, msg);
+
+            // set error based on if there is output
             if (output != -1) {
                 *error = SOCKET_NOERROR;
             }
             *error = SOCKET_RECEIVEERROR;
+
+            // indicate if there is data left over
             if (stream_is_empty(socket->stream) == 0) {
                 semaphore_V(socket->received_data);
             }
+
+            // no longer waiting
             semaphore_P(socket->lock);
             socket->receive_waiting_count -= 1;
             semaphore_V(socket->lock);
+
             return output;
         case RECEIVE_CLOSE:
             *error = SOCKET_RECEIVEERROR;
