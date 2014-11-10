@@ -14,7 +14,7 @@ extern void transition_to(state_t, int);
 
 extern void transition_timer(void *);
 
-extern void set_state(state_t);
+extern void set_state(state_t, int);
 
 extern int get_state(state_t);
 

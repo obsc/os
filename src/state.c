@@ -1,9 +1,10 @@
+#include "state.h"
 #include "machineprimitives.h"
 #include "synch.h"
 
 struct state {
     int cur_state;
-    
+
     semaphore_t transition; // Semaphore for transition blocking
     int transitioned; // Represents if transitioned yet
 };
@@ -15,7 +16,7 @@ state_t state_new(int default_state) {
     s->transition = semaphore_create();
     s->transitioned = 0;
 
-    if (!s->transition || !s->lock) {
+    if (!s->transition) {
         semaphore_destroy(s->transition);
         free(s);
         return NULL;
@@ -51,7 +52,7 @@ int get_state(state_t state) {
 
 void wait_for_transition(state_t state) {
     semaphore_P(state->transition);
-    transitioned = 0;
+    state->transitioned = 0;
 }
 
 void state_destroy(state_t state) {
