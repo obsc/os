@@ -137,7 +137,6 @@ reply(minisocket_t socket, char message_type) {
  */
 void
 handle_syn(minisocket_t socket, network_address_t source, int source_port) {
-    printf("syn\n");
     switch (get_state(socket->u.server.server_state)) {
         // Syn to listening port
         case LISTEN:
@@ -167,7 +166,6 @@ handle_syn(minisocket_t socket, network_address_t source, int source_port) {
  */
 void
 handle_synack(minisocket_t socket, network_address_t source, int source_port) {
-    printf("synack\n");
     // Source validation
     if ( socket->remote_port != source_port ||
          !network_compare_network_addresses(socket->remote_address, source) ) {
@@ -195,7 +193,6 @@ handle_ack(minisocket_t socket, network_address_t source, int source_port, int a
 
     // Waiting for ack on synack
     if (socket->socket_type == SERVER && get_state(socket->u.server.server_state) == SYN_RECEIVED) {
-        printf("synackack\n");
         if (ack == 1) { // Drop non-ack 1 packets
             transition_to(socket->u.server.server_state, S_ESTABLISHED);
         }
@@ -203,20 +200,17 @@ handle_ack(minisocket_t socket, network_address_t source, int source_port, int a
 
     // Waiting for ack on fin
     if (get_state(socket->close_state) == CLOSING && ack >= socket->fin_seq) {
-        printf("finack\n");
         transition_to(socket->close_state, CLOSED);
     }
 
     // Waiting for ack on data
     else if (ack == socket->seq && ack > 1) {
-        printf("dataack\n");
         if (get_state(socket->send_state) == SEND_SENDING) {
             transition_to(socket->send_state, SEND_ACK);
         }
     }
     // Data
-    else if (arg->size > sizeof(struct mini_header_reliable)) {
-        printf("data\n");
+    if (arg->size > sizeof(struct mini_header_reliable)) {
         if (seq - 1 == socket->ack && socket->receive_state == RECEIVE_RECEIVING) {
             socket->ack++;
             stream_add(socket->stream, arg);
@@ -232,7 +226,6 @@ handle_ack(minisocket_t socket, network_address_t source, int source_port, int a
  */
 void
 handle_fin(minisocket_t socket, network_address_t source, int source_port, int seq) {
-    printf("fin\n");
     // Source validation
     if ( socket->remote_port != source_port ||
          !network_compare_network_addresses(socket->remote_address, source) ) {
@@ -534,14 +527,12 @@ client_handshake(minisocket_t socket, minisocket_error *error) {
                 retry_alarm = register_alarm(timeout, transition_timer, socket->u.client.client_state); // Set up alarm
                 reply(socket, MSG_SYN);
 
-                //printf("before alarm: %i\n", num_sent);
                 semaphore_V(socket->lock);
 
                 num_sent++;
                 timeout *= 2;
 
                 wait_for_transition(socket->u.client.client_state);
-                //printf("%i\n", socket->port_number);
                 deregister_alarm(retry_alarm);
                 break;
             case C_ESTABLISHED: // Received Synack
