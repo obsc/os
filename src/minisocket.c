@@ -137,6 +137,7 @@ reply(minisocket_t socket, char message_type) {
  */
 void
 handle_syn(minisocket_t socket, network_address_t source, int source_port) {
+    //printf("syn\n");
     switch (get_state(socket->u.server.server_state)) {
         // Syn to listening port
         case LISTEN:
@@ -166,6 +167,7 @@ handle_syn(minisocket_t socket, network_address_t source, int source_port) {
  */
 void
 handle_synack(minisocket_t socket, network_address_t source, int source_port) {
+    //printf("synack\n");
     // Source validation
     if ( socket->remote_port != source_port ||
          !network_compare_network_addresses(socket->remote_address, source) ) {
@@ -193,26 +195,30 @@ handle_ack(minisocket_t socket, network_address_t source, int source_port, int a
 
     // Waiting for ack on synack
     if (socket->socket_type == SERVER && get_state(socket->u.server.server_state) == SYN_RECEIVED) {
+        //printf("synackack\n");
         if (ack == 1) { // Drop non-ack 1 packets
             transition_to(socket->u.server.server_state, S_ESTABLISHED);
         }
     }
 
     // Waiting for ack on fin
-    if (get_state(socket->close_state) == CLOSING && ack == socket->fin_seq) {
+    if (get_state(socket->close_state) == CLOSING && ack >= socket->fin_seq) {
+        //printf("finack\n");
         transition_to(socket->close_state, CLOSED);
     }
 
     // Waiting for ack on data
-    if (ack == socket->seq && ack > 1) {
+    else if (ack == socket->seq && ack > 1) {
+        //printf("dataack\n");
         if (get_state(socket->send_state) == SEND_SENDING) {
             transition_to(socket->send_state, SEND_ACK);
         }
     }
     // Data
-    if (arg->size > sizeof(struct mini_header_reliable)) {
+    else if (arg->size > sizeof(struct mini_header_reliable)) {
+        //printf("data\n");
         if (seq - 1 == socket->ack && socket->receive_state == RECEIVE_RECEIVING) {
-            socket->ack += 1;
+            socket->ack++;
             stream_add(socket->stream, arg);
             semaphore_V(socket->receive_lock);
         }
@@ -225,7 +231,8 @@ handle_ack(minisocket_t socket, network_address_t source, int source_port, int a
  * Handles fin packets
  */
 void
-handle_fin(minisocket_t socket, network_address_t source, int source_port) {
+handle_fin(minisocket_t socket, network_address_t source, int source_port, int seq) {
+    //printf("fin\n");
     // Source validation
     if ( socket->remote_port != source_port ||
          !network_compare_network_addresses(socket->remote_address, source) ) {
@@ -238,9 +245,11 @@ handle_fin(minisocket_t socket, network_address_t source, int source_port) {
 
     if ( (socket->socket_type == CLIENT && get_state(socket->u.client.client_state) == C_ESTABLISHED) ||
          (socket->socket_type == SERVER && get_state(socket->u.server.server_state) == S_ESTABLISHED) ) {
-        transition_to(socket->close_state, CLOSING);
-        socket->close_alarm = register_alarm(CLOSEDELAY, end_send_receive, socket);
-
+        if (get_state(socket->close_state) == OPEN) {
+            transition_to(socket->close_state, CLOSING);
+            socket->close_alarm = register_alarm(CLOSEDELAY, end_send_receive, socket);
+        }
+        if (socket->ack < seq) socket->ack = seq;
         reply(socket, MSG_ACK);
     }
 
@@ -294,7 +303,7 @@ minisocket_handle(network_interrupt_arg_t *arg) {
             handle_ack(socket, source, source_port, ack, seq, arg);
             break;
         case MSG_FIN:
-            handle_fin(socket, source, source_port);
+            handle_fin(socket, source, source_port, seq);
             break;
     }
 
@@ -760,7 +769,7 @@ minisocket_send(minisocket_t socket, minimsg_t msg, int len, minisocket_error *e
                 if (!header) {
                     socket->send_waiting_count -= 1;
                     semaphore_V(socket->lock);
-                    
+
                     check_last(socket);
                     if (message_iterator == 0) {
                         return -1;
@@ -925,7 +934,12 @@ minisocket_close(minisocket_t socket) {
     int timeout;
     alarm_id retry_alarm;
 
-    if (get_state(socket->close_state) != OPEN) return; // Already closing
+    if (get_state(socket->close_state) == CLOSING) {
+        wait_for_transition(socket->close_state);
+        return;
+    } else if (get_state(socket->close_state) == CLOSED) {
+        return;
+    }
 
     timeout = BASE_DELAY;
     num_sent = 0;
