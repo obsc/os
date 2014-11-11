@@ -5,13 +5,20 @@ Implementation details of Project 3 for CS4411 - Fall 2014
 ================================================================================
 Important Design Decisions
   - We assume it is the job of minisocket_send to fragment the input message
-    into fragments of data to send
-  - We encode the MSG_FIN packet's seq number to be 0 (unused) to differentiate
-    it from the other packets. This is to handle the case where the window size
-    becomes 2 when MSG_FIN packets are sent (potentially alongside other packets).
+    into fragments of data to send, thus, it will always try to send as many
+    fragments as it can before failing.
 
 ================================================================================
 Minisocket
+  - Our network handler handles replying to messages with MSG_ACK
+  - To differentiate ack packets and data packets, we used the size of the
+    packet (it is considered an ack if the packet is empty)
+  - MSG_FIN is transmitted like a data packet (with the current syn and ack values)
+  - network_intterupt_arg_t's are mostly freed in the network handler. Only data
+    packets are freed in receive.
+  - server and client creation result in a blocking handshaking call. If the
+    call succeeds, then the socket will be created, otherwise the socket creation
+    will fail.
   - Minisocket_send is implemented using a finite state machine with 3 states.
     One state is the acknowledge state where we receive an ack packet from the
     remote connection and move on to the next chunk of data. One state is the
@@ -28,12 +35,16 @@ Minisocket
     is the closed state where it indicates that the minisocket is closed.
   - Minisocket_receive blocks if the stream is empty and until the stream has some
     data in it.
-  - Minisocket_close is implemented using a finite state machine with 4 states.
+  - Minisocket_close is implemented using a finite state machine with 3 states.
   - Minisocket_close attempts to send MSG_FIN packets to the remote connection
     until it reaches the max number of retries. Then, it sends signals to waiting
     minisocket_send and minisocket_receive applications to tell them to terminate
     in the closed state. Then, it blocks until all of these send and receive
     applications have exited and then frees the minisocket.
+  - If there are no send or receive threads running, then close will free the
+    socket, otherwise, the last send or receive thread will handle freeing the
+    socket
+
 ================================================================================
 Stream
   - Implements a stream using a queue, where each node holds an interrupt_arg_t
@@ -46,6 +57,12 @@ Stream
     meet the needs of the request, which takes longer as it loops over the whole
     stream in the worst case. However, this is fine as stream_take is called
     by the user application.
+
+================================================================================
+State
+  - A finite state machine implementation
+  - Allows our code to block until a transition happens
+  - Only allows one thing waiting for a transition to proceed at a time
 
 ================================================================================
 Test cases
