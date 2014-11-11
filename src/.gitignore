@@ -26,6 +26,7 @@ alarmtest2
 conn-network1
 conn-network2
 conn-network3
+conn-network4
 handshake
 .depend
 *.o
