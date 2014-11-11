@@ -1,9 +1,7 @@
 /* 
- *    conn-network test program 1
+ *    conn-network test program 4
  *
- *    spawns two threads, one of which sends a big message
- *    and then exits, other of which receives the message.
-*/
+ */
 
 #include "defs.h"
 #include "minithread.h"
@@ -62,9 +60,6 @@ int transmit(int* arg) {
   int bytes_sent;
   minisocket_t socket;
   minisocket_error error;
-  minithread_t receiver;
-
-  receiver = minithread_fork(receive, NULL);
 
   socket = minisocket_server_create(port,&error);
   if (socket==NULL){
@@ -85,6 +80,51 @@ int transmit(int* arg) {
     trans_bytes=
       minisocket_send(socket,buffer+bytes_sent,
 		      BUFFER_SIZE-bytes_sent, &error);
+  
+    printf("Sent %d bytes.\n",trans_bytes);
+
+    if (error!=SOCKET_NOERROR){
+      printf("ERROR: %s. Exiting. \n",GetErrorDescription(error));
+      /* close the connection */
+      //minisocket_close(socket);
+    
+      return -1;
+    }   
+
+    bytes_sent+=trans_bytes;
+  }
+
+  /* close the connection */
+  minisocket_close(socket);
+
+  return 0;
+}
+
+int transmit(int* arg) {
+  char buffer[BUFFER_SIZE];
+  int i;
+  int bytes_sent;
+  minisocket_t socket;
+  minisocket_error error;
+
+  socket = minisocket_server_create(port,&error);
+  if (socket==NULL){
+    printf("ERROR: %s. Exiting. \n",GetErrorDescription(error));
+    return -1;
+  }
+
+  /* Fill in the buffer with numbers from 0 to BUFFER_SIZE-1 */
+  for (i=0; i<BUFFER_SIZE; i++){
+    buffer[i]=(char)(i%256);
+  }
+
+  /* send the message */
+  bytes_sent=0;
+  while (bytes_sent!=BUFFER_SIZE){
+    int trans_bytes;
+    trans_bytes=
+      minisocket_send(socket,buffer+bytes_sent,
+          BUFFER_SIZE-bytes_sent, &error);
   
     printf("Sent %d bytes.\n",trans_bytes);
 
@@ -158,10 +198,26 @@ int receive(int* arg) {
   
   minisocket_close(socket);
 
+  minithread_fork(spawner2, NULL);
+
+  return 0;
+}
+
+int spawner(int* arg) {
+  minithread_fork(receive, NULL);
+  minithread_fork(transmit, NULL);
+  minithread_fork(transmit, NULL);
+  return 0;
+}
+
+int spawner2(int* arg) {
+  minithread_fork(receive, NULL);
+  minithread_fork(receive, NULL);
+  minithread_fork(transmit2, NULL);
   return 0;
 }
 
 int main(int argc, char** argv) {
-  minithread_system_initialize(transmit, NULL);
+  minithread_system_initialize(spawner, NULL);
   return -1;
 }
