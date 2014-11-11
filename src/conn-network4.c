@@ -1,9 +1,7 @@
 /* 
- *    conn-network test program 1
+ *    conn-network test program 4
  *
- *    spawns two threads, one of which sends a big message
- *    and then exits, other of which receives the message.
-*/
+ */
 
 #include "defs.h"
 #include "minithread.h"
@@ -63,8 +61,6 @@ int transmit(int* arg) {
   minisocket_t socket;
   minisocket_error error;
   minithread_t receiver;
-
-  receiver = minithread_fork(receive, NULL);
 
   socket = minisocket_server_create(port,&error);
   if (socket==NULL){
@@ -161,7 +157,13 @@ int receive(int* arg) {
   return 0;
 }
 
+int spawner(int* arg) {
+  minithread_fork(receive, NULL);
+  minithread_fork(transmit, NULL);
+  minithread_fork(transmit, NULL);
+}
+
 int main(int argc, char** argv) {
-  minithread_system_initialize(transmit, NULL);
+  minithread_system_initialize(spawner, NULL);
   return -1;
 }
