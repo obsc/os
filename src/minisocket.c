@@ -899,7 +899,6 @@ minisocket_receive(minisocket_t socket, minimsg_t msg, int max_len, minisocket_e
 
 /* terminates receives and sends */
 void end_send_receive(void *sock) {
-    int acc;
     minisocket_t socket;
 
     socket = (minisocket_t) sock;
