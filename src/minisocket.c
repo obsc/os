@@ -204,7 +204,7 @@ handle_ack(minisocket_t socket, network_address_t source, int source_port, int a
     }
 
     // Waiting for ack on data
-    else if (ack == socket->seq && ack > 1) {
+    if (ack == socket->seq && ack > 1) {
         if (get_state(socket->send_state) == SEND_SENDING) {
             transition_to(socket->send_state, SEND_ACK);
         }
