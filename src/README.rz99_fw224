@@ -68,7 +68,12 @@ State
 Test cases
 
 conn-network4
-  - tests for minisocket_close behavior by closing the port first and then
-    sending the data.
+  - This includes two tests (1 is commented out). One test spawns 2 transmitter
+    and 1 receiver, where the transmitters close the socket before sending. This
+    results in error message from 1 transmitter in connecting to server, and
+    from each of the other transmitter and receiver. One test spawns 2 receiver
+    and 1 transmitter, where the transmitter should successfully send. One
+    receiver should error on connecting to server while the rest should run
+    just like conn-network1.
 ================================================================================
 
