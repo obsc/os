@@ -100,7 +100,7 @@ int transmit(int* arg) {
   return 0;
 }
 
-int transmit(int* arg) {
+int transmit2(int* arg) {
   char buffer[BUFFER_SIZE];
   int i;
   int bytes_sent;
@@ -198,8 +198,6 @@ int receive(int* arg) {
   
   minisocket_close(socket);
 
-  minithread_fork(spawner2, NULL);
-
   return 0;
 }
 
@@ -218,6 +216,7 @@ int spawner2(int* arg) {
 }
 
 int main(int argc, char** argv) {
-  minithread_system_initialize(spawner, NULL);
+  //minithread_system_initialize(spawner, NULL);
+  minithread_system_initialize(spawner2, NULL);
   return -1;
 }
