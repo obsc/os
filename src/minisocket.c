@@ -936,6 +936,8 @@ minisocket_close(minisocket_t socket) {
     int timeout;
     alarm_id retry_alarm;
 
+    if (!socket) return;
+
     if (get_state(socket->close_state) == CLOSING) {
         wait_for_transition(socket->close_state);
         return;
