@@ -7,6 +7,8 @@ Important Design Decisions
   - We assume it is the job of minisocket_send to fragment the input message
     into fragments of data to send, thus, it will always try to send as many
     fragments as it can before failing.
+  - We treat MSG_FIN packets similarly to data packets: we give it its own seq
+    and ack value. 
 
 ================================================================================
 Minisocket
