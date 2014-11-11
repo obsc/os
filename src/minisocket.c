@@ -212,8 +212,6 @@ handle_ack(minisocket_t socket, network_address_t source, int source_port, int a
     }
 }
 
-void
-
 
 /*
  * Handles fin packets
@@ -527,7 +525,7 @@ client_handshake(minisocket_t socket, minisocket_error *error) {
             case C_ESTABLISHED: // Received Synack
                 *error = SOCKET_NOERROR;
                 return socket;
-            case CLOSING: // Socket closed
+            case C_CLOSING: // Socket closed
                 *error = SOCKET_BUSY;
                 return NULL;
         }
@@ -549,7 +547,7 @@ minisocket_t
 minisocket_server_create(int port, minisocket_error *error) {
     minisocket_t socket;
 
-    if ( !err ) return;
+    if ( !error ) return NULL;
 
     // Out of range check
     if ( port < 0 || port >= NUMPORTS ) {
@@ -603,7 +601,7 @@ minisocket_client_create(network_address_t addr, int port, minisocket_error *err
     int cur_id;
     minisocket_t socket;
 
-    if ( !err ) return;
+    if ( !error ) return NULL;
 
     // Out of range check
     if ( port < 0 || port >= NUMPORTS ) {
@@ -890,11 +888,11 @@ minisocket_receive(minisocket_t socket, minimsg_t msg, int max_len, minisocket_e
 /* terminates receives and sends */
 void end_send_receive(void *sock) {
     int acc;
-    socket_t socket;
+    minisocket_t socket;
 
-    socket = (socket_t) sock;
+    socket = (minisocket_t) sock;
 
-    // Terminates sends    
+    // Terminates sends
     transition_to(socket->send_state, SEND_CLOSE);
     for (acc = 0; acc < socket->send_waiting_count; acc++) {
         semaphore_V(socket->send_lock);
@@ -916,7 +914,6 @@ void end_send_receive(void *sock) {
  */
 void
 minisocket_close(minisocket_t socket) {
-    int done;
     int num_sent;
     int timeout;
     alarm_id retry_alarm;
@@ -927,7 +924,6 @@ minisocket_close(minisocket_t socket) {
     num_sent = 0;
     semaphore_P(socket->lock);
     socket->seq++;
-    socket->closing = 1;
     set_state(socket->close_state, CLOSING);
     semaphore_V(socket->lock);
 
