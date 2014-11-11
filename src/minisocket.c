@@ -16,10 +16,10 @@
 #define CLOSEDELAY 15000
 
 enum { LISTEN = 1, SYN_RECEIVED, S_ESTABLISHED }; // Server state
-enum { SYN_SENT = 1, C_ESTABLISHED, CLOSING }; // Client state
-enum { SEND_ACK = 1, SEND_SENDING, SEND_CLOSE}; // Send state
+enum { SYN_SENT = 1, C_ESTABLISHED, C_CLOSING }; // Client state
+enum { SEND_SENDING = 1, SEND_ACK, SEND_CLOSE}; // Send state
 enum { RECEIVE_RECEIVING = 1, RECEIVE_CLOSE}; // Receive state
-enum { CLOSE_CLOSING = 1, CLOSE_ACK}; // Close state
+enum { OPEN = 1, CLOSING , CLOSED }; // Close state
 
 struct minisocket {
     char socket_type;
@@ -46,8 +46,7 @@ struct minisocket {
 
     // Close logic
     state_t close_state;
-    char closing; // Boolean representing if the socket is closing or not
-    semaphore_t close_wait;
+    alarm_id close_alarm;
 
     union {
         struct {
@@ -67,6 +66,8 @@ minisocket_t client_ports[NUMPORTS]; // Array of all the client sockets
 int next_client_id; // Next client port id to use
 
 char *dummy; // Represents a dummy bytearray to pass to send pkt
+
+void end_send_receive(void *sock);
 
 /*
  * Returns a reliable header to a destination
@@ -211,6 +212,9 @@ handle_ack(minisocket_t socket, network_address_t source, int source_port, int a
     }
 }
 
+void
+
+
 /*
  * Handles fin packets
  */
@@ -223,11 +227,14 @@ handle_fin(minisocket_t socket, network_address_t source, int source_port) {
     }
 
     if ( socket->socket_type == CLIENT && get_state(socket->u.client.client_state) == SYN_SENT ) {
-        transition_to(socket->u.client.client_state, CLOSING);
+        transition_to(socket->u.client.client_state, C_CLOSING);
     }
 
     if ( (socket->socket_type == CLIENT && get_state(socket->u.client.client_state) == C_ESTABLISHED) ||
          (socket->socket_type == SERVER && get_state(socket->u.server.server_state) == S_ESTABLISHED) ) {
+        transition_to(socket->close_state, CLOSING);
+        socket->close_alarm = register_alarm(CLOSEDELAY, end_send_receive, socket);
+
         reply(socket, MSG_ACK);
     }
 
@@ -351,17 +358,15 @@ create_socket(int port) {
     socket->receive_waiting_count = 0;
     socket->received_data = semaphore_create();
 
-    socket->closing = 0;
-    socket->close_state = state_new(CLOSE_CLOSING);
-    socket->close_wait = semaphore_create();
+    socket->close_state = state_new(OPEN);
+    socket->close_alarm = NULL;
 
     if ( !socket->lock || !socket->send_lock || !socket->send_state ||
          !socket->received_data || !socket->stream ||
-         !socket->close_state || !socket->close_wait) {
+         !socket->close_state ) {
         semaphore_destroy(socket->lock);
         semaphore_destroy(socket->send_lock);
         semaphore_destroy(socket->received_data);
-        semaphore_destroy(socket->close_wait);
         state_destroy(socket->close_state);
         state_destroy(socket->send_state);
         stream_destroy(socket->stream);
@@ -371,23 +376,34 @@ create_socket(int port) {
     semaphore_initialize(socket->lock, 1);
     semaphore_initialize(socket->send_lock, 1);
     semaphore_initialize(socket->received_data, 0);
-    semaphore_initialize(socket->close_wait, 0);
 
     return socket;
 }
 
 /*
- * Destroys a socket
+ * Clears and destroys a socket from arrays
  */
 void
 destroy_socket(minisocket_t socket) {
+    if (socket->socket_type == SERVER) {
+        semaphore_P(mutex_server);
+        server_ports[socket->port_number] = NULL;
+        semaphore_V(mutex_server);
+    } else {
+        semaphore_P(mutex_client);
+        client_ports[socket->port_number - NUMPORTS] = NULL;
+        semaphore_V(mutex_client);
+    }
     semaphore_destroy(socket->lock);
     semaphore_destroy(socket->send_lock);
     semaphore_destroy(socket->received_data);
-    semaphore_destroy(socket->close_wait);
     state_destroy(socket->send_state);
     state_destroy(socket->close_state);
     stream_destroy(socket->stream);
+    if (socket->socket_type == SERVER)
+        state_destroy(socket->u.server.server_state);
+    else
+        state_destroy(socket->u.client.client_state);
     free(socket);
 }
 
@@ -533,6 +549,8 @@ minisocket_t
 minisocket_server_create(int port, minisocket_error *error) {
     minisocket_t socket;
 
+    if ( !err ) return;
+
     // Out of range check
     if ( port < 0 || port >= NUMPORTS ) {
         *error = SOCKET_INVALIDPARAMS;
@@ -557,11 +575,7 @@ minisocket_server_create(int port, minisocket_error *error) {
     socket = server_handshake(server_ports[port], error);
 
     if ( !socket ) { // Handshake failed
-        semaphore_P(mutex_server);
         destroy_socket(server_ports[port]);
-        state_destroy(server_ports[port]->u.server.server_state);
-        server_ports[port] = NULL;
-        semaphore_V(mutex_server);
         return NULL;
     } else {
         return socket;
@@ -588,6 +602,9 @@ minisocket_client_create(network_address_t addr, int port, minisocket_error *err
     int i;
     int cur_id;
     minisocket_t socket;
+
+    if ( !err ) return;
+
     // Out of range check
     if ( port < 0 || port >= NUMPORTS ) {
         *error = SOCKET_INVALIDPARAMS;
@@ -607,11 +624,7 @@ minisocket_client_create(network_address_t addr, int port, minisocket_error *err
 
             socket = client_handshake(client_ports[cur_id], error);
             if ( !socket ) { // Handshake failed
-                semaphore_P(mutex_client);
                 destroy_socket(client_ports[cur_id]);
-                state_destroy(client_ports[cur_id]->u.client.client_state);
-                client_ports[cur_id] = NULL;
-                semaphore_V(mutex_client);
                 return NULL;
             } else {
                 return socket;
@@ -624,6 +637,20 @@ minisocket_client_create(network_address_t addr, int port, minisocket_error *err
 
     *error = SOCKET_NOMOREPORTS;
     return NULL;
+}
+
+/* Checks if this thread is the last sending and receiving thread
+ * and if we are currently in the closed state
+ * Frees all data structures if it is
+ */
+void
+check_last(minisocket_t socket) {
+    if (get_state(socket->close_state) == CLOSED) {
+        if (socket->receive_waiting_count == 0 && socket->send_waiting_count == 0) {
+            transition(socket->close_state);
+            destroy_socket(socket);
+        }
+    }
 }
 
 /*
@@ -655,29 +682,27 @@ minisocket_send(minisocket_t socket, minimsg_t msg, int len, minisocket_error *e
     int message_iterator;
     int len_left;
 
-    // if length is 0, send nothing and return
-    if (len == 0) {
-        *error = SOCKET_NOERROR;
-        return 0;
-    }
-
+    // Sanity checks
     if (!error) return -1;
     if (!socket || !msg) {
         *error = SOCKET_INVALIDPARAMS;
         return -1;
     }
 
+    // if length is 0, send nothing and return
+    if (len == 0) {
+        *error = SOCKET_NOERROR;
+        return 0;
+    }
+
     semaphore_P(socket->lock);
-    socket->send_waiting_count += 1;
-    if (socket->closing) {
+    // Socket closing, no new threads
+    if (get_state(socket->close_state) != OPEN) {
         *error = SOCKET_SENDERROR;
-        socket->send_waiting_count -= 1;
-        if (socket->receive_waiting_count == 0 && socket->send_waiting_count == 0) {
-            semaphore_V(socket->close_wait);
-        }
         semaphore_V(socket->lock);
         return -1;
     }
+    socket->send_waiting_count += 1;
     semaphore_V(socket->lock);
 
     // only 1 send at any given time
@@ -703,30 +728,19 @@ minisocket_send(minisocket_t socket, minimsg_t msg, int len, minisocket_error *e
         }
 
         switch (get_state(socket->send_state)) {
-            // received ack, send successful
-            case SEND_ACK:
-                message_iterator += size;
-                len_left -= size;
-                num_sent = 0;
-                timeout = BASE_DELAY;
-                set_state(socket->send_state, SEND_SENDING);
-                // increase seq if there are data left to send
-                if (len_left > 0) socket->seq++;
-                break;
             // attempts to send current chunk
             case SEND_SENDING:
                 if (num_sent >= MAX_TIMEOUTS) {
                     *error = SOCKET_SENDERROR;
                     semaphore_V(socket->send_lock);
+                    semaphore_P(socket->lock);
+                    socket->send_waiting_count -= 1;
+                    semaphore_V(socket->lock);
+
+                    check_last(socket);
                     if (message_iterator == 0) {
-                        semaphore_P(socket->lock);
-                        socket->send_waiting_count -= 1;
-                        semaphore_V(socket->lock);
                         return -1;
                     } else {
-                        semaphore_P(socket->lock);
-                        socket->send_waiting_count -= 1;
-                        semaphore_V(socket->lock);
                         return message_iterator;
                     }
                 }
@@ -735,16 +749,13 @@ minisocket_send(minisocket_t socket, minimsg_t msg, int len, minisocket_error *e
                 semaphore_P(socket->lock);
                 header = create_header(socket, error);
                 if (!header) {
+                    socket->send_waiting_count -= 1;
                     semaphore_V(socket->lock);
+                    
+                    check_last(socket);
                     if (message_iterator == 0) {
-                        semaphore_P(socket->lock);
-                        socket->send_waiting_count -= 1;
-                        semaphore_V(socket->lock);
                         return -1;
                     } else {
-                        semaphore_P(socket->lock);
-                        socket->send_waiting_count -= 1;
-                        semaphore_V(socket->lock);
                         return message_iterator;
                     }
                 }
@@ -762,35 +773,39 @@ minisocket_send(minisocket_t socket, minimsg_t msg, int len, minisocket_error *e
                 wait_for_transition(socket->send_state);
                 deregister_alarm(retry_alarm);
                 break;
+            // received ack, send successful
+            case SEND_ACK:
+                message_iterator += size;
+                len_left -= size;
+                num_sent = 0;
+                timeout = BASE_DELAY;
+                set_state(socket->send_state, SEND_SENDING);
+                // increase seq if there are data left to send
+                if (len_left > 0) socket->seq++;
+                break;
             case SEND_CLOSE:
                 *error = SOCKET_SENDERROR;
                 semaphore_V(socket->send_lock);
+                semaphore_P(socket->lock);
+                socket->send_waiting_count -= 1;
+                semaphore_V(socket->lock);
+
+                check_last(socket);
                 if (message_iterator == 0) {
-                    semaphore_P(socket->lock);
-                    socket->send_waiting_count -= 1;
-                    if (socket->receive_waiting_count == 0 && socket->send_waiting_count == 0) {
-                        semaphore_V(socket->close_wait);
-                    }
-                    semaphore_V(socket->lock);
                     return -1;
                 } else {
-                    semaphore_P(socket->lock);
-                    socket->send_waiting_count -= 1;
-                    if (socket->receive_waiting_count == 0 && socket->send_waiting_count == 0) {
-                        semaphore_V(socket->close_wait);
-                    }
-                    semaphore_V(socket->lock);
                     return message_iterator;
                 }
         }
     }
+
     semaphore_V(socket->send_lock);
     semaphore_P(socket->lock);
     socket->send_waiting_count -= 1;
     semaphore_V(socket->lock);
+
+    check_last(socket);
     return message_iterator;
-
-
 }
 
 /*
@@ -806,24 +821,28 @@ minisocket_send(minisocket_t socket, minimsg_t msg, int len, minisocket_error *e
 int
 minisocket_receive(minisocket_t socket, minimsg_t msg, int max_len, minisocket_error *error) {
     int output;
-
+    // Sanity checks
     if (!error) return -1;
     if (!socket || !msg) {
         *error = SOCKET_INVALIDPARAMS;
         return -1;
     }
 
+    // if length is 0, receive nothing and return
+    if (max_len == 0) {
+        *error = SOCKET_NOERROR;
+        return 0;
+    }
+
     // is waiting
     semaphore_P(socket->lock);
-    socket->receive_waiting_count += 1;
-    if (socket->closing) {
+    // Socket closing, no new threads
+    if (get_state(socket->close_state) != OPEN) {
         *error = SOCKET_RECEIVEERROR;
-        if (socket->receive_waiting_count == 0 && socket->send_waiting_count == 0) {
-            semaphore_V(socket->close_wait);
-        }
         semaphore_V(socket->lock);
         return -1;
     }
+    socket->receive_waiting_count += 1;
     semaphore_V(socket->lock);
 
     // wait until there is data
@@ -849,44 +868,47 @@ minisocket_receive(minisocket_t socket, minimsg_t msg, int max_len, minisocket_e
             socket->receive_waiting_count -= 1;
             semaphore_V(socket->lock);
 
+            check_last(socket);
             return output;
         case RECEIVE_CLOSE:
             *error = SOCKET_RECEIVEERROR;
             semaphore_P(socket->lock);
             socket->receive_waiting_count -= 1;
-            if (socket->receive_waiting_count == 0 && socket->send_waiting_count == 0) {
-                semaphore_V(socket->close_wait);
-            }
             semaphore_V(socket->lock);
+
+            check_last(socket);
             return -1;
     }
     semaphore_P(socket->lock);
     socket->receive_waiting_count -= 1;
     semaphore_V(socket->lock);
+
+    check_last(socket);
     return -1;
 }
 
-/* waits for current receives and sends to terminate */
-void wait_close(minisocket_t socket) {
+/* terminates receives and sends */
+void end_send_receive(void *sock) {
     int acc;
-    semaphore_P(socket->lock);
+    socket_t socket;
+
+    socket = (socket_t) sock;
+
+    // Terminates sends    
     transition_to(socket->send_state, SEND_CLOSE);
     for (acc = 0; acc < socket->send_waiting_count; acc++) {
         semaphore_V(socket->send_lock);
     }
+    // Terminates receives
     socket->receive_state = RECEIVE_CLOSE;
-    if (stream_is_empty(socket->stream) == 0) {
-        semaphore_V(socket->received_data);
-    }
     for (acc = 0; acc < socket->receive_waiting_count; acc++) {
         semaphore_V(socket->received_data);
     }
-    if (socket->send_waiting_count != 0 || socket->receive_waiting_count != 0) {
-        semaphore_V(socket->lock);
-        semaphore_P(socket->close_wait);
-    }
-    semaphore_V(socket->lock);
+
+    // If there are no sends or receives running, terminate
+    check_last(socket);
 }
+
 /* Close a connection. If minisocket_close is issued, any send or receive should
  * fail.  As soon as the other side knows about the close, it should fail any
  * send or receive in progress. The minisocket is destroyed by minisocket_close
@@ -899,24 +921,24 @@ minisocket_close(minisocket_t socket) {
     int timeout;
     alarm_id retry_alarm;
 
+    if (get_state(socket->close_state) != OPEN) return; // Already closing
+
     timeout = BASE_DELAY;
     num_sent = 0;
     semaphore_P(socket->lock);
     socket->seq++;
     socket->closing = 1;
+    set_state(socket->close_state, CLOSING);
     semaphore_V(socket->lock);
 
-    while (done != 1) {
-
+    while (1) {
         switch (get_state(socket->close_state)) {
-            // received ack, considered closed
-            case CLOSE_ACK:
-                done = 1;
-                break;
+            case OPEN:
+                wait_for_transition(socket->close_state);
             // attempts to send fin packet
-            case CLOSE_CLOSING:
+            case CLOSING:
                 if (num_sent >= MAX_TIMEOUTS) {
-                    done = 1;
+                    set_state(socket->close_state, CLOSED);
                     break;
                 }
 
@@ -934,20 +956,11 @@ minisocket_close(minisocket_t socket) {
                 wait_for_transition(socket->close_state);
                 deregister_alarm(retry_alarm);
                 break;
+            // received ack, considered closed
+            case CLOSED:
+                end_send_receive(socket);
+                wait_for_transition(socket->close_state);
+                return;
         }
-    }
-
-    wait_close(socket);
-
-    if (socket->socket_type == SERVER) {
-        semaphore_P(mutex_server);
-        server_ports[socket->port_number] = NULL;
-        destroy_socket(socket);
-        semaphore_V(mutex_server);
-    } else {
-        semaphore_P(mutex_client);
-        client_ports[socket->port_number - NUMPORTS] = NULL;
-        destroy_socket(socket);
-        semaphore_V(mutex_client);
     }
 }
