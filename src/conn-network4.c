@@ -60,7 +60,6 @@ int transmit(int* arg) {
   int bytes_sent;
   minisocket_t socket;
   minisocket_error error;
-  minithread_t receiver;
 
   socket = minisocket_server_create(port,&error);
   if (socket==NULL){
@@ -161,6 +160,7 @@ int spawner(int* arg) {
   minithread_fork(receive, NULL);
   minithread_fork(transmit, NULL);
   minithread_fork(transmit, NULL);
+  return 0;
 }
 
 int main(int argc, char** argv) {
