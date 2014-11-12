@@ -47,7 +47,6 @@ struct minisocket {
     // Close logic
     state_t close_state;
     alarm_id close_alarm;
-    int fin_seq;
 
     union {
         struct {
@@ -198,15 +197,12 @@ handle_ack(minisocket_t socket, network_address_t source, int source_port, int a
         }
     }
 
-    // Waiting for ack on fin
-    if (get_state(socket->close_state) == CLOSING && ack >= socket->fin_seq) {
-        transition_to(socket->close_state, CLOSED);
-    }
-
-    // Waiting for ack on data
+    // Ack
     if (ack == socket->seq && ack > 1) {
-        if (get_state(socket->send_state) == SEND_SENDING) {
+        if (get_state(socket->send_state) == SEND_SENDING) { // ack on data
             transition_to(socket->send_state, SEND_ACK);
+        } else if (get_state(socket->close_state) == CLOSING) { // ack on fin
+            transition_to(socket->close_state, CLOSED);
         }
     }
     // Data
@@ -240,7 +236,8 @@ handle_fin(minisocket_t socket, network_address_t source, int source_port, int s
          (socket->socket_type == SERVER && get_state(socket->u.server.server_state) == S_ESTABLISHED) ) {
         if (get_state(socket->close_state) == OPEN) {
             transition_to(socket->close_state, CLOSING);
-            socket->close_alarm = register_alarm(CLOSEDELAY, end_send_receive, socket);
+            end_send_receive(socket);
+            socket->close_alarm = register_alarm(CLOSEDELAY, check_last, socket);
         }
         if (socket->ack < seq) socket->ack = seq;
         reply(socket, MSG_ACK);
@@ -370,7 +367,6 @@ create_socket(int port) {
 
     socket->close_state = state_new(OPEN);
     socket->close_alarm = NULL;
-    socket->fin_seq = 0;
 
     if ( !socket->lock || !socket->send_lock || !socket->send_state ||
          !socket->receive_lock || !socket->stream ||
@@ -397,10 +393,12 @@ create_socket(int port) {
 void
 destroy_socket(minisocket_t socket) {
     if (socket->socket_type == SERVER) {
+        state_destroy(socket->u.server.server_state);
         semaphore_P(mutex_server);
         server_ports[socket->port_number] = NULL;
         semaphore_V(mutex_server);
     } else {
+        state_destroy(socket->u.client.client_state);
         semaphore_P(mutex_client);
         client_ports[socket->port_number - NUMPORTS] = NULL;
         semaphore_V(mutex_client);
@@ -411,10 +409,7 @@ destroy_socket(minisocket_t socket) {
     state_destroy(socket->send_state);
     state_destroy(socket->close_state);
     stream_destroy(socket->stream);
-    if (socket->socket_type == SERVER)
-        state_destroy(socket->u.server.server_state);
-    else
-        state_destroy(socket->u.client.client_state);
+    deregister_alarm(socket->close_alarm);
     free(socket);
 }
 
@@ -655,7 +650,10 @@ minisocket_client_create(network_address_t addr, int port, minisocket_error *err
  * Frees all data structures if it is
  */
 void
-check_last(minisocket_t socket) {
+check_last(void *sock) {
+    minisocket_t socket;
+
+    socket = (minisocket_t) sock;
     if (get_state(socket->close_state) == CLOSED) {
         if (socket->receive_waiting_count == 0 && socket->send_waiting_count == 0) {
             transition(socket->close_state);
@@ -900,20 +898,12 @@ minisocket_receive(minisocket_t socket, minimsg_t msg, int max_len, minisocket_e
 }
 
 /* terminates receives and sends */
-void end_send_receive(void *sock) {
-    minisocket_t socket;
-
-    socket = (minisocket_t) sock;
-
+void end_send_receive(minisocket_t socket) {
     // Terminates sends
     transition_to(socket->send_state, SEND_CLOSE);
-    semaphore_V(socket->send_lock);
     // Terminates receives
     socket->receive_state = RECEIVE_CLOSE;
     semaphore_V(socket->receive_lock);
-
-    // If there are no sends or receives running, terminate
-    check_last(socket);
 }
 
 /* Close a connection. If minisocket_close is issued, any send or receive should
@@ -929,10 +919,11 @@ minisocket_close(minisocket_t socket) {
 
     if (!socket) return;
 
-    if (get_state(socket->close_state) == CLOSING) {
+    while (get_state(socket->close_state) == CLOSING) {
         wait_for_transition(socket->close_state);
-        return;
-    } else if (get_state(socket->close_state) == CLOSED) {
+    }
+
+    if (get_state(socket->close_state) == CLOSED) {
         return;
     }
 
@@ -940,8 +931,8 @@ minisocket_close(minisocket_t socket) {
     num_sent = 0;
     semaphore_P(socket->lock);
     socket->seq++;
-    socket->fin_seq = socket->seq;
     set_state(socket->close_state, CLOSING);
+    end_send_receive(socket);
     semaphore_V(socket->lock);
 
     while (1) {
@@ -971,7 +962,7 @@ minisocket_close(minisocket_t socket) {
                 break;
             // received ack, considered closed
             case CLOSED:
-                end_send_receive(socket);
+                check_last(socket);
                 wait_for_transition(socket->close_state);
                 return;
         }
