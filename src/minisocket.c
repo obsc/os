@@ -67,7 +67,8 @@ int next_client_id; // Next client port id to use
 
 char *dummy; // Represents a dummy bytearray to pass to send pkt
 
-void end_send_receive(void *sock);
+void check_last(void*);
+void end_send_receive(minisocket_t);
 
 /*
  * Returns a reliable header to a destination
