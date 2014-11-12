@@ -15,10 +15,10 @@
 
 #define CLOSEDELAY 15000
 
-enum { LISTEN = 1, SYN_RECEIVED, S_ESTABLISHED }; // Server state
-enum { SYN_SENT = 1, C_ESTABLISHED, C_CLOSING }; // Client state
-enum { SEND_SENDING = 1, SEND_ACK, SEND_CLOSE}; // Send state
-enum { RECEIVE_RECEIVING = 1, RECEIVE_CLOSE}; // Receive state
+enum { LISTEN = 1, SYN_RECEIVED, S_ESTABLISHED };// Server state
+enum { SYN_SENT = 1, C_ESTABLISHED, C_CLOSING };// Client state
+enum { SEND_SENDING = 1, SEND_ACK, SEND_ACKCLOSE, SEND_CLOSE};// Send state
+enum { RECEIVE_RECEIVING = 1, RECEIVE_DATACLOSE, RECEIVE_CLOSE};// Receive state
 enum { OPEN = 1, CLOSING , CLOSED }; // Close state
 
 struct minisocket {
@@ -742,10 +742,10 @@ minisocket_send(minisocket_t socket, minimsg_t msg, int len, minisocket_error *e
             case SEND_SENDING:
                 if (num_sent >= MAX_TIMEOUTS) {
                     *error = SOCKET_SENDERROR;
-                    semaphore_V(socket->send_lock);
                     semaphore_P(socket->lock);
                     socket->send_waiting_count -= 1;
                     semaphore_V(socket->lock);
+                    semaphore_V(socket->send_lock);
 
                     check_last(socket);
                     if (message_iterator == 0) {
@@ -761,6 +761,7 @@ minisocket_send(minisocket_t socket, minimsg_t msg, int len, minisocket_error *e
                 if (!header) {
                     socket->send_waiting_count -= 1;
                     semaphore_V(socket->lock);
+                    semaphore_V(socket->send_lock);
 
                     check_last(socket);
                     if (message_iterator == 0) {
@@ -793,6 +794,15 @@ minisocket_send(minisocket_t socket, minimsg_t msg, int len, minisocket_error *e
                 // increase seq if there are data left to send
                 if (len_left > 0) socket->seq++;
                 break;
+            // received ack and is closing
+            case SEND_ACKCLOSE:
+                message_iterator += size;
+                len_left -= size;
+                num_sent = 0;
+                timeout = BASE_DELAY;
+                set_state(socket->send_state, SEND_CLOSE);
+                break;
+            // Closing
             case SEND_CLOSE:
                 *error = SOCKET_SENDERROR;
                 semaphore_P(socket->lock);
@@ -860,6 +870,8 @@ minisocket_receive(minisocket_t socket, minimsg_t msg, int max_len, minisocket_e
 
     switch (socket->receive_state) {
         case RECEIVE_RECEIVING:
+        // got data and closed
+        case RECEIVE_DATACLOSE:
             output = stream_take(socket->stream, max_len, msg);
 
             // set error based on if there is output
@@ -873,13 +885,19 @@ minisocket_receive(minisocket_t socket, minimsg_t msg, int max_len, minisocket_e
             socket->receive_waiting_count -= 1;
             semaphore_V(socket->lock);
 
+            if (socket->receive_state == RECEIVE_DATACLOSE && stream_is_empty(socket->stream) == 1) {
+                socket->receive_state = RECEIVE_CLOSE;
+                semaphore_V(socket->receive_lock);
+            }
+
             // indicate if there is data left over
-            if (stream_is_empty(socket->stream) == 0 || get_state(socket->close_state) == CLOSED) {
+            if (stream_is_empty(socket->stream) == 0) {
                 semaphore_V(socket->receive_lock);
             }
 
             check_last(socket);
             return output;
+        // Closing
         case RECEIVE_CLOSE:
             *error = SOCKET_RECEIVEERROR;
             semaphore_P(socket->lock);
@@ -901,9 +919,15 @@ minisocket_receive(minisocket_t socket, minimsg_t msg, int max_len, minisocket_e
 /* terminates receives and sends */
 void end_send_receive(minisocket_t socket) {
     // Terminates sends
-    transition_to(socket->send_state, SEND_CLOSE);
+    if (get_state(socket->send_state) == SEND_ACK)
+        transition_to(socket->send_state, SEND_ACKCLOSE);
+    else
+        transition_to(socket->send_state, SEND_CLOSE);
     // Terminates receives
-    socket->receive_state = RECEIVE_CLOSE;
+    if (stream_is_empty(socket->stream) == 0)
+        socket->receive_state = RECEIVE_DATACLOSE;
+    else
+        socket->receive_state = RECEIVE_CLOSE;
     semaphore_V(socket->receive_lock);
 }
 
