@@ -14,7 +14,7 @@
 #include <string.h>
 
 #define BUFFER_SIZE 100000
-#define MAX_CONN 10
+#define MAX_CONN 100
 
 int ports[MAX_CONN]; /* port on which we do the communication */
 char* hostname;
@@ -102,6 +102,7 @@ int spawn_server(int* arg) {
   for (i = 0; i < MAX_CONN; i++) {
     minithread_fork(server, &ports[i]);
   }
+  return 0;
 }
 
 int spawn_client(int* arg) {
@@ -109,6 +110,7 @@ int spawn_client(int* arg) {
   for (i = 0; i < MAX_CONN; i++) {
     minithread_fork(client, &ports[i]);
   }
+  return 0;
 }
 
 
@@ -120,9 +122,11 @@ int main(int argc, char** argv) {
 
   if (argc > 1) {
     hostname = argv[1];
+    network_udp_ports(5000, 6000);
     minithread_system_initialize(spawn_client, NULL);
   }
   else {
+    network_udp_ports(6000, 5000);
     minithread_system_initialize(spawn_server, NULL);
   }
   return -1;
