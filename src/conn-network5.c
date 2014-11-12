@@ -1,8 +1,7 @@
 /* 
- *    Handshake test
+ *    conn-network test program 5
  *
- *    spawns two threads, one server and one client and attempts a handshake
- *    and then close
+ *    usage: conn-network5 [<hostname>]
 */
 
 #include "defs.h"
@@ -14,12 +13,11 @@
 #include <stdio.h>
 #include <string.h>
 
-
 #define BUFFER_SIZE 100000
+#define MAX_CONN 10
 
-int port=80; /* port on which we do the communication */
-
-int receive(int* arg); /* forward declaration */
+int ports[MAX_CONN]; /* port on which we do the communication */
+char* hostname;
 
 char* GetErrorDescription(int errorcode){
   switch(errorcode){
@@ -56,23 +54,20 @@ char* GetErrorDescription(int errorcode){
   }
 }
 
-int transmit(int* arg) {
+int server(int* arg) {
+  int port;
   minisocket_t socket;
   minisocket_error error;
 
-  printf("starting transmit\n");
-
-  minithread_fork(receive, NULL);
-
-  printf("continuing transmit\n");
-
+  port = *arg;
+  
   socket = minisocket_server_create(port,&error);
   if (socket==NULL){
     printf("ERROR: %s. Exiting. \n",GetErrorDescription(error));
     return -1;
   }
 
-  printf("server connected\n");
+  printf("Server connected on port %i\n", port);
 
   /* close the connection */
   minisocket_close(socket);
@@ -80,34 +75,56 @@ int transmit(int* arg) {
   return 0;
 }
 
-int receive(int* arg) {
-  network_address_t my_address;
+int client(int* arg) {
+  int port;
+  network_address_t address;
   minisocket_t socket;
   minisocket_error error;
-
-  printf("starting receive\n");
-
-  minithread_yield();
-
-  printf("continuing receive\n");
-
-  network_get_my_address(my_address);
-
-  /* create a network connection to the local machine */
-  socket = minisocket_client_create(my_address, port,&error);
+  
+  port = *arg;
+  network_translate_hostname(hostname, address);
+  
+  socket = minisocket_client_create(address, port, &error);
   if (socket==NULL){
     printf("ERROR: %s. Exiting. \n",GetErrorDescription(error));
     return -1;
   }
 
-  printf("client connected\n");
-
+  printf("Client connected on port %i\n", port);
+  
   minisocket_close(socket);
 
   return 0;
 }
 
+int spawn_server(int* arg) {
+  int i;
+  for (i = 0; i < MAX_CONN; i++) {
+    minithread_fork(server, &ports[i]);
+  }
+}
+
+int spawn_client(int* arg) {
+  int i;
+  for (i = 0; i < MAX_CONN; i++) {
+    minithread_fork(client, &ports[i]);
+  }
+}
+
+
 int main(int argc, char** argv) {
-  minithread_system_initialize(transmit, NULL);
+  int i;
+  for (i = 0; i < MAX_CONN; i++) {
+    ports[i] = i;
+  }
+
+  if (argc > 1) {
+    hostname = argv[1];
+    minithread_system_initialize(spawn_client, NULL);
+  }
+  else {
+    minithread_system_initialize(spawn_server, NULL);
+  }
   return -1;
 }
+
