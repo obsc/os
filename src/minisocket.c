@@ -792,7 +792,11 @@ minisocket_send(minisocket_t socket, minimsg_t msg, int len, minisocket_error *e
                 timeout = BASE_DELAY;
                 set_state(socket->send_state, SEND_SENDING);
                 // increase seq if there are data left to send
-                if (len_left > 0) socket->seq++;
+                if (len_left > 0) {
+                    semaphore_P(socket->lock);
+                    socket->seq++;
+                    semaphore_V(socket->lock);
+                }
                 break;
             // received ack and is closing
             case SEND_ACKCLOSE:
@@ -886,7 +890,9 @@ minisocket_receive(minisocket_t socket, minimsg_t msg, int max_len, minisocket_e
             semaphore_V(socket->lock);
 
             if (socket->receive_state == RECEIVE_DATACLOSE && stream_is_empty(socket->stream) == 1) {
+                semaphore_P(socket->lock);
                 socket->receive_state = RECEIVE_CLOSE;
+                semaphore_V(socket->lock);
                 semaphore_V(socket->receive_lock);
             }
 
