@@ -21,31 +21,35 @@ Minisocket
   - server and client creation result in a blocking handshaking call. If the
     call succeeds, then the socket will be created, otherwise the socket creation
     will fail.
-  - Minisocket_send is implemented using a finite state machine with 3 states.
+  - Minisocket_send is implemented using a finite state machine with 4 states.
     One state is the acknowledge state where we receive an ack packet from the
     remote connection and move on to the next chunk of data. One state is the
     send state where we try to send data until the maxed number of retries.
     One state is the closed state where it indicates that the minisocket is
-    closed and we should terminate.
+    closed and we should terminate. One state is the acknowledged and closed state
+    where it indicates that the sender received a MSG_FIN after an ack and should go
+    to the closed state after the current acknowledge state.
   - Minisocket_send blocks each time after it sends something and waits for
     either the network_handler to wake it up after receiving an ack, or the
     alarm to wake it up after some timeout time.
   - We decide that it's the minisocket_send's job to fragment and send the data
     in the largest chunks possible.
-  - Minisocket_receive is implemented using a finite state machine with 2 states.
+  - Minisocket_receive is implemented using a finite state machine with 3 states.
     One state is the receiving state where we take data from the stream. One state
-    is the closed state where it indicates that the minisocket is closed.
+    is the closed state where it indicates that the minisocket is closed. One state
+    is the acknowledged and closed state where it indicates that it should go to
+    the closed state after either all of the receivers exit or data is used up.
   - Minisocket_receive blocks if the stream is empty and until the stream has some
     data in it.
   - Minisocket_close is implemented using a finite state machine with 3 states.
   - Minisocket_close attempts to send MSG_FIN packets to the remote connection
-    until it reaches the max number of retries. Then, it sends signals to waiting
+    until it reaches the max number of retries. It also sends signals to waiting
     minisocket_send and minisocket_receive applications to tell them to terminate
     in the closed state. Then, it blocks until all of these send and receive
-    applications have exited and then frees the minisocket.
+    applications have exited. Finally, the socket is freed and minisocket_close returns.
   - If there are no send or receive threads running, then close will free the
     socket, otherwise, the last send or receive thread will handle freeing the
-    socket
+    socket.
 
 ================================================================================
 Stream
@@ -77,5 +81,11 @@ conn-network4
     and 1 transmitter, where the transmitter should successfully send. One
     receiver should error on connecting to server while the rest should run
     just like conn-network1.
+
+handshake
+  - Establishes a connection between the client and host by handshaking
+
+conn-network5
+  - Stress tests the creations, handshakes, and closes of minisockets
 ================================================================================
 
