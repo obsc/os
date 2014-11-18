@@ -127,6 +127,30 @@ queue_dequeue(queue_t queue, void** item) {
 }
 
 /*
+ * peek at the first void* from the queue or NULL if queue
+ * is empty.  Return 0 (success) or -1 (failure).
+ */
+int
+queue_peek(queue_t queue, void** item) {
+    node_t n = NULL;
+    if (queue == NULL || item == NULL) {
+        *item = NULL;
+        return -1;
+    }
+
+    // Checks if queue is empty
+    if ( queue->length == 0 ) {
+        *item = NULL;
+        return -1;
+    }
+
+    n = queue->head;
+    *item = n->data;
+
+    return 0;
+}
+
+/*
  * Iterate the function parameter over each element in the queue.  The
  * additional void* argument is passed to the function as its first
  * argument and the queue element is the second.  Return 0 (success)

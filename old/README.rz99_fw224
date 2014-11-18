@@ -3,73 +3,89 @@ Fukang Wen - fw224
 
 Implementation details of Project 3 for CS4411 - Fall 2014
 ================================================================================
-Minimsg
-
-minimsg.h
-  - added minimsg_handle for the network handler to call
-minimsg.c
-  - minimsg_handle assumes interrupts are disabled
-  - minimsg_handle does sanity checks, and enqueues the network_interrupt_arg_t
-    onto the correct port (dropped if port isn't made yet)
-
-  - two arrays for unbound and bound ports, with a mutex of each
-  - unbound port has a queue for data, with a lock on the queue and a counting
-    semaphore for receiving threads to wait on
-
-  - create_bound and create_unbound return NULL on failure
-  - create_bound fails when all bound ports are taken up and takes O(1) time
-    for the first iteration through the array
-
-  - when destroying an unbound port, all data enqueued onto the queue is
-    automatically freed.
-
-  - send and receive have failure returns of -1
-  - send fails on null inputs, msg too large, or failure to malloc a header
-  - send assumes network_send_pkt sends whole packet (all or nothing). If
-    network_send_pkt fails, we assume nothing was sent, otherwise we assume
-    the whole packet was sent
-
-  - In receive, if payload is too large, we only memcpy the buffer size (*len).
-  - If we fail to construct a bound port for replies, we return -1 but have a
-    *len representing how much we copied.
-  - constructs the reply bound port with the source address in the header
-  - receive frees the network_interrupt_arg_t
+Important Design Decisions
+  - We assume it is the job of minisocket_send to fragment the input message
+    into fragments of data to send, thus, it will always try to send as many
+    fragments as it can before failing.
+  - We treat MSG_FIN packets similarly to data packets: we give it its own seq
+    and ack value. 
 
 ================================================================================
-Minithread
+Minisocket
+  - Our network handler handles replying to messages with MSG_ACK
+  - To differentiate ack packets and data packets, we used the size of the
+    packet (it is considered an ack if the packet is empty)
+  - MSG_FIN is transmitted like a data packet (with the current syn and ack values)
+  - network_intterupt_arg_t's are mostly freed in the network handler. Only data
+    packets are freed in receive.
+  - server and client creation result in a blocking handshaking call. If the
+    call succeeds, then the socket will be created, otherwise the socket creation
+    will fail.
+  - Minisocket_send is implemented using a finite state machine with 4 states.
+    One state is the acknowledge state where we receive an ack packet from the
+    remote connection and move on to the next chunk of data. One state is the
+    send state where we try to send data until the maxed number of retries.
+    One state is the closed state where it indicates that the minisocket is
+    closed and we should terminate. One state is the acknowledged and closed state
+    where it indicates that the sender received a MSG_FIN after an ack and should go
+    to the closed state after the current acknowledge state.
+  - Minisocket_send blocks each time after it sends something and waits for
+    either the network_handler to wake it up after receiving an ack, or the
+    alarm to wake it up after some timeout time.
+  - We decide that it's the minisocket_send's job to fragment and send the data
+    in the largest chunks possible.
+  - Minisocket_receive is implemented using a finite state machine with 3 states.
+    One state is the receiving state where we take data from the stream. One state
+    is the closed state where it indicates that the minisocket is closed. One state
+    is the acknowledged and closed state where it indicates that it should go to
+    the closed state after either all of the receivers exit or data is used up.
+  - Minisocket_receive blocks if the stream is empty and until the stream has some
+    data in it.
+  - Minisocket_close is implemented using a finite state machine with 3 states.
+  - Minisocket_close attempts to send MSG_FIN packets to the remote connection
+    until it reaches the max number of retries. It also sends signals to waiting
+    minisocket_send and minisocket_receive applications to tell them to terminate
+    in the closed state. Then, it blocks until all of these send and receive
+    applications have exited. Finally, the socket is freed and minisocket_close returns.
+  - If there are no send or receive threads running, then close will free the
+    socket, otherwise, the last send or receive thread will handle freeing the
+    socket.
 
-minithread.c
-  - Added initializing network and minimsgs
-  - Added network_handler
+================================================================================
+Stream
+  - Implements a stream using a queue, where each node holds an interrupt_arg_t
+  - Stream contains the index that denotes where the next data of the current
+    node starts
+  - We implement stream_add as efficiently as possible because this is called
+    by the network handler. stream_add simply append the interrupt_arg_t onto
+    the queue
+  - We implement stream_take to take as much data as available at this time to
+    meet the needs of the request, which takes longer as it loops over the whole
+    stream in the worst case. However, this is fine as stream_take is called
+    by the user application.
+
+================================================================================
+State
+  - A finite state machine implementation
+  - Allows our code to block until a transition happens
+  - Only allows one thing waiting for a transition to proceed at a time
 
 ================================================================================
 Test cases
 
-network_port_stress_test
-  - Creates enough ports to overflow the max number of unbound and bound ports
-    and then destroy them. Stress tests the creation of ports and
-    overflow behavior.
-network_send_test
-  - Sends a message to an uncreated port. Then, create the port and listen on it.
-  - Expects the message to be dropped.
-network_send_test2
-  - Sends two messages to three receiving threads. Tests for the order in which
-    the messages are received, (a,b,c waiting for messages, a,b will get them).
-network_send_test3
-  - Sends a message to a port. Then, delete the port and create it again.
-  - In this case, the message should be dropped.
+conn-network4
+  - This includes two tests (1 is commented out). One test spawns 2 transmitter
+    and 1 receiver, where the transmitters close the socket before sending. This
+    results in error message from 1 transmitter in connecting to server, and
+    from each of the other transmitter and receiver. One test spawns 2 receiver
+    and 1 transmitter, where the transmitter should successfully send. One
+    receiver should error on connecting to server while the rest should run
+    just like conn-network1.
 
-network_load_test
-  - This tests heavy loads on the same port in a network
-  - Receiver spawns 1000 threads and receives on the same unbound port number
-  - Sender spawns 1 thread and sends 1000 messages (with 1 millisecond sleep)
-  - Expects that we send all 1000 eventually and receive all 1000 with no loss 
+handshake
+  - Establishes a connection between the client and host by handshaking
 
-network_forward
-  - This forwards messages from one computer to another
-  - Forwards all incoming traffic to a user defined hostname
-  - Interfaces directly with network5, receives messages sent by network5 and
-    sends to hostname
-
+conn-network5
+  - Stress tests the creations, handshakes, and closes of minisockets
 ================================================================================
 
