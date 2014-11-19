@@ -142,6 +142,7 @@ flood_discovery(network_address_t dest_address) {
     if (!header) return -1;
 
     bcast_empty((char *) header);
+    free(header);
 
     return 0;
 }
@@ -154,6 +155,8 @@ miniroute_send_pkt(network_address_t dest_address, int hdr_len, char* hdr, int d
     int pathlen; // Length of the path
     int pktlen; // Size of the packet
     char path[MAX_ROUTE_LENGTH][8]; // The path to destination
+    routing_header_t data_hdr;
+    char* full_data;
 
     pktlen = sizeof(routing_header) + hdr_len + data_len;
 
@@ -173,9 +176,20 @@ miniroute_send_pkt(network_address_t dest_address, int hdr_len, char* hdr, int d
         pathlen = cache_get(path_cache, dest_address, &path);
         semaphore_V(path_cache);
     }
-
     // We have successfully gotten a path
+    data_hdr = create_data_hdr(dest_address, pathlen, &path);
 
+    full_data = (char *) malloc(hdr_len + data_len);
+    memcpy(full_data, hdr, hdr_len);
+    memcpy(full_data + hdr_len, data, data_len);
+
+    if (send(dest_address, data_hdr, hdr_len + data_len, full_data) == -1) {
+        free(data_hdr);
+        return -1;
+    }
+
+    free(data_hdr);
+    return hdr_len + data_len;
 }
 
 /* hashes a network_address_t into a 16 bit unsigned int */
