@@ -56,9 +56,7 @@ minimsg_handle(network_interrupt_arg_t *arg) {
     }
 
     // Lock incoming data queue
-    semaphore_P(unbound_ports[destination]->u.unbound.lock);
     queue_append(unbound_ports[destination]->u.unbound.incoming_data, arg);
-    semaphore_V(unbound_ports[destination]->u.unbound.lock);
     // One more piece of data ready
     semaphore_V(unbound_ports[destination]->u.unbound.ready);
 }
