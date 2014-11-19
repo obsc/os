@@ -21,6 +21,13 @@ network_send_test
 network_send_test2
 network_send_test3
 network_forward
+alarmtest1
+alarmtest2
+conn-network1
+conn-network2
+conn-network3
+conn-network4
+handshake
 .depend
 *.o
 

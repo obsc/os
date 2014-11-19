@@ -37,11 +37,13 @@ OBJ =                              \
     pqueue.o                       \
     multilevel_queue.o             \
     synch.o                        \
+    read.o                         \
     stream.o                       \
     state.o                        \
     miniheader.o                   \
     minimsg.o                      \
     minisocket.o                   \
+    miniroute.o                    \
     network.o
 
 %: %.o start.o end.o $(OBJ) $(SYSTEMOBJ)

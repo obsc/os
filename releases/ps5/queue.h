@@ -36,13 +36,6 @@ extern int queue_append(queue_t, void*);
 extern int queue_dequeue(queue_t, void**);
 
 /*
- * peek and return the first void* from the queue.
- * Return 0 (success) and first item if queue is nonempty, or -1 (failure) and
- * NULL if queue is empty.
- */ 
-extern int queue_peek(queue_t, void**);
-
-/*
  * queue_iterate(q, f, t) calls f(x,t) for each x in q.
  * q and f should be non-null.
  *
