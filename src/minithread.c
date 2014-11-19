@@ -18,6 +18,7 @@
 #include "alarm.h"
 #include "queue.h"
 #include "multilevel_queue.h"
+#include "miniroute.h"
 
 #include <assert.h>
 #include <time.h>
@@ -304,13 +305,7 @@ network_handler(network_interrupt_arg_t *arg) {
     if ( !arg ) return;
 
     old_level = set_interrupt_level(DISABLED);
-    // Check protocol type
-    if (arg->buffer[0] == PROTOCOL_MINIDATAGRAM) {
-        minimsg_handle(arg);
-    } else if (arg->buffer[0] == PROTOCOL_MINISTREAM) {
-        minisocket_handle(arg);
-    }
-
+    miniroute_handle(arg);
     set_interrupt_level(old_level);
 }
 
@@ -352,6 +347,7 @@ void minithread_system_initialize(proc_t mainproc, arg_t mainarg) {
     minithread_clock_init(PERIOD * MILLISECOND, clock_handler);
     // Initialize network
     network_initialize(network_handler);
+    miniroute_initialize();
     minimsg_initialize();
     minisocket_initialize();
     // Switch into our first thread

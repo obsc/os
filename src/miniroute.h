@@ -2,6 +2,7 @@
 #define _MINIROUTE_H_
 
 #include "minimsg.h"
+#include "network.h"
 
 enum routing_packet_type {
   ROUTING_DATA=0,
@@ -26,6 +27,9 @@ struct routing_header
 									   The address of the source is stored in the first position, and the
 									   address of the destination is stored in the last position. */
 };
+
+/* Handler for receiving a message */
+void miniroute_handle(network_interrupt_arg_t *arg);
 
 /* Performs any initialization of the miniroute layer, if required. */
 void miniroute_initialize();
