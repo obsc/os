@@ -17,12 +17,12 @@ extern cache_t cache_new(int);
 /*
  * Set the specified key as this value. Returns 0 (success) or -1 (failure)
  */
-extern int cache_set(cache_t, network_address_t, char[MAX_ROUTE_LENGTH][8]);
+extern int cache_set(cache_t, network_address_t, char (*path)[8]);
 
 /*
  * get the value of the specified key. Returns 0 (success) or -1 (failure)
  */
-extern int cache_get(cache_t, network_address_t, char[MAX_ROUTE_LENGTH][8]);
+extern int cache_get(cache_t, network_address_t, char (*path)[8]);
 
 /*
  * delete the corresponding key from the cache. Returns 0 (success) or -1 (failure)
