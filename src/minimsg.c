@@ -255,7 +255,7 @@ minimsg_send(miniport_t local_unbound_port, miniport_t local_bound_port, minimsg
     if ( !local_unbound_port || !local_bound_port || msg == NULL ) return -1;
 
     // Size check
-    if (len + sizeof(struct mini_header) > MINIMSG_MAX_MSG_SIZE) return -1;
+    if (len > MINIMSG_MAX_MSG_SIZE) return -1;
 
     network_get_my_address(my_address); // Get my address
     // Construct a header to send
