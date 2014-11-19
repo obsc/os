@@ -26,7 +26,7 @@ struct routing_header
 	char path[MAX_ROUTE_LENGTH][8];	/* contains the packed network addresses of each node in the route.
 									   The address of the source is stored in the first position, and the
 									   address of the destination is stored in the last position. */
-};
+}* routing_header_t;
 
 /* Handler for receiving a message */
 void miniroute_handle(network_interrupt_arg_t *arg);
