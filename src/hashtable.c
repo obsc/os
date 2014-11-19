@@ -6,14 +6,13 @@
 #include "queue.h"
 #include <stdlib.h>
 #include <stdio.h>
-
-#define checkNull(q) if( !(q) ) { return -1; }
+#include "miniroute.h"
 
 typedef struct tuple* tuple_t;
 
 struct hashtable
 {
-    queue_t buckets;
+    queue_t *buckets;
     int max_size;
     int current_size;
 };
@@ -34,7 +33,7 @@ hashtable_t hashtable_new(int size) {
     int free_pointer;
 
     hashtable_t hashtable = (hashtable_t) malloc (sizeof(struct hashtable));
-    buckets = (queue_t) malloc (sizeof(struct queue));
+    buckets = (queue_t) malloc (sizeof(struct queue) * size);
     if (buckets || !hashtable) {
         free(hashtable);
         free(buckets);
@@ -141,6 +140,14 @@ int hashtable_delete(hashtable_t hashtable, void *key) {
     if (!found_kv) return -1;
     hashtable->current_size --;
     return queue_delete(hashtable->buckets[hashed_key], found_kv);
+}
+
+/*
+ * return the current size of the hashtable, or -1 (failure)
+ */
+int hashtable_length(hashtable_t hashtable) {
+    if (!hashtable) return -1;
+    return hashtable->current_size;
 }
 
 /*

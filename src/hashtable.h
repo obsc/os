@@ -27,7 +27,12 @@ extern int hashtable_get(hashtable_t, void *, void **);
 /*
  * delete the corresponding key from the hashtable. Returns 0 (success) or -1 (failure)
  */
-extern hashtable_delete(hashtable_t, void *);
+extern int hashtable_delete(hashtable_t, void *);
+
+/*
+ * return the current size of the hashtable, or -1 (failure)
+ */
+extern int hashtable_length(hashtable_t);
 
 /*
  * Free the hashtable and return 0 (success) or -1 (failure).
