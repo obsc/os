@@ -164,4 +164,3 @@ cache_delete(cache_t cache, network_address_t key) {
  */
 extern int cache_destroy (cache_t);
 
-#endif /*__cache_H__*/
