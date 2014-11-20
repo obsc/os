@@ -29,7 +29,7 @@ struct hashtable
 
 struct tuple
 {
-    network_address_t *key;
+    network_address_t key;
     void * value;
     void * list_node;
     void * chain_node;
@@ -75,15 +75,16 @@ hashtable_t hashtable_new(int size) {
 
 }
 
-void compare_keys(void* tuple, void* key, void** output) {
-	tuple_t t;
-	network_address_t addr;
-	t = (tuple_t) tuple;
-	addr = (network_address_t *) (key);
-	if (network_compare_network_addresses(*addr, *(t->key)) != 0) {
-		*output = tuple;
-	}
-}
+//void compare_keys(void* tuple, void* key, void** output) {
+//	tuple_t t;
+//	network_address_t addr;
+//	t = (tuple_t) tuple;
+//	addr = (unsigned int *) key;
+//      addr = (network_address_t) addr;
+//	if (network_compare_network_addresses(addr, t->key) != 0) {
+//		*output = tuple;
+//	}
+//}
 
 int hash_naive(network_address_t address, int size) {
 	unsigned short unmodded;
@@ -102,36 +103,35 @@ int hash_naive(network_address_t address, int size) {
 tuple_t hashtable_contains(hashtable_t hashtable, network_address_t key) {
     tuple_t result;
     int hashed_key;
-    void ** output;
-    void * input;
+    void *node;
+    int checked;
 
     if (!hashtable || !key) return NULL;
     hashed_key = hash_naive(key, hashtable->max_size);
-    *output = NULL;
-    input = (void *) &key;
-    list_iterate(hashtable->buckets[hashed_key], compare_keys, input, output);
-    if ((*output) != NULL) {
-    	result = (tuple_t) (*output);
-    	return result;
-    } else {
-    	return NULL;
-    }
+  //  *output = NULL;
+  //  input = (void *) key;
+  //  list_iterate(hashtable->buckets[hashed_key], compare_keys, input, output);
+  //  if ((*output) != NULL) {
+  //  	result = (tuple_t) (*output);
+  //  	return result;
+  //  } else {
+  //  	return NULL;
+  //  }
 
-    // checked = 0;
-    // //hashed_key = hash(key);
-    // while (checked < queue_length(hashtable->buckets[hashed_key])) {
-    //     if (queue_dequeue(hashtable->buckets[hashed_key], &node) == 0) {
-    //         result = (tuple_t) node;
-    //         queue_append(hashtable->buckets[hashed_key], result);
-    //         if (key == result->first) {
-    //             return result;
-    //         }
-    //         checked += 1;
-    //     } else {
-    //         return NULL;
-    //     }
-    // }
-    // return NULL;
+     checked = 0;
+     while (checked < list_length(hashtable->buckets[hashed_key])) {
+         if (list_dequeue(hashtable->buckets[hashed_key], &node) == 0) {
+             result = (tuple_t) node;
+             list_append(hashtable->buckets[hashed_key], result);
+             if (network_compare_network_addresses(key, result->key)) {
+                 return result;
+             }
+             checked += 1;
+         } else {
+             return NULL;
+         }
+     }
+     return NULL;
 }
 
 /*
@@ -239,7 +239,7 @@ int cache_set(cache_t cache, network_address_t key, void *value, void** output) 
 
 		tup = (tuple_t) malloc (sizeof(struct tuple));
 		if (!tup) return -1;
-		tup->key = &key;
+		network_address_copy(key, tup->key);
 		tup->value = value;
 
 		if (cache->current_size < cache->max_size) {
