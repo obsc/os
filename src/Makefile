@@ -40,7 +40,6 @@ OBJ =                              \
     read.o                         \
     stream.o                       \
     state.o                        \
-    hashtable.o                    \
     cache.o                        \
     miniheader.o                   \
     minimsg.o                      \

@@ -3,7 +3,7 @@
  */
 #ifndef __CACHE_H__
 #define __CACHE_H__
-
+#include "network.h"
 /*
  * cache_t is a pointer to an internally maintained data structure.
  */

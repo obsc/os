@@ -7,6 +7,7 @@
 #include "miniroute.h"
 #include "alarm.h"
 #include "network.h"
+#include "list.h"
 
 typedef struct hashtable* hashtable_t;
 typedef struct tuple* tuple_t;
@@ -22,13 +23,13 @@ struct cache
 
 struct hashtable
 {
-    queue_t *buckets;
+    list_t *buckets;
     int max_size;
 };
 
 struct tuple
 {
-    network_address_t key;
+    network_address_t *key;
     void * value;
     void * list_node;
     void * chain_node;
@@ -39,30 +40,35 @@ struct tuple
  * Return an empty hashtable of some specified size.  Returns NULL on error.
  */
 hashtable_t hashtable_new(int size) {
-    list_t buckets;
     int iterator;
-    int free_pointer;
 
     hashtable_t hashtable = (hashtable_t) malloc (sizeof(struct hashtable));
-    buckets = (list_t *) malloc (sizeof(list_t) * size);
-    if (buckets || !hashtable) {
+    if (!hashtable) {
         free(hashtable);
-        free(buckets);
         return NULL;
     }
+    hashtable->buckets = (list_t *) malloc (sizeof(list_t) * size);
 
+    if (!hashtable->buckets) {
+        free(hashtable);
+        return NULL;
+    }
     for (iterator = 0; iterator < size; iterator++) {
-        buckets[iterator] = list_new();
-        if (!buckets[iterator]) {
-            for (free_pointer = iterator; free_pointer >= 0; free_pointer --) {
-                free(buckets[free_pointer]);
-            }
-            free(hashtable);
-            return NULL;
+        (hashtable->buckets)[iterator] = list_new();
+        if (!((hashtable->buckets)[iterator])) {
+            break;
         }
     }
 
-    hashtable->buckets = buckets;
+    if (iterator < size) {
+        for (; iterator > 0; iterator--) {
+            list_free((hashtable->buckets)[iterator-1]);
+        }
+        free(hashtable->buckets);
+        free(hashtable);
+        return NULL;
+    }
+
     hashtable->max_size = size;
 
     return hashtable;
@@ -73,8 +79,8 @@ void compare_keys(void* tuple, void* key, void** output) {
 	tuple_t t;
 	network_address_t addr;
 	t = (tuple_t) tuple;
-	addr = (network_address_t) (*key);
-	if (network_compare_network_addresses(addr, t->key) != 0) {
+	addr = (network_address_t *) (key);
+	if (network_compare_network_addresses(*addr, *(t->key)) != 0) {
 		*output = tuple;
 	}
 }
@@ -181,8 +187,8 @@ int hashtable_free (hashtable_t hashtable) {
     int iterator;
 
     if (!hashtable) return -1;
-    for (iterator = 0; iterator < max_size; iterator ++) {
-        if (list_free(hashtable->buckets[iterator] == -1)) {
+    for (iterator = 0; iterator < hashtable->max_size; iterator ++) {
+        if (list_free(hashtable->buckets[iterator]) == -1) {
             return -1;
         }
     }
@@ -222,7 +228,7 @@ cache_t cache_new(int size) {
 /*
  * Set the specified key as this value. Returns 0 (success) or -1 (failure)
  */
-int cache_set(cache_t cache, network_address_t key, void *value) {
+int cache_set(cache_t cache, network_address_t key, void *value, void** output) {
 	void *result;
 	tuple_t tup;
 	tuple_t evicted;
@@ -233,21 +239,23 @@ int cache_set(cache_t cache, network_address_t key, void *value) {
 
 		tup = (tuple_t) malloc (sizeof(struct tuple));
 		if (!tup) return -1;
-		tup->key = key;
+		tup->key = &key;
 		tup->value = value;
 
 		if (cache->current_size < cache->max_size) {
 			l_node = list_append(cache->list, tup);
 			if (!l_node) return -1;
 			tup->list_node = l_node;
-			c_node = hashtable_set(cache->hashtable, tup->key, tup);
+			c_node = hashtable_set(cache->hashtable, tup);
 			if (!c_node) return -1;
 			tup->chain_node = c_node;
 			cache->current_size++;
+                        *output = NULL;
 			return 0;
 		} else {
-			if (list_dequeue(cache->queue, &result) == 0) {
+			if (list_dequeue(cache->list, &result) == 0) {
 				evicted = (tuple_t) result;
+                                *output = evicted->value;
 				hashtable_delete(cache->hashtable, evicted);
 				free(evicted);
 				l_node = list_append(cache->list, tup);
@@ -258,12 +266,14 @@ int cache_set(cache_t cache, network_address_t key, void *value) {
 				tup->chain_node = c_node;
 				return 0;
 			} else {
+                                *output = NULL;
 				return -1;
 			}
 		}
 	} else {
 		tup = (tuple_t) result;
 		tup->value = value;
+                *output = NULL;
 		return 0;
 	}
 }
@@ -304,7 +314,7 @@ int cache_delete(cache_t cache, network_address_t key) {
  */
 int cache_destroy (cache_t cache) {
 	void *result;
-	tuple_t *tup;
+	tuple_t tup;
 
 	while (list_dequeue(cache->list, &result) == 0) {
 		tup = (tuple_t) result;
