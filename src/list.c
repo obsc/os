@@ -4,6 +4,7 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include "list.h"
+
 #define checkNull(q) if( !(q) ) { return -1; }
 
 typedef struct list_node* list_node_t;
@@ -56,7 +57,7 @@ list_append(list_t list, void* item) {
         list->head = n;
     } else {
         list->tail->next = n;
-        n->prev = list->tail
+        n->prev = list->tail;
     }
 
     list->tail = n;
@@ -133,8 +134,8 @@ int
 list_iterate(list_t list, func_t f, void* arg, void** output) {
 	list_node_t n = NULL;
 
-	checkNULL(list);
-	checkNULL(f);
+	checkNull(list);
+	checkNull(f);
 
 	n = list->head;
 

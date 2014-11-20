@@ -208,7 +208,7 @@ handle_ack(minisocket_t socket, network_address_t source, int source_port, int a
         }
     }
     // Data
-    if (arg->size > sizeof(routing_header) + sizeof(struct mini_header_reliable)) {
+    if (arg->size > sizeof(struct routing_header) + sizeof(struct mini_header_reliable)) {
         if (seq - 1 == socket->ack && socket->receive_state == RECEIVE_RECEIVING) {
             socket->ack++;
             stream_add(socket->stream, arg);

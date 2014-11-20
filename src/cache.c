@@ -14,10 +14,10 @@ typedef struct tuple* tuple_t;
 
 struct cache
 {
-	list_t list;
-	hashtable_t hashtable;
-	int current_size;
-	int max_size;
+    list_t list;
+    hashtable_t hashtable;
+    int current_size;
+    int max_size;
 };
 
 

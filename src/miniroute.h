@@ -13,8 +13,7 @@ enum routing_packet_type {
 #define MAX_ROUTE_LENGTH 20
 #define SIZE_OF_ROUTE_CACHE 20
 
-
-struct routing_header
+typedef struct routing_header
 {
 	char routing_packet_type;		/* the type of routing packet */
 	char destination[8];			/* ultimate destination of routing packet */
