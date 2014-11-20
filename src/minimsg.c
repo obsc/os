@@ -4,6 +4,7 @@
 #include "defs.h"
 #include "minimsg.h"
 #include "miniheader.h"
+#include "miniroute.h"
 #include "network.h"
 #include "queue.h"
 #include "synch.h"
@@ -45,7 +46,7 @@ minimsg_handle(network_interrupt_arg_t *arg) {
     int source;
     int destination;
 
-    header = (mini_header_t) arg->buffer;
+    header = (mini_header_t) arg->buffer + sizeof(struct routing_header);
     source = unpack_unsigned_short(header->source_port);
     destination = unpack_unsigned_short(header->destination_port);
 
@@ -314,13 +315,13 @@ minimsg_receive(miniport_t local_unbound_port, miniport_t* new_local_bound_port,
 
     data = (network_interrupt_arg_t *) node;
 
-    payload_size = data->size - sizeof(struct mini_header);
+    payload_size = data->size - sizeof(struct routing_header) - sizeof(struct mini_header);
     // We have less payload than the allocated buffer
     if (payload_size < *len) {
         *len = payload_size;
     }
     // Copies data over to user buffer
-    memcpy(msg, data->buffer + sizeof(struct mini_header), *len);
+    memcpy(msg, data->buffer + sizeof(struct routing_header) + sizeof(struct mini_header), *len);
 
     // Try to construct bound port
     header = (mini_header_t) data->buffer;

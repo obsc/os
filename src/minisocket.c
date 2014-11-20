@@ -4,6 +4,7 @@
 #include "defs.h"
 #include "minisocket.h"
 #include "miniheader.h"
+#include "miniroute.h"
 #include "minimsg.h"
 #include "network.h"
 #include "queue.h"
@@ -207,7 +208,7 @@ handle_ack(minisocket_t socket, network_address_t source, int source_port, int a
         }
     }
     // Data
-    if (arg->size > sizeof(struct mini_header_reliable)) {
+    if (arg->size > sizeof(routing_header) + sizeof(struct mini_header_reliable)) {
         if (seq - 1 == socket->ack && socket->receive_state == RECEIVE_RECEIVING) {
             socket->ack++;
             stream_add(socket->stream, arg);
@@ -243,8 +244,6 @@ handle_fin(minisocket_t socket, network_address_t source, int source_port, int s
         if (socket->ack < seq) socket->ack = seq;
         reply(socket, MSG_ACK);
     }
-
-
 }
 
 
@@ -262,7 +261,7 @@ minisocket_handle(network_interrupt_arg_t *arg) {
     int seq;
     int ack;
 
-    header = (mini_header_reliable_t) arg->buffer;
+    header = (mini_header_reliable_t) arg->buffer + sizeof(struct routing_header);
     unpack_address(header->source_address, source);
     source_port = unpack_unsigned_short(header->source_port);
     port = unpack_unsigned_short(header->destination_port);
@@ -298,7 +297,7 @@ minisocket_handle(network_interrupt_arg_t *arg) {
             break;
     }
 
-    if (!(header->message_type == MSG_ACK && arg->size > sizeof(struct mini_header_reliable))) {
+    if (!(header->message_type == MSG_ACK && arg->size > sizeof(struct routing_header) + sizeof(struct mini_header_reliable))) {
         free(arg);
     }
 }
@@ -731,8 +730,8 @@ minisocket_send(minisocket_t socket, minimsg_t msg, int len, minisocket_error *e
     while (len_left > 0) {
 
         // find the size for this iteration of send
-        if (MAX_NETWORK_PKT_SIZE - sizeof(struct mini_header_reliable) < len_left) {
-            size = MAX_NETWORK_PKT_SIZE - sizeof(struct mini_header_reliable);
+        if (MAX_NETWORK_PKT_SIZE - sizeof(struct routing_header) - sizeof(struct mini_header_reliable) < len_left) {
+            size = MAX_NETWORK_PKT_SIZE - sizeof(struct routing_header) - sizeof(struct mini_header_reliable);
         } else {
             size = len_left;
         }
