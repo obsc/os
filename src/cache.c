@@ -47,20 +47,20 @@ hashtable_t hashtable_new(int size) {
         free(hashtable);
         return NULL;
     }
-    hashtable->buckets = (list_t *) malloc (sizeof(list_t) * size);
+    hashtable->buckets = (list_t *) malloc (sizeof(list_t) * 2 * size);
 
     if (!hashtable->buckets) {
         free(hashtable);
         return NULL;
     }
-    for (iterator = 0; iterator < size; iterator++) {
+    for (iterator = 0; iterator < 2 * size; iterator++) {
         (hashtable->buckets)[iterator] = list_new();
         if (!((hashtable->buckets)[iterator])) {
             break;
         }
     }
 
-    if (iterator < size) {
+    if (iterator < 2 * size) {
         for (; iterator > 0; iterator--) {
             list_free((hashtable->buckets)[iterator-1]);
         }
@@ -69,7 +69,7 @@ hashtable_t hashtable_new(int size) {
         return NULL;
     }
 
-    hashtable->max_size = size;
+    hashtable->max_size = 2 * size;
 
     return hashtable;
 
