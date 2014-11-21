@@ -287,12 +287,16 @@ int cache_set(cache_t cache, network_address_t key, void *value, void** output) 
 int cache_get(cache_t cache, network_address_t key, void ** output) {
     void *result;
     tuple_t tup;
-    if (!cache || !key || !output) return -1;
+    if (!cache || !key || !output) {
+        *output = NULL;
+        return -1;
+    }
     if (hashtable_get(cache->hashtable, key, &result) == 0) {
         tup = (tuple_t) result;
         *output = tup->value;
         return 0;
     }
+    *output = NULL;
     return -1;
 }
 

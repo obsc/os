@@ -16,6 +16,7 @@ extern cache_t cache_new(int);
 
 /*
  * Set the specified key as this value. Returns 0 (success) or -1 (failure)
+ * Also returns the evicted value if applicable.
  */
 extern int cache_set(cache_t, network_address_t, void*, void**);
 
