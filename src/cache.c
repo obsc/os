@@ -69,7 +69,7 @@ hashtable_t hashtable_new(int size) {
         return NULL;
     }
 
-    hashtable->max_size = 2 * size;
+    hashtable->max_size = size;
 
     return hashtable;
 
@@ -92,7 +92,7 @@ int hash_naive(network_address_t address, int size) {
 
 	unmodded = hash_address(address);
 
-	result = ((int) unmodded) % size;
+	result = ((int) unmodded) % (2 * size);
 
 	return result;
 }
