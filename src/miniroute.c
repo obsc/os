@@ -4,14 +4,17 @@
 #include "miniheader.h"
 #include "minimsg.h"
 #include "minisocket.h"
+#include "minithread.h"
 #include "synch.h"
 #include "cache.h"
 #include "alarm.h"
 
 #define NUM_RETRY 3
 #define WAIT_DELAY 12000
+#define CACHE_FRESH 3000
 
 typedef struct route {
+    long timestamp
     int path_len;
     char path[MAX_ROUTE_LENGTH][8];
 }* route_t;
@@ -74,6 +77,22 @@ destroy_waiting(waiting_t wait) {
     semaphore_destroy(wait->wait_disc);
     semaphore_destroy(wait->wait_for_data);
     free(wait);
+}
+
+route_t
+get_cached_route(network_address_t dest_address) {
+    void* route_node;
+    route_t route;
+
+    if (cache_get(path_cache, dest_address, &route_node) == -1) {
+        return NULL;
+    }
+    route = (route_t) route_node;
+
+    if ((time_ticks - route->timestamp) * PERIOD >= CACHE_FRESH) { // expired
+        return NULL;
+    }
+    return route;
 }
 
 /* Sends out a broadcast for discovery
@@ -366,11 +385,9 @@ flood_discovery(network_address_t dest_address, waiting_t wait) {
  */
 int
 miniroute_send_pkt(network_address_t dest_address, int hdr_len, char* hdr, int data_len, char* data) {
-    int cache_hit; // If we hit the path cache or not
     int pktlen; // Size of the packet
     routing_header_t data_hdr;
     char* full_data;
-    void* route_node;
     void* wait_node;
     void* overflow_node;
     route_t route;
@@ -384,11 +401,10 @@ miniroute_send_pkt(network_address_t dest_address, int hdr_len, char* hdr, int d
 
     // Checks if the path is in the cache
     semaphore_P(path_mutex);
-    cache_hit = cache_get(path_cache, dest_address, &route_node);
+    route = get_cached_route(dest_address);
     semaphore_V(path_mutex);
-    route = (route_t) route_node;
 
-    if (cache_hit == -1) { // Cache miss
+    if (route == NULL) { // Cache miss
         semaphore_P(wait_mutex);
         if (cache_get(wait_cache, dest_address, &wait_node) == -1) { // New dest
             semaphore_V(wait_mutex);
