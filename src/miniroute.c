@@ -33,6 +33,13 @@ semaphore_t wait_limit; // Limits the number of concurrent discoveries
 char *dummy; // Represents a dummy bytearray to pass to send pkt
 unsigned int next_id; // Represents the currnt id value to send for discoveries
 
+/* Increments and returns the next id
+ */
+unsigned int
+get_next_id() {
+    return next_id++;
+}
+
 waiting_t
 create_waiting() {
     waiting_t wait;
@@ -55,6 +62,7 @@ create_waiting() {
     wait->id = get_next_id();
     semaphore_initialize(wait->wait_disc, 0);
     semaphore_initialize(wait->wait_for_data, 0);
+    return wait;
 }
 
 void
@@ -62,13 +70,6 @@ destroy_waiting(waiting_t wait) {
     semaphore_destroy(wait->wait_disc);
     semaphore_destroy(wait->wait_for_data);
     free(wait);
-}
-
-/* Increments and returns the next id
- */
-unsigned int
-get_next_id() {
-    return next_id++;
 }
 
 int
@@ -284,11 +285,11 @@ fail_wait(waiting_t wait) {
 /*
  * Times out a waiting flood discovery
  */
-void unblock(void *w) {
+void timeout(void *w) {
     waiting_t wait;
 
     wait = (waiting_t) w;
-    semaphore_V(w->wait_disc);
+    semaphore_V(wait->wait_disc);
 }
 
 /* Performs flood broadcasting to discover path to destination
@@ -306,7 +307,7 @@ flood_discovery(network_address_t dest_address, waiting_t wait) {
     }
 
     for (i = 0; i < NUM_RETRY; i++) {
-        retry_alarm = register_alarm(WAIT_DELAY, unblock, wait);
+        retry_alarm = register_alarm(WAIT_DELAY, timeout, wait);
         bcast_discovery(header);
         semaphore_P(wait->wait_disc);
         if (wait->route != NULL) { // Success
@@ -368,7 +369,7 @@ miniroute_send_pkt(network_address_t dest_address, int hdr_len, char* hdr, int d
                 destroy_waiting(wait);
                 semaphore_V(wait_limit);
             }
-            return NULL;
+            return -1;
         } else { // Route discovery success
             route = wait->route;
         }
