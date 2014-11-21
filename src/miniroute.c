@@ -14,7 +14,7 @@
 #define CACHE_FRESH 3000
 
 typedef struct route {
-    long timestamp
+    long timestamp;
     int path_len;
     char path[MAX_ROUTE_LENGTH][8];
 }* route_t;
@@ -332,7 +332,7 @@ miniroute_handle(network_interrupt_arg_t *arg) {
 
                     route->path_len = unpack_unsigned_int(header->path_len);
                     for (i = 0; i < route->path_len; i++) { // Reverses path
-                        memcpy(route->path[i], hdr->path[route->path_len - 1 - i], 8);
+                        memcpy(route->path[i], header->path[route->path_len - 1 - i], 8);
                     }
                     route->timestamp = time_ticks;
                     wait->route = route;

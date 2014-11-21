@@ -30,6 +30,7 @@ conn-network4
 conn-network5
 handshake
 messenger
+cache_test
 .depend
 *.o
 
