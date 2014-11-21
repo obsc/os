@@ -7,12 +7,33 @@
 #include <stdio.h>
 #include <string.h>
 
-#define BUFFER_SIZE 100000 
+#define BUFFER_SIZE 100000
 
 char* hostname;
-int port=80; /* port on which we do the communication */
+int port = 80; /* port on which we do the communication */
 int version;
 minisocket_t socket;
+
+int receiver(int *arg) {
+  char buffer[BUFFER_SIZE];
+  minisocket_error error;
+  int len;
+  int i;
+
+  while (1) {
+    len = minisocket_receive(socket,buffer, BUFFER_SIZE, &error);
+    if (len == -1) {
+      printf("Receiving error. Code: %d.\n", error);
+      minisocket_close(socket);
+      return 0;
+    } else {
+      for (i = 0; i < len; i++) {
+        printf("%c", buffer[i]);
+      }
+    }
+  }
+  return 0;
+}
 
 int sender(int* arg) {
   char buffer[BUFFER_SIZE];
@@ -20,8 +41,8 @@ int sender(int* arg) {
   int len;
   network_address_t address;
   minisocket_error error;
-  
-  if (version = 2) {
+
+  if (version == 2) {
     socket = minisocket_server_create(port,&error);
   } else {
     network_translate_hostname(hostname, address);
@@ -48,44 +69,23 @@ int sender(int* arg) {
         printf("Sending error. Code: %d.\n", error);
         minisocket_close(socket);
         return 0;
-      }   
+      }
       bytes_sent+=trans_bytes;
     }
   }
   return 0;
 }
 
-int receiver(int *arg) {
-  char buffer[BUFFER_SIZE];
-  minisocket_error error;
-  int len;
-  int i;
-
-  while (1) {
-    len = minisocket_receive(socket,buffer, BUFFER_SIZE, &error);
-    if (len == -1) {
-      printf("Receiving error. Code: %d.\n", error);
-      minisocket_close(socket);
-      return 0;
-    } else {
-      for (i = 0; i < len; i++) {
-        printf("%c", buffer[i]);
-      }
-    }
-  }
-  return 0;
-}
-
 int main(int argc, char** argv) {
-  
+
   if (argc > 2) {
       hostname = argv[2];
-      port = argv[1];
+      port = atoi(argv[1]);
       version = 1;
       minithread_system_initialize(sender, NULL);
   }
   else if (argc > 1) {
-      port = argv[1];
+      port = atoi(argv[1]);
       version = 2;
       minithread_system_initialize(sender, NULL);
   }
