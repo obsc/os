@@ -33,6 +33,8 @@ semaphore_t wait_limit; // Limits the number of concurrent discoveries
 char *dummy; // Represents a dummy bytearray to pass to send pkt
 unsigned int next_id; // Represents the currnt id value to send for discoveries
 
+/* Creates a new waiting block
+ */
 waiting_t
 create_waiting() {
     waiting_t wait;
@@ -57,6 +59,8 @@ create_waiting() {
     semaphore_initialize(wait->wait_for_data, 0);
 }
 
+/* Destroys a waiting block
+ */
 void
 destroy_waiting(waiting_t wait) {
     semaphore_destroy(wait->wait_disc);
@@ -71,12 +75,15 @@ get_next_id() {
     return next_id++;
 }
 
+/* Sends out a broadcast for discovery
+ * Appends current address to the path as well
+ */
 int
 bcast_discovery(routing_header_t hdr) {
     network_address_t my_address;
     int pathlen;
 
-    if (unpack_unsigned_int(hdr->ttl) == 0) {
+    if (unpack_unsigned_int(hdr->ttl) == 0) { // Fail if ttl is 0
         return 0;
     }
 
@@ -88,6 +95,9 @@ bcast_discovery(routing_header_t hdr) {
     return network_bcast_pkt(sizeof(struct routing_header), (char *) hdr, 0, dummy);
 }
 
+/* Sends a data packet along a path
+ *
+ */
 int
 send_data(routing_header_t hdr, int len, char* data) {
     network_address_t next_addr; // Next address along path
@@ -102,11 +112,17 @@ send_data(routing_header_t hdr, int len, char* data) {
     return network_send_pkt(next_addr, sizeof(struct routing_header), (char *) hdr, len, data);
 }
 
+/* Sends a reply along a path
+ *
+ */
 int
 send_reply(routing_header_t hdr) {
     return send_data(hdr, 0, dummy);
 }
 
+/* Time passes for the header (decrease ttl)
+ *
+ */
 void
 increment_hdr(routing_header_t hdr) {
     pack_unsigned_int(hdr->ttl, unpack_unsigned_int(hdr->ttl) - 1);
@@ -201,6 +217,28 @@ check_destination(routing_header_t hdr) {
     return network_compare_network_addresses(my_address, dest_address);
 }
 
+/* Checks if we are in the path of the packet
+ * Return 0 if not, non-zero if we are
+ */
+int
+check_route(routing_header_t hdr) {
+    int pathlen;
+    int i;
+    network_address_t my_address;
+    network_address_t other_address;
+
+    network_get_my_address(my_address);
+    pathlen = unpack_unsigned_int(hdr->path_len);
+
+    for (i = 0; i < pathlen; i++) {
+        unpack_address(hdr->path[i], other_address);
+        if (network_compare_network_addresses(my_address, dest_address) > 0) {
+            return 1;
+        }
+    }
+    return 0;
+}
+
 /* Handler for miniroutes messages
  * Assumes interrupts are disabled within
  */
@@ -219,7 +257,9 @@ miniroute_handle(network_interrupt_arg_t *arg) {
             free(reply_hdr);
         } else { // Rebroadcast
             increment_hdr(header);
-            bcast_discovery(header);
+            if (!check_route(header)) {
+                bcast_discovery(header);
+            }
         }
         free(arg);
     } else if (header->routing_packet_type == ROUTING_ROUTE_REPLY) {
