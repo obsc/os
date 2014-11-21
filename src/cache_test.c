@@ -95,10 +95,9 @@ void test_delete_destroy() {
     assert(cache_get(c,addr2,&output) == -1);
     // Testing destroy
     assert(cache_destroy(c) == 0);
+    c = NULL;
     assert(cache_set(c, addr, &data, &evicted) == -1);
     assert(cache_set(c, addr2, &data2, &evicted) == -1);
-
-
 
 }
 

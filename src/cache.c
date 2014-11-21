@@ -328,7 +328,6 @@ int cache_destroy (cache_t cache) {
     if (!cache) return -1;
     while (list_dequeue(cache->list, &result) == 0) {
         tup = (tuple_t) result;
-        if (list_delete(cache->list, tup->list_node) == -1) return -1;
         free(tup);
     }
     if (list_free(cache->list) == -1) return -1;

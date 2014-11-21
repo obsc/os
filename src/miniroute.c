@@ -14,7 +14,7 @@
 #define CACHE_FRESH 3000
 
 typedef struct route {
-    long timestamp
+    long timestamp;
     int path_len;
     char path[MAX_ROUTE_LENGTH][8];
 }* route_t;
@@ -24,7 +24,7 @@ typedef struct waiting {
     int id;
     semaphore_t wait_disc;
     semaphore_t wait_for_data;
-    route_t route;    
+    route_t route;
 }* waiting_t;
 
 cache_t wait_cache;
