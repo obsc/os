@@ -275,8 +275,8 @@ int cache_set(cache_t cache, network_address_t key, void *value, void** output) 
         }
     } else {
         tup = (tuple_t) result;
-        tup->value = value;
         *output = NULL;
+        tup->value = value;
         return 0;
     }
 }
