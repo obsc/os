@@ -9,6 +9,8 @@
 #include "network.h"
 #include "list.h"
 
+#define TABLE_MULT 2
+
 typedef struct hashtable* hashtable_t;
 typedef struct tuple* tuple_t;
 
@@ -47,20 +49,20 @@ hashtable_t hashtable_new(int size) {
         free(hashtable);
         return NULL;
     }
-    hashtable->buckets = (list_t *) malloc (sizeof(list_t) * 2 * size);
+    hashtable->buckets = (list_t *) malloc (sizeof(list_t) * TABLE_MULT * size);
 
     if (!hashtable->buckets) {
         free(hashtable);
         return NULL;
     }
-    for (iterator = 0; iterator < 2 * size; iterator++) {
+    for (iterator = 0; iterator < TABLE_MULT * size; iterator++) {
         (hashtable->buckets)[iterator] = list_new();
         if (!((hashtable->buckets)[iterator])) {
             break;
         }
     }
 
-    if (iterator < 2 * size) {
+    if (iterator < TABLE_MULT * size) {
         for (; iterator > 0; iterator--) {
             list_free((hashtable->buckets)[iterator-1]);
         }
@@ -92,7 +94,7 @@ int hash_naive(network_address_t address, int size) {
 
     unmodded = hash_address(address);
 
-    result = ((int) unmodded) % (2 * size);
+    result = ((int) unmodded) % (TABLE_MULT * size);
 
     return result;
 }
@@ -196,8 +198,6 @@ int hashtable_free (hashtable_t hashtable) {
     free(hashtable);
     return 0;
 }
-
-
 
 /*
  * Return an empty cache of some specified size.  Returns NULL on error.

@@ -6,13 +6,63 @@
 #include "minisocket.h"
 #include "synch.h"
 #include "cache.h"
+#include "alarm.h"
+
+#define NUM_RETRY 3
+#define WAIT_DELAY 12000
+
+typedef struct route {
+    int path_len;
+    char path[MAX_ROUTE_LENGTH][8];
+}* route_t;
+
+typedef struct waiting {
+    int num_waiting;
+    int id;
+    semaphore_t wait_disc;
+    semaphore_t wait_for_data;
+    route_t route;    
+}* waiting_t;
 
 cache_t wait_cache;
 cache_t path_cache;
+semaphore_t path_mutex;
 semaphore_t wait_mutex;
+semaphore_t wait_limit; // Limits the number of concurrent discoveries
 
 char *dummy; // Represents a dummy bytearray to pass to send pkt
 unsigned int next_id; // Represents the currnt id value to send for discoveries
+
+waiting_t
+create_waiting() {
+    waiting_t wait;
+
+    wait = (waiting_t) malloc(sizeof(struct waiting));
+    if (!wait) return NULL;
+
+    wait->num_waiting = 1;
+    wait->wait_disc = semaphore_create();
+    wait->wait_for_data = semaphore_create();
+    wait->route = NULL;
+
+    if ( !wait->wait_disc || !wait->wait_for_data ) {
+        semaphore_destroy(wait->wait_disc);
+        semaphore_destroy(wait->wait_for_data);
+        free(wait);
+        return NULL;
+    }
+
+    wait->id = get_next_id();
+    semaphore_initialize(wait->wait_disc, 0);
+    semaphore_initialize(wait->wait_for_data, 0);
+}
+
+void
+destroy_waiting(waiting_t wait) {
+    semaphore_destroy(wait->wait_disc);
+    semaphore_destroy(wait->wait_for_data);
+    free(wait);
+}
 
 /* Increments and returns the next id
  */
@@ -75,7 +125,7 @@ create_disc_hdr(network_address_t dest_address, int id) {
 
     header->routing_packet_type = ROUTING_ROUTE_DISCOVERY;
     pack_address(header->destination, dest_address);
-    pack_unsigned_int(header->id, id); // TODO: CHANGE THIS
+    pack_unsigned_int(header->id, id);
     pack_unsigned_int(header->ttl, MAX_ROUTE_LENGTH);
     pack_unsigned_int(header->path_len, 0);
 
@@ -199,34 +249,75 @@ miniroute_handle(network_interrupt_arg_t *arg) {
 /* Performs any initialization of the miniroute layer, if required. */
 void
 miniroute_initialize() {
+    wait_cache = cache_new(SIZE_OF_ROUTE_CACHE);
     path_cache = cache_new(SIZE_OF_ROUTE_CACHE);
     wait_mutex = semaphore_create();
+    path_mutex = semaphore_create();
+    wait_limit = semaphore_create();
     dummy = (char *) malloc(1);
 
-    if ( !path_cache || !wait_mutex || !dummy ) {
+    if ( !wait_cache || !path_cache || !wait_mutex ||
+         !path_mutex || !wait_limit || !dummy ) {
+        cache_destroy(wait_cache);
         cache_destroy(path_cache);
         semaphore_destroy(wait_mutex);
+        semaphore_destroy(path_mutex);
+        semaphore_destroy(wait_limit);
         free(dummy);
         return;
     }
 
     semaphore_initialize(wait_mutex, 1);
+    semaphore_initialize(path_mutex, 1);
+    semaphore_initialize(wait_limit, SIZE_OF_ROUTE_CACHE);
+}
+
+void
+fail_wait(waiting_t wait) {
+    int i;
+
+    for (i = 0; i < wait->num_waiting - 1; i++) {
+        semaphore_V(wait->wait_for_data);
+    }
+}
+
+/*
+ * Times out a waiting flood discovery
+ */
+void unblock(void *w) {
+    waiting_t wait;
+
+    wait = (waiting_t) w;
+    semaphore_V(w->wait_disc);
 }
 
 /* Performs flood broadcasting to discover path to destination
- * Returns -1 on failure and 0 on success
  */
-int
-flood_discovery(network_address_t dest_address) {
-    //routing_header_t header;
+void
+flood_discovery(network_address_t dest_address, waiting_t wait) {
+    int i;
+    routing_header_t header;
+    alarm_id retry_alarm;
 
-    //header = create_disc_hdr(dest_address);
-    //if (!header) return -1;
+    header = create_disc_hdr(dest_address, wait->id);
+    if (!header) {
+        fail_wait(wait);
+        return;
+    }
 
-    //bcast_discovery(header);
-    //free(header);
+    for (i = 0; i < NUM_RETRY; i++) {
+        retry_alarm = register_alarm(WAIT_DELAY, unblock, wait);
+        bcast_discovery(header);
+        semaphore_P(wait->wait_disc);
+        if (wait->route != NULL) { // Success
+            free(header);
+            return;
+        }
+    }
 
-    return 0;
+    // 3 failures
+    free(header);
+    fail_wait(wait);
 }
 
 /* sends a miniroute packet, automatically discovering the path if necessary. See description in the
@@ -234,34 +325,57 @@ flood_discovery(network_address_t dest_address) {
  */
 int
 miniroute_send_pkt(network_address_t dest_address, int hdr_len, char* hdr, int data_len, char* data) {
-    int pathlen; // Length of the path
+    int cache_hit; // If we hit the path cache or not
     int pktlen; // Size of the packet
     routing_header_t data_hdr;
     char* full_data;
-    char path[MAX_ROUTE_LENGTH][8]; // The path to destination
+    void* route_node;
+    void* wait_node;
+    void* overflow_node;
+    route_t route;
+    waiting_t wait;
 
     pktlen = sizeof(struct routing_header) + hdr_len + data_len;
-
-    pathlen = 0; // TODO: CHANGE
 
     // sanity checks
     if (hdr_len < 0 || data_len < 0 || pktlen > MAX_NETWORK_PKT_SIZE)
         return -1;
 
     // Checks if the path is in the cache
-    semaphore_P(wait_mutex);
-    //pathlen = cache_get(path_cache, dest_address, &path);
-    semaphore_V(wait_mutex);
+    semaphore_P(path_mutex);
+    cache_hit = cache_get(path_cache, dest_address, &route_node);
+    semaphore_V(path_mutex);
+    route = (route_t) route_node;
 
-    // If not, discovery protocol, then check again
-    while (pathlen == -1) { // TODO: CHANGE THIS WHEN PIAZZA QUESTION RESOLVED
-        //flood_discovery();
+    if (cache_hit == -1) { // Cache miss
         semaphore_P(wait_mutex);
-        //pathlen = cache_get(path_cache, dest_address, &path);
-        semaphore_V(wait_mutex);
+        if (cache_get(wait_cache, dest_address, &wait_node) == -1) { // New dest
+            semaphore_V(wait_mutex);
+            semaphore_P(wait_limit);
+            wait = create_waiting();
+            cache_set(wait_cache, dest_address, wait, &overflow_node); // should not overflow
+            flood_discovery(dest_address, wait);
+        } else {
+            semaphore_V(wait_mutex);
+            wait = (waiting_t) wait_node;
+            wait->num_waiting++;
+            semaphore_P(wait->wait_for_data);
+        }
+        if (wait->route == NULL) { // Route discovery failure
+            wait->num_waiting--;
+            if (wait->num_waiting == 0) { // If last out, remove
+                cache_delete(wait_cache, dest_address);
+                destroy_waiting(wait);
+                semaphore_V(wait_limit);
+            }
+            return NULL;
+        } else { // Route discovery success
+            route = wait->route;
+        }
     }
+
     // We have successfully gotten a path
-    data_hdr = create_data_hdr(dest_address, pathlen, path);
+    data_hdr = create_data_hdr(dest_address, route->path_len, route->path);
 
     full_data = (char *) malloc(hdr_len + data_len);
     memcpy(full_data, hdr, hdr_len);
