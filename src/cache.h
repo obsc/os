@@ -20,7 +20,7 @@ extern cache_t cache_new(int);
 extern int cache_set(cache_t, network_address_t, void*, void**);
 
 /*
- * get the value of the specified key. Returns length of path (success) or -1 (failure)
+ * get the value of the specified key. Returns 0 (success) or -1 (failure)
  */
 extern int cache_get(cache_t, network_address_t, void**);
 

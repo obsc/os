@@ -234,7 +234,10 @@ int cache_set(cache_t cache, network_address_t key, void *value, void** output) 
     tuple_t evicted;
     void *l_node;
     void *c_node;
-    if (!cache || !key || !output) return -1;
+    if (!cache || !key || !output) {
+        *output = NULL;
+        return -1;
+    }
     if (hashtable_get(cache->hashtable, key, &result) == -1) {
 
         tup = (tuple_t) malloc (sizeof(struct tuple));
