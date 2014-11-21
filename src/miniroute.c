@@ -233,7 +233,7 @@ check_route(routing_header_t hdr) {
 
     for (i = 0; i < pathlen; i++) {
         unpack_address(hdr->path[i], other_address);
-        if (network_compare_network_addresses(my_address, dest_address) > 0) {
+        if (network_compare_network_addresses(my_address, other_address) > 0) {
             return 1;
         }
     }
