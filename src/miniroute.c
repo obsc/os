@@ -76,9 +76,43 @@ void
 destroy_waiting(waiting_t wait) {
     semaphore_destroy(wait->wait_disc);
     semaphore_destroy(wait->wait_for_data);
+    free(wait->route);
     free(wait);
 }
 
+/* Sets the cached route by using the received reply header
+ */
+void
+set_cached_route(network_address_t dest_address, routing_header_t hdr) {
+    void* route_node;
+    void* overflow_node;
+    route_t route;
+    route_t overflow;
+    int i;
+
+    if (cache_get(path_cache, dest_address, &route_node) == -1) { // Did not exist
+        route = (route_t) malloc(sizeof(struct route));
+        if (!route) return;
+    } else {
+        route = (route_t) route_node;
+        cache_delete(path_cache, dest_address);
+    }
+
+    route->path_len = unpack_unsigned_int(hdr->path_len);
+    for (i = 0; i < route->path_len; i++) { // Reverses path
+        memcpy(route->path[i], hdr->path[route->path_len - 1 - i], 8);
+    }
+    route->timestamp = time_ticks;
+    cache_set(path_cache, dest_address, route, &overflow_node);
+    if (overflow_node != NULL) { // cache overflow
+        overflow = (route_t) overflow_node;
+        free(overflow);
+    }
+}
+
+/* Gets the cache route for the destination address
+ * returns NULL if expired or doesn't exist
+ */
 route_t
 get_cached_route(network_address_t dest_address) {
     void* route_node;
@@ -266,32 +300,53 @@ void
 miniroute_handle(network_interrupt_arg_t *arg) {
     routing_header_t header;
     routing_header_t reply_hdr;
+    network_address_t dest_address;
+    void* wait_node;
+    waiting_t wait;
+    route_t route;
+    int i;
 
     header = (routing_header_t) arg->buffer;
 
     // Check routing type
     if (header->routing_packet_type == ROUTING_ROUTE_DISCOVERY) {
-        if (check_destination(header) > 0) { // We have reached the destination
+        if (check_destination(header) != 0) { // We have reached the destination
             reply_hdr = create_reply_hdr(header);
             send_reply(reply_hdr);
             free(reply_hdr);
         } else { // Rebroadcast
             increment_hdr(header);
-            if (!check_route(header)) {
+            if (check_route(header) == 0) {
                 bcast_discovery(header);
             }
         }
         free(arg);
     } else if (header->routing_packet_type == ROUTING_ROUTE_REPLY) {
-        if (check_destination(header) > 0) { // We have reached the destination
+        if (check_destination(header) != 0) { // We have reached the destination
+            unpack_address(header->path[0], dest_address);
+            if (cache_get(wait_cache, dest_address, &wait_node) != 0) {
+                wait = (waiting_t) wait_node;
+                if (wait->id == unpack_unsigned_int(header->id)) {
+                    route = (route_t) malloc(sizeof(struct route));
+                    if (!route) return;
 
+                    route->path_len = unpack_unsigned_int(header->path_len);
+                    for (i = 0; i < route->path_len; i++) { // Reverses path
+                        memcpy(route->path[i], hdr->path[route->path_len - 1 - i], 8);
+                    }
+                    route->timestamp = time_ticks;
+                    wait->route = route;
+                    semaphore_V(wait->wait_disc);
+                    set_cached_route(dest_address, header);
+                }
+            }
         } else { // Continue sending
             increment_hdr(header);
             send_reply(header);
         }
         free(arg);
     } else if (header->routing_packet_type == ROUTING_DATA) {
-        if (check_destination(header) > 0) { // We have reached the destination
+        if (check_destination(header) != 0) { // We have reached the destination
             // Check protocol type
             if (arg->buffer[sizeof(struct routing_header)] == PROTOCOL_MINIDATAGRAM) {
                 minimsg_handle(arg);
