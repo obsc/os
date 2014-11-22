@@ -46,7 +46,7 @@ minimsg_handle(network_interrupt_arg_t *arg) {
     int source;
     int destination;
 
-    header = (mini_header_t) arg->buffer + sizeof(struct routing_header);
+    header = (mini_header_t) (arg->buffer + sizeof(struct routing_header));
     source = unpack_unsigned_short(header->source_port);
     destination = unpack_unsigned_short(header->destination_port);
 
@@ -272,8 +272,8 @@ minimsg_send(miniport_t local_unbound_port, miniport_t local_bound_port, minimsg
     pack_unsigned_short(header->destination_port, local_bound_port->u.bound.remote_unbound_port);
 
     // Frees the header after sending the packet
-    if (network_send_pkt(local_bound_port->u.bound.remote_address, sizeof(struct mini_header), (char *) header, len, msg) == -1) {
-        free(header);
+    if (miniroute_send_pkt(local_bound_port->u.bound.remote_address, sizeof(struct mini_header), (char *) header, len, msg) == -1) {
+	free(header);
         return -1;
     }
     free(header);

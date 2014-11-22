@@ -313,7 +313,6 @@ miniroute_handle(network_interrupt_arg_t *arg) {
         if (check_destination(header) != 0) { // We have reached the destination
             reply_hdr = create_reply_hdr(header);
             send_reply(reply_hdr);
-            free(reply_hdr);
         } else { // Rebroadcast
             increment_hdr(header);
             if (check_route(header) == 0) {
@@ -324,7 +323,7 @@ miniroute_handle(network_interrupt_arg_t *arg) {
     } else if (header->routing_packet_type == ROUTING_ROUTE_REPLY) {
         if (check_destination(header) != 0) { // We have reached the destination
             unpack_address(header->path[0], dest_address);
-            if (cache_get(wait_cache, dest_address, &wait_node) != 0) {
+            if (cache_get(wait_cache, dest_address, &wait_node) == 0) {
                 wait = (waiting_t) wait_node;
                 if (wait->id == unpack_unsigned_int(header->id)) {
                     route = (route_t) malloc(sizeof(struct route));
@@ -424,6 +423,7 @@ flood_discovery(network_address_t dest_address, waiting_t wait) {
         retry_alarm = register_alarm(WAIT_DELAY, timeout, wait);
         bcast_discovery(header);
         semaphore_P(wait->wait_disc);
+	deregister_alarm(retry_alarm);
         if (wait->route != NULL) { // Success
             free(header);
             return;
@@ -492,7 +492,7 @@ miniroute_send_pkt(network_address_t dest_address, int hdr_len, char* hdr, int d
     full_data = (char *) malloc(hdr_len + data_len);
     memcpy(full_data, hdr, hdr_len);
     memcpy(full_data + hdr_len, data, data_len);
-
+    
     if (send_data(data_hdr, hdr_len + data_len, full_data) == -1) {
         free(data_hdr);
         return -1;
