@@ -127,30 +127,6 @@ list_free (list_t list) {
 }
 
 /*
- * list_iterate(q, f, t, o) calls f(x,t,o) for each x in q.
- * q and f should be non-null.
- *
- * returns 0 (success) or -1 (failure)
- */
-int
-list_iterate(list_t list, func_t f, void* arg, void** output) {
-	list_node_t n = NULL;
-
-	checkNull(list);
-	checkNull(f);
-
-	n = list->head;
-
-	while (n) {
-		f(n->data, arg, output);
-
-		n = n->next;
-	}
-
-	return 0;
-}
-
-/*
  * Return the number of items in the list, or -1 if an error occured
  */
 int
@@ -204,7 +180,7 @@ void *node_value(void *node) {
     list_node_t n;
     if (!node) return NULL;
     n = (list_node_t) node;
-    return n->value;
+    return n->data;
 }
 
 /*

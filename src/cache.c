@@ -117,8 +117,8 @@ tuple_t hashtable_contains(hashtable_t hashtable, network_address_t key) {
   //    return NULL;
   //  }
 
-    // if (!hashtable || !key) return NULL;
-    // hashed_key = hash_naive(key, hashtable->max_size);
+    if (!hashtable || !key) return NULL;
+    hashed_key = hash_naive(key, hashtable->max_size);
     // node = list_head(hashtable->buckets[hashed_key]);
     // while (node) {
     //     result = (tuple_t) node_value(node);
