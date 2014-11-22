@@ -56,7 +56,7 @@ int sender(int* arg) {
 
   minithread_fork(receiver, NULL);
   while (1) {
-    len = miniterm_read(buffer, BUFFER_SIZE);
+    len = miniterm_read(buffer, BUFFER_SIZE) + 1;
 
     bytes_sent=0;
     while (bytes_sent!=len){

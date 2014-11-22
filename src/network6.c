@@ -84,13 +84,13 @@ transmit_first(int* arg) {
 
 int
 main(int argc, char** argv) {
-    short fromport, toport;
-    fromport = atoi(argv[1]);
-    toport = atoi(argv[2]);
-    network_udp_ports(fromport,toport); 
+    //short fromport, toport;
+    //fromport = atoi(argv[1]);
+    //toport = atoi(argv[2]);
+    //network_udp_ports(fromport,toport); 
 
-    if (argc > 3) {
-        hostname = argv[3];
+    if (argc > 1) {
+        hostname = argv[1];
         minithread_system_initialize(transmit_first, NULL);
     }
     else {
