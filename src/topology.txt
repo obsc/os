@@ -1,7 +1,3 @@
-csug07.csuglab.cornell.edu
-csug08.csuglab.cornell.edu
-csug09.csuglab.cornell.edu
+localhost
 
-.x.
-x..
-...
+.
