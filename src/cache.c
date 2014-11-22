@@ -106,11 +106,8 @@ tuple_t hashtable_contains(hashtable_t hashtable, network_address_t key) {
     tuple_t result;
     int hashed_key;
     void *node;
-    int checked;
-
-    if (!hashtable || !key) return NULL;
-    hashed_key = hash_naive(key, hashtable->max_size);
-  //  *output = NULL;
+    //int checked;
+      //  *output = NULL;
   //  input = (void *) key;
   //  list_iterate(hashtable->buckets[hashed_key], compare_keys, input, output);
   //  if ((*output) != NULL) {
@@ -120,20 +117,33 @@ tuple_t hashtable_contains(hashtable_t hashtable, network_address_t key) {
   //    return NULL;
   //  }
 
-     checked = 0;
-     while (checked < list_length(hashtable->buckets[hashed_key])) {
-         if (list_dequeue(hashtable->buckets[hashed_key], &node) == 0) {
-             result = (tuple_t) node;
-             list_append(hashtable->buckets[hashed_key], result);
-             if (network_compare_network_addresses(key, result->key)) {
-                 return result;
-             }
-             checked += 1;
-         } else {
-             return NULL;
-         }
-     }
-     return NULL;
+    if (!hashtable || !key) return NULL;
+    hashed_key = hash_naive(key, hashtable->max_size);
+    node = list_head(hashtable->buckets[hashed_key]);
+    while (node) {
+        result = (tuple_t) node_value(node);
+        if (network_compare_network_addresses(key, result->key)) {
+            return result;
+        }
+        node = node_next(node);
+    }
+    return NULL;
+
+
+    // checked = 0;
+    // while (checked < list_length(hashtable->buckets[hashed_key])) {
+    //     if (list_dequeue(hashtable->buckets[hashed_key], &node) == 0) {
+    //         result = (tuple_t) node;
+    //         list_append(hashtable->buckets[hashed_key], result);
+    //         if (network_compare_network_addresses(key, result->key)) {
+    //             return result;
+    //         }
+    //         checked += 1;
+    //     } else {
+    //         return NULL;
+    //     }
+    // }
+    // return NULL;
 }
 
 /*

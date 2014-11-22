@@ -188,3 +188,32 @@ list_delete(list_t list, void *node) {
 	return 0;
 
 }
+
+/*
+ * Get the first element of the list, returns NULL on failure
+ */
+void *list_head(list_t list) {
+    if (!list) return NULL;
+    return ((void *) list->head);
+}
+
+/*
+ * Get the value of the node, returns NULL on failure
+ */
+void *node_value(void *node) {
+    list_node_t n;
+    if (!node) return NULL;
+    n = (list_node_t) node;
+    return n->value;
+}
+
+/*
+ * Get the node's next element, returns NULL on failure
+ */
+void *node_next(void *node) {
+    list_node_t n;
+    if (!node) return NULL;
+    n = (list_node_t) node;
+    return ((void *) n->next);
+
+}
