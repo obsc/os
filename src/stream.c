@@ -8,6 +8,7 @@
 #include "stream.h"
 #include "synch.h"
 #include "miniheader.h"
+#include "miniroute.h"
 
 struct stream
 {
@@ -89,7 +90,7 @@ int stream_take(stream_t stream, int request, char * output) {
     while (request_left != 0 && stream_is_empty(stream) == 0) {
 
         semaphore_P(stream->lock);
-        start_read = sizeof(struct mini_header_reliable) + stream->index;
+        start_read = sizeof(struct routing_header) + sizeof(struct mini_header_reliable) + stream->index;
         queue_peek(stream->data, &node);
         semaphore_V(stream->lock);
         current_chunk = (network_interrupt_arg_t *) node;
