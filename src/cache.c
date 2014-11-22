@@ -199,7 +199,7 @@ int hashtable_free (hashtable_t hashtable) {
     int iterator;
 
     if (!hashtable) return -1;
-    for (iterator = 0; iterator < hashtable->max_size; iterator ++) {
+    for (iterator = 0; iterator < 2 * hashtable->max_size; iterator ++) {
         if (list_free(hashtable->buckets[iterator]) == -1) {
             return -1;
         }
