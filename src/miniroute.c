@@ -423,7 +423,7 @@ flood_discovery(network_address_t dest_address, waiting_t wait) {
         retry_alarm = register_alarm(WAIT_DELAY, timeout, wait);
         bcast_discovery(header);
         semaphore_P(wait->wait_disc);
-	deregister_alarm(retry_alarm);
+        deregister_alarm(retry_alarm);
         if (wait->route != NULL) { // Success
             free(header);
             return;
@@ -495,9 +495,21 @@ miniroute_send_pkt(network_address_t dest_address, int hdr_len, char* hdr, int d
     
     if (send_data(data_hdr, hdr_len + data_len, full_data) == -1) {
         free(data_hdr);
+        wait->num_waiting--;
+        if (wait->num_waiting == 0) { // If last out, remove
+            cache_delete(wait_cache, dest_address);
+            destroy_waiting(wait);
+            semaphore_V(wait_limit);
+        }
         return -1;
     }
 
+    wait->num_waiting--;
+    if (wait->num_waiting == 0) { // If last out, remove
+        cache_delete(wait_cache, dest_address);
+        destroy_waiting(wait);
+        semaphore_V(wait_limit);
+    }
     free(data_hdr);
     return hdr_len + data_len;
 }
