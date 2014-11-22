@@ -65,7 +65,7 @@ create_waiting() {
     }
 
     wait->id = get_next_id();
-    semaphore_initialize(wait->wait_disc, 0);
+    semaphore_initialize(wait->wait_disc, 1);
     semaphore_initialize(wait->wait_for_data, 0);
     return wait;
 }
@@ -356,6 +356,8 @@ miniroute_handle(network_interrupt_arg_t *arg) {
         free(arg);
     } else if (header->routing_packet_type == ROUTING_DATA) {
         if (check_destination(header) != 0) { // We have reached the destination
+            unpack_address(header->path[0], dest_address);
+            set_cached_route(dest_address, header);
             // Check protocol type
             if (arg->buffer[sizeof(struct routing_header)] == PROTOCOL_MINIDATAGRAM) {
                 minimsg_handle(arg);
@@ -419,7 +421,7 @@ flood_discovery(network_address_t dest_address, waiting_t wait) {
         complete_wait(wait);
         return;
     }
-
+    semaphore_P(wait->wait_disc);
     for (i = 0; i < NUM_RETRY; i++) {
         retry_alarm = register_alarm(WAIT_DELAY, timeout, wait);
         bcast_discovery(header);
@@ -487,6 +489,7 @@ miniroute_send_pkt(network_address_t dest_address, int hdr_len, char* hdr, int d
             route = wait->route;
         }
     }
+    
     // We have successfully gotten a path
     data_hdr = create_data_hdr(dest_address, route->path_len, route->path);
 

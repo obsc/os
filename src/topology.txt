@@ -1,3 +1,5 @@
-localhost
+csug07.csuglab.cornell.edu
+csug11.csuglab.cornell.edu
 
-.
+.x
+x.

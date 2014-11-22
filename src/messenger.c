@@ -2,6 +2,7 @@
 #include "minisocket.h"
 #include "synch.h"
 #include "read.h"
+#include "read_private.h"
 
 #include <stdlib.h>
 #include <stdio.h>
@@ -26,7 +27,7 @@ int receiver(int *arg) {
       minisocket_close(socket_glob);
       return 0;
     } else {
-      printf("%s\n", buffer);
+      printf("%s", buffer);
     }
   }
   return 0;
@@ -36,6 +37,7 @@ int sender(int* arg) {
   char buffer[BUFFER_SIZE];
   int bytes_sent;
   int len;
+  int trans_bytes;
   network_address_t address;
   minisocket_error error;
 
@@ -58,7 +60,7 @@ int sender(int* arg) {
 
     bytes_sent=0;
     while (bytes_sent!=len){
-      int trans_bytes=
+      trans_bytes=
         minisocket_send(socket_glob,buffer+bytes_sent,
             len-bytes_sent, &error);
       //printf("Sent %d bytes.\n", trans_bytes);
@@ -74,6 +76,7 @@ int sender(int* arg) {
 }
 
 int main(int argc, char** argv) {
+  miniterm_initialize();
 
   if (argc > 1) {
       hostname = argv[1];
