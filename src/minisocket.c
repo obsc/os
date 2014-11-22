@@ -261,7 +261,7 @@ minisocket_handle(network_interrupt_arg_t *arg) {
     int seq;
     int ack;
 
-    header = (mini_header_reliable_t) arg->buffer + sizeof(struct routing_header);
+    header = (mini_header_reliable_t) (arg->buffer + sizeof(struct routing_header));
     unpack_address(header->source_address, source);
     source_port = unpack_unsigned_short(header->source_port);
     port = unpack_unsigned_short(header->destination_port);
@@ -520,7 +520,9 @@ client_handshake(minisocket_t socket, minisocket_error *error) {
 
                 semaphore_P(socket->lock);
                 retry_alarm = register_alarm(timeout, transition_timer, socket->u.client.client_state); // Set up alarm
+                //printf("sending syn\n");
                 reply(socket, MSG_SYN);
+                //printf("sent syn\n");
 
                 semaphore_V(socket->lock);
 

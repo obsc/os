@@ -319,6 +319,7 @@ miniroute_handle(network_interrupt_arg_t *arg) {
 
     // Check routing type
     if (header->routing_packet_type == ROUTING_ROUTE_DISCOVERY) {
+        //printf("discovery\n");
         if (check_destination(header) != 0) { // We have reached the destination
             reply_hdr = create_reply_hdr(header);
             send_reply(reply_hdr);
@@ -330,6 +331,7 @@ miniroute_handle(network_interrupt_arg_t *arg) {
         }
         free(arg);
     } else if (header->routing_packet_type == ROUTING_ROUTE_REPLY) {
+        //printf("reply\n");
         if (check_destination(header) != 0) { // We have reached the destination
             unpack_address(header->path[0], dest_address);
             if (cache_get(wait_cache, dest_address, &wait_node) == 0) {
@@ -355,6 +357,7 @@ miniroute_handle(network_interrupt_arg_t *arg) {
         }
         free(arg);
     } else if (header->routing_packet_type == ROUTING_DATA) {
+        //printf("data\n");
         if (check_destination(header) != 0) { // We have reached the destination
             // Check protocol type
             if (arg->buffer[sizeof(struct routing_header)] == PROTOCOL_MINIDATAGRAM) {
@@ -449,6 +452,7 @@ miniroute_send_pkt(network_address_t dest_address, int hdr_len, char* hdr, int d
     route_t route;
     waiting_t wait;
 
+    wait = NULL;
     pktlen = sizeof(struct routing_header) + hdr_len + data_len;
 
     // sanity checks
@@ -486,30 +490,34 @@ miniroute_send_pkt(network_address_t dest_address, int hdr_len, char* hdr, int d
             route = wait->route;
         }
     }
-
+    
     // We have successfully gotten a path
     data_hdr = create_data_hdr(dest_address, route->path_len, route->path);
 
     full_data = (char *) malloc(hdr_len + data_len);
     memcpy(full_data, hdr, hdr_len);
     memcpy(full_data + hdr_len, data, data_len);
-    
+
     if (send_data(data_hdr, hdr_len + data_len, full_data) == -1) {
         free(data_hdr);
+	if (wait != NULL) {
+            wait->num_waiting--;
+            if (wait->num_waiting == 0) { // If last out, remove
+                cache_delete(wait_cache, dest_address);
+                destroy_waiting(wait);
+                semaphore_V(wait_limit);
+            }
+        }
+        return -1;
+    }
+
+    if (wait != NULL) {
         wait->num_waiting--;
         if (wait->num_waiting == 0) { // If last out, remove
             cache_delete(wait_cache, dest_address);
             destroy_waiting(wait);
             semaphore_V(wait_limit);
         }
-        return -1;
-    }
-
-    wait->num_waiting--;
-    if (wait->num_waiting == 0) { // If last out, remove
-        cache_delete(wait_cache, dest_address);
-        destroy_waiting(wait);
-        semaphore_V(wait_limit);
     }
     free(data_hdr);
     return hdr_len + data_len;
