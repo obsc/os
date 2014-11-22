@@ -161,8 +161,7 @@ send_data(routing_header_t hdr, int len, char* data) {
     if (i >= MAX_ROUTE_LENGTH - 1) {
         return 0;
     }
-
-    unpack_address(hdr->path[i+1], next_addr);
+    unpack_address(hdr->path[i], next_addr);
     return network_send_pkt(next_addr, sizeof(struct routing_header), (char *) hdr, len, data);
 }
 
@@ -220,11 +219,11 @@ create_reply_hdr(routing_header_t hdr) {
     pack_unsigned_int(hdr->ttl, MAX_ROUTE_LENGTH);
     pack_unsigned_int(hdr->path_len, pathlen + 1);
     pack_address(hdr->path[pathlen], my_address);
-
+ 
     for (i = 0; i < (pathlen + 1) / 2; i++) { // Reverses the path
         memcpy(temp, hdr->path[i], 8);
-        memcpy(hdr->path[i], hdr->path[pathlen - 1 - i], 8);
-        memcpy(hdr->path[pathlen - 1 - i], temp, 8);
+        memcpy(hdr->path[i], hdr->path[pathlen - i], 8);
+        memcpy(hdr->path[pathlen - i], temp, 8);
     }
 
     return hdr;
@@ -319,9 +318,9 @@ miniroute_handle(network_interrupt_arg_t *arg) {
 
     // Check routing type
     if (header->routing_packet_type == ROUTING_ROUTE_DISCOVERY) {
-        //printf("discovery\n");
         if (check_destination(header) != 0) { // We have reached the destination
             reply_hdr = create_reply_hdr(header);
+            increment_hdr(reply_hdr);
             send_reply(reply_hdr);
         } else { // Rebroadcast
             increment_hdr(header);
@@ -331,7 +330,6 @@ miniroute_handle(network_interrupt_arg_t *arg) {
         }
         free(arg);
     } else if (header->routing_packet_type == ROUTING_ROUTE_REPLY) {
-        //printf("reply\n");
         if (check_destination(header) != 0) { // We have reached the destination
             unpack_address(header->path[0], dest_address);
             if (cache_get(wait_cache, dest_address, &wait_node) == 0) {
@@ -357,7 +355,6 @@ miniroute_handle(network_interrupt_arg_t *arg) {
         }
         free(arg);
     } else if (header->routing_packet_type == ROUTING_DATA) {
-        //printf("data\n");
         if (check_destination(header) != 0) { // We have reached the destination
             // Check protocol type
             if (arg->buffer[sizeof(struct routing_header)] == PROTOCOL_MINIDATAGRAM) {
@@ -490,7 +487,6 @@ miniroute_send_pkt(network_address_t dest_address, int hdr_len, char* hdr, int d
             route = wait->route;
         }
     }
-    
     // We have successfully gotten a path
     data_hdr = create_data_hdr(dest_address, route->path_len, route->path);
 
