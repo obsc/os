@@ -293,6 +293,15 @@ check_route(routing_header_t hdr) {
     return 0;
 }
 
+void
+complete_wait(waiting_t wait) {
+    int i;
+
+    for (i = 0; i < wait->num_waiting - 1; i++) {
+        semaphore_V(wait->wait_for_data);
+    }
+}
+
 /* Handler for miniroutes messages
  * Assumes interrupts are disabled within
  */
@@ -336,6 +345,7 @@ miniroute_handle(network_interrupt_arg_t *arg) {
                     route->timestamp = time_ticks;
                     wait->route = route;
                     semaphore_V(wait->wait_disc);
+                    complete_wait(wait);
                     set_cached_route(dest_address, header);
                 }
             }
@@ -386,15 +396,6 @@ miniroute_initialize() {
     semaphore_initialize(wait_limit, SIZE_OF_ROUTE_CACHE);
 }
 
-void
-fail_wait(waiting_t wait) {
-    int i;
-
-    for (i = 0; i < wait->num_waiting - 1; i++) {
-        semaphore_V(wait->wait_for_data);
-    }
-}
-
 /*
  * Times out a waiting flood discovery
  */
@@ -415,7 +416,7 @@ flood_discovery(network_address_t dest_address, waiting_t wait) {
 
     header = create_disc_hdr(dest_address, wait->id);
     if (!header) {
-        fail_wait(wait);
+        complete_wait(wait);
         return;
     }
 
@@ -432,7 +433,7 @@ flood_discovery(network_address_t dest_address, waiting_t wait) {
 
     // 3 failures
     free(header);
-    fail_wait(wait);
+    complete_wait(wait);
 }
 
 /* sends a miniroute packet, automatically discovering the path if necessary. See description in the
