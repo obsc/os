@@ -1,91 +1,41 @@
 Rene Zhang - rz99
 Fukang Wen - fw224
 
-Implementation details of Project 3 for CS4411 - Fall 2014
+Implementation details of Project 5 for CS4411 - Fall 2014
 ================================================================================
 Important Design Decisions
-  - We assume it is the job of minisocket_send to fragment the input message
-    into fragments of data to send, thus, it will always try to send as many
-    fragments as it can before failing.
-  - We treat MSG_FIN packets similarly to data packets: we give it its own seq
-    and ack value. 
+  - The cache is implemented as a FIFO cache. This is chosen over alternatives
+  like LRU cache because FIFO lends itself better to our case of getting rid
+  of paths that are "stale" (in the cache for more than 3 seconds).
+  - We double the amount of "buckets" in the hashtable than the max amount
+  specified by the user to reduce collision for small numbers.
 
 ================================================================================
-Minisocket
-  - Our network handler handles replying to messages with MSG_ACK
-  - To differentiate ack packets and data packets, we used the size of the
-    packet (it is considered an ack if the packet is empty)
-  - MSG_FIN is transmitted like a data packet (with the current syn and ack values)
-  - network_intterupt_arg_t's are mostly freed in the network handler. Only data
-    packets are freed in receive.
-  - server and client creation result in a blocking handshaking call. If the
-    call succeeds, then the socket will be created, otherwise the socket creation
-    will fail.
-  - Minisocket_send is implemented using a finite state machine with 4 states.
-    One state is the acknowledge state where we receive an ack packet from the
-    remote connection and move on to the next chunk of data. One state is the
-    send state where we try to send data until the maxed number of retries.
-    One state is the closed state where it indicates that the minisocket is
-    closed and we should terminate. One state is the acknowledged and closed state
-    where it indicates that the sender received a MSG_FIN after an ack and should go
-    to the closed state after the current acknowledge state.
-  - Minisocket_send blocks each time after it sends something and waits for
-    either the network_handler to wake it up after receiving an ack, or the
-    alarm to wake it up after some timeout time.
-  - We decide that it's the minisocket_send's job to fragment and send the data
-    in the largest chunks possible.
-  - Minisocket_receive is implemented using a finite state machine with 3 states.
-    One state is the receiving state where we take data from the stream. One state
-    is the closed state where it indicates that the minisocket is closed. One state
-    is the acknowledged and closed state where it indicates that it should go to
-    the closed state after either all of the receivers exit or data is used up.
-  - Minisocket_receive blocks if the stream is empty and until the stream has some
-    data in it.
-  - Minisocket_close is implemented using a finite state machine with 3 states.
-  - Minisocket_close attempts to send MSG_FIN packets to the remote connection
-    until it reaches the max number of retries. It also sends signals to waiting
-    minisocket_send and minisocket_receive applications to tell them to terminate
-    in the closed state. Then, it blocks until all of these send and receive
-    applications have exited. Finally, the socket is freed and minisocket_close returns.
-  - If there are no send or receive threads running, then close will free the
-    socket, otherwise, the last send or receive thread will handle freeing the
-    socket.
+Miniroute
 
 ================================================================================
-Stream
-  - Implements a stream using a queue, where each node holds an interrupt_arg_t
-  - Stream contains the index that denotes where the next data of the current
-    node starts
-  - We implement stream_add as efficiently as possible because this is called
-    by the network handler. stream_add simply append the interrupt_arg_t onto
-    the queue
-  - We implement stream_take to take as much data as available at this time to
-    meet the needs of the request, which takes longer as it loops over the whole
-    stream in the worst case. However, this is fine as stream_take is called
-    by the user application.
+Cache
+  - A cache implemented using a doubly linked list and a hashtable.
+  - The cache associates network_address_t with a void * (pointer to some struct)
+  that the user specifies.
+  - We introduce a tuple holding (key, value, list node, hashtable node) so that
+  the doubly linked list has a direct pointer to the item in the hashtable and
+  vice versa. This is so we can perform all the necessary constant time
+  operations in the cache.
+  - The hashtable is a fixed sized array holding a specified number of doubly
+  linked lists. We use chaining to deal with collisions.
+  - We create twice as many "buckets" in the hashtable as the size given by the user 
+  in order to reduce collision for small numbers.
 
 ================================================================================
-State
-  - A finite state machine implementation
-  - Allows our code to block until a transition happens
-  - Only allows one thing waiting for a transition to proceed at a time
-
+List
+  - A doubly linked list implementation
+  - This is private use for the cache, because we need a list implementation
+  that performs delete in O(1) (which the current queue does not support)
 ================================================================================
 Test cases
 
-conn-network4
-  - This includes two tests (1 is commented out). One test spawns 2 transmitter
-    and 1 receiver, where the transmitters close the socket before sending. This
-    results in error message from 1 transmitter in connecting to server, and
-    from each of the other transmitter and receiver. One test spawns 2 receiver
-    and 1 transmitter, where the transmitter should successfully send. One
-    receiver should error on connecting to server while the rest should run
-    just like conn-network1.
-
-handshake
-  - Establishes a connection between the client and host by handshaking
-
-conn-network5
-  - Stress tests the creations, handshakes, and closes of minisockets
+cache_test
+  - Unit test for cache interface
 ================================================================================
 
