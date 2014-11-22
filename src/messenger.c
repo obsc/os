@@ -78,14 +78,12 @@ int sender(int* arg) {
 
 int main(int argc, char** argv) {
 
-  if (argc > 2) {
-      hostname = argv[2];
-      port = atoi(argv[1]);
+  if (argc > 1) {
+      hostname = argv[1];
       version = 1;
       minithread_system_initialize(sender, NULL);
   }
-  else if (argc > 1) {
-      port = atoi(argv[1]);
+  else {
       version = 2;
       minithread_system_initialize(sender, NULL);
   }
