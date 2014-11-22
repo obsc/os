@@ -18,7 +18,6 @@ int receiver(int *arg) {
   char buffer[BUFFER_SIZE];
   minisocket_error error;
   int len;
-  int i;
 
   while (1) {
     len = minisocket_receive(socket_glob,buffer, BUFFER_SIZE, &error);
