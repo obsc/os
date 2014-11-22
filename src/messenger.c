@@ -27,9 +27,7 @@ int receiver(int *arg) {
       minisocket_close(socket_glob);
       return 0;
     } else {
-      for (i = 0; i < len; i++) {
-        printf("%c", buffer[i]);
-      }
+      printf("%s\n", buffer);
     }
   }
   return 0;
