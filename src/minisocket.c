@@ -120,7 +120,7 @@ reply_to_address(minisocket_t socket, char message_type, network_address_t dest,
     header = create_header_to_address(socket, dest, dest_port, &err);
     if ( err == SOCKET_NOERROR ) {
         header->message_type = message_type;
-        network_send_pkt(dest, sizeof(struct mini_header_reliable), (char *) header, 0, dummy);
+        miniroute_send_pkt(dest, sizeof(struct mini_header_reliable), (char *) header, 0, dummy);
         free(header);
     }
 }
@@ -772,7 +772,7 @@ minisocket_send(minisocket_t socket, minimsg_t msg, int len, minisocket_error *e
                 header->message_type = MSG_ACK;
                 retry_alarm = register_alarm(timeout, transition_timer, socket->send_state);
                 // create alarm to timeout
-                network_send_pkt(socket->remote_address, sizeof(struct mini_header_reliable), (char *) header, size, msg+message_iterator);
+                miniroute_send_pkt(socket->remote_address, sizeof(struct mini_header_reliable), (char *) header, size, msg+message_iterator);
                 free(header);
 
                 semaphore_V(socket->lock);
