@@ -1,3 +1,9 @@
+/*
+ * Messenger application, syntax:
+ * ./messenger <host name> where
+ * the one where messenger is not specified
+ * should be ran first.
+ */
 #include "minithread.h"
 #include "minisocket.h"
 #include "synch.h"

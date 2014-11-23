@@ -15,6 +15,7 @@ Important Design Decisions
   over the max size of cache. Otherwise, they are just considered stale.
   - We cache the found path backwards as well in order to avoid the network
   handler blocking on finding a route (path always guaranteed to be valid)
+  - Our messenger application specifies the hosts when creating the application.
 
 ================================================================================
 Miniroute
@@ -56,6 +57,18 @@ Cache
   - We create twice as many "buckets" in the hashtable as the size given by the user 
   in order to reduce collision for small numbers.
 
+================================================================================
+Messenger
+  - A chat program that talks between two connections. The syntax is
+    ./messenger
+  on the first connection and
+    ./messenger <host name>
+  on the second connection where <host name> is the host name of the first
+  connection.
+  - The application detects keyboard interrupts and sends on every endline (press
+  enter to send). The application also receives data and displays it.
+  - We interpret "being able to specify host" as being able to choose a host
+  to connect to when running the application.
 ================================================================================
 List
   - A doubly linked list implementation
