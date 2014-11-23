@@ -10,20 +10,27 @@ Important Design Decisions
   - We double the amount of "buckets" in the hashtable than the max amount
   specified by the user to reduce collision for small numbers.
   - We use timestamps in miniroute to check if the path is still valid by checking
-  elapsed time when we get the paths.
+  elapsed time when we get the paths. Because of this, we don't use timers
+  for evicting stale paths. Instead, paths are only evicted and freed when we go
+  over the max size of cache. Otherwise, they are just considered stale.
   - We cache the found path backwards as well in order to avoid the network
   handler blocking on finding a route (path always guaranteed to be valid)
 
 ================================================================================
 Miniroute
-  - network interrupt handler calls miniroute handler first, which then calls
-  either minimsg handler or minisocket handler if applicable.
-  - We send network discovery packets to search for a path to the destination,
-  which then sends reply packets back.
+  - network interrupt handler calls miniroute handler first, which then handles
+  discovery and reply packets. If the packet is a data packet, then it
+  will call the respective handlers for minimsg and minisocket.
+  - When sending discovery packets, new broadcasts are not made if the node
+  is already in the path.
   - Upon finding a path, we update the cache of paths with this found path
-  and use it to send the message.
+  in addition to directly providing it to the waiting threads. This is to make
+  sure that the paths don't become stale in the 3 second interview before the
+  waiting threads are all scheduled and run
   - Routing between locations is done by checking the path information and
   updating it before forwarding to the next location in the path.
+  - TTL is modified just before sending, so the first node to send a message
+  will be sending with a TTL value of max - 1.
   - We use timestamps to check if a path is still valid, this is to avoid 
   the potential problems alarms can bring (such as route becomes invalid
   due to the alarm in the middle of using it)
@@ -33,6 +40,7 @@ Miniroute
   - We create structures to hold the path information and pass these pointers
   to be cached and also free them when we are done with them (timed out) inside
   miniroute.
+  - We decided to use three 12 second timers for timing out the discovery
 
 ================================================================================
 Cache
