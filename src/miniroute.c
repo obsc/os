@@ -65,7 +65,7 @@ create_waiting() {
     }
 
     wait->id = get_next_id();
-    semaphore_initialize(wait->wait_disc, 1);
+    semaphore_initialize(wait->wait_disc, 0);
     semaphore_initialize(wait->wait_for_data, 0);
     return wait;
 }
@@ -421,7 +421,7 @@ flood_discovery(network_address_t dest_address, waiting_t wait) {
         complete_wait(wait);
         return;
     }
-    semaphore_P(wait->wait_disc);
+    
     for (i = 0; i < NUM_RETRY; i++) {
         retry_alarm = register_alarm(WAIT_DELAY, timeout, wait);
         bcast_discovery(header);

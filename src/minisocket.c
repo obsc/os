@@ -18,7 +18,7 @@
 
 enum { LISTEN = 1, SYN_RECEIVED, S_ESTABLISHED };// Server state
 enum { SYN_SENT = 1, C_ESTABLISHED, C_CLOSING };// Client state
-enum { SEND_SENDING = 1, SEND_ACK, SEND_ACKCLOSE, SEND_CLOSE};// Send state
+enum { SEND_IDLE = 1, SEND_SENDING, SEND_ACK, SEND_ACKCLOSE, SEND_CLOSE};// Send state
 enum { RECEIVE_RECEIVING = 1, RECEIVE_DATACLOSE, RECEIVE_CLOSE};// Receive state
 enum { OPEN = 1, CLOSING , CLOSED }; // Close state
 
@@ -520,9 +520,7 @@ client_handshake(minisocket_t socket, minisocket_error *error) {
 
                 semaphore_P(socket->lock);
                 retry_alarm = register_alarm(timeout, transition_timer, socket->u.client.client_state); // Set up alarm
-                //printf("sending syn\n");
                 reply(socket, MSG_SYN);
-                //printf("sent syn\n");
 
                 semaphore_V(socket->lock);
 
@@ -728,18 +726,17 @@ minisocket_send(minisocket_t socket, minimsg_t msg, int len, minisocket_error *e
     socket->seq++;
     semaphore_V(socket->lock);
 
-    if (get_state(socket->send_state) == SEND_ACK) {
-        set_state(socket->send_state, SEND_SENDING);
-    }
-
     // iterate until no more data to send
     while (len_left > 0) {
-
         // find the size for this iteration of send
         if (MAX_NETWORK_PKT_SIZE - sizeof(struct routing_header) - sizeof(struct mini_header_reliable) < len_left) {
             size = MAX_NETWORK_PKT_SIZE - sizeof(struct routing_header) - sizeof(struct mini_header_reliable);
         } else {
             size = len_left;
+        }
+
+        if (get_state(socket->send_state) == SEND_IDLE) {
+            set_state(socket->send_state, SEND_SENDING);
         }
 
         switch (get_state(socket->send_state)) {
@@ -795,7 +792,7 @@ minisocket_send(minisocket_t socket, minimsg_t msg, int len, minisocket_error *e
                 len_left -= size;
                 num_sent = 0;
                 timeout = BASE_DELAY;
-                set_state(socket->send_state, SEND_SENDING);
+                set_state(socket->send_state, SEND_IDLE);
                 // increase seq if there are data left to send
                 if (len_left > 0) {
                     semaphore_P(socket->lock);
