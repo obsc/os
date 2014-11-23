@@ -728,6 +728,10 @@ minisocket_send(minisocket_t socket, minimsg_t msg, int len, minisocket_error *e
     socket->seq++;
     semaphore_V(socket->lock);
 
+    if (get_state(socket->send_state) == SEND_ACK) {
+        set_state(socket->send_state, SEND_SENDING);
+    }
+
     // iterate until no more data to send
     while (len_left > 0) {
 
