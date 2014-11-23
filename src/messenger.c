@@ -2,7 +2,6 @@
 #include "minisocket.h"
 #include "synch.h"
 #include "read.h"
-#include "read_private.h"
 
 #include <stdlib.h>
 #include <stdio.h>
@@ -76,7 +75,6 @@ int sender(int* arg) {
 }
 
 int main(int argc, char** argv) {
-  miniterm_initialize();
 
   if (argc > 1) {
       hostname = argv[1];
