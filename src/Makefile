@@ -46,6 +46,8 @@ OBJ =                              \
     minimsg.o                      \
     minisocket.o                   \
     miniroute.o                    \
+    disk.o                         \
+    minifile.o                     \
     network.o
 
 %: %.o start.o end.o $(OBJ) $(SYSTEMOBJ)
