@@ -1,12 +1,98 @@
 #include "minifile.h"
 #include "disk.h"
 
+#define MAGIC 4411
+#define DIRECT_BLOCKS 11
+#define DIRECT_PER_TABLE 1023
+#define ENTRIES_PER_TABLE 15
+
+enum { DIR_INODE = 1, FILE_INODE };
+
+/*
+ * Structure representing the superblock of a filesystem.
+ * Keeps track of general information for the file system.
+ */
+struct superblock {
+    union {
+        struct {
+            char magic_number[4];
+            char disk_size[4];
+
+            char root_inode[4];
+
+            char first_free_inode[4];
+            char first_free_data_block[4];
+        } data;
+
+        char padding[DISK_BLOCK_SIZE];
+    }
+}
+
+/*
+ * Structure representing an inode.
+ * Acts as both directory and file inodes.
+ * Keeps direct pointers and an indirect pointer.
+ */
+struct inode {
+    union {
+        struct {
+            char inode_type;
+            char size[4];
+
+            char direct_ptrs[DIRECT_BLOCKS][4];
+            char indirect_ptr[4];
+        } data;
+        
+        char padding[DISK_BLOCK_SIZE];
+    }
+}
+
+/*
+ * Structure representing an indirect block.
+ * A list of direct pointers with a single indirect pointer.
+ */
+struct indirect_block {
+    union {
+        struct {
+            char direct_ptrs[DIRECT_PER_TABLE][4];
+            char indirect_ptr[4];
+        } data;
+
+        char padding[DISK_BLOCK_SIZE];
+    }
+}
+
+/*
+ * Structure representing a directory.
+ * A table of names and their mappings to inode ptrs.
+ */
+struct dir_data_block {
+    union {
+        struct {
+            char dir_entries[ENTRIES_PER_TABLE][256];
+            char inode_ptrs[ENTRIES_PER_TABLE][4];
+        } data;
+
+        char padding[DISK_BLOCK_SIZE];
+    }
+}
+
+/*
+ * Structure representing a free block. Acts like a node in a queue.
+ * Keeps a reference to the next free block.
+ */
+struct free_block {
+    union {
+        char next_free_block[4];
+        char padding[DISK_BLOCK_SIZE];
+    }
+}
+
 /*
  * struct minifile:
  *     This is the structure that keeps the information about 
  *     the opened file like the position of the cursor, etc.
  */
-
 struct minifile {
   /* add members here */
   int dummy;
