@@ -8,7 +8,7 @@
 
 #include "minifile.h"
 
-int start(int *arg) {
+int fsck(int *arg) {
 	//make datastructs
 	return -1;
 }
@@ -19,5 +19,6 @@ int main(int argc, char** argv) {
 	disk_flags = DISK_READWRITE;
 	disk_size = 1000;
 
-	minithread_system_initialize(start, NULL);
+	minithread_system_initialize(fsck, NULL);
+    return -1;
 }

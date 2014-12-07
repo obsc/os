@@ -32,6 +32,8 @@ handshake
 messenger
 cache_test
 shell
+mkfs
+fsck
 .depend
 *.o
 

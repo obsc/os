@@ -8,16 +8,17 @@
 
 #include "minifile.h"
 
-int start(int *arg) {
-	//make datastructs
-	return -1;
+int mkfs(int *arg) {
+    //make datastructs
+    return -1;
 }
 
 int main(int argc, char** argv) {
-	use_existing_disk = 0;
-	disk_name = "MINIFILESYSTEM";
-	disk_flags = DISK_READWRITE;
-	disk_size = 1000;
+    use_existing_disk = 0;
+    disk_name = "MINIFILESYSTEM";
+    disk_flags = DISK_READWRITE;
+    disk_size = 1000;
 
-	minithread_system_initialize(start, NULL);
+    minithread_system_initialize(mkfs, NULL);
+    return -1;
 }
