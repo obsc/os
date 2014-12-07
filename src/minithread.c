@@ -311,7 +311,9 @@ network_handler(network_interrupt_arg_t *arg) {
     set_interrupt_level(old_level);
 }
 
-void disk_handler(disk_t* disk, disk_request_t req, disk_reply_t rep) {
+void disk_handler(void *arg) {
+    disk_interrupt_arg_t *interrupt;
+    interrupt = (disk_interrupt_arg_t *) arg;
     //TODO
 }
 
