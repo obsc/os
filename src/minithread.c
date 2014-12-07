@@ -21,6 +21,7 @@
 #include "miniroute.h"
 #include "read_private.h"
 #include "disk.h"
+#include "minifile.h"
 
 #include <assert.h>
 #include <time.h>
