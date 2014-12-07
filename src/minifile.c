@@ -25,7 +25,7 @@ typedef struct superblock {
         } data;
 
         char padding[DISK_BLOCK_SIZE];
-    }
+    };
 }* superblock_t;
 
 /*
@@ -42,9 +42,9 @@ typedef struct inode {
             char direct_ptrs[DIRECT_BLOCKS][4];
             char indirect_ptr[4];
         } data;
-        
+
         char padding[DISK_BLOCK_SIZE];
-    }
+    };
 }* inode_t;
 
 /*
@@ -59,7 +59,7 @@ typedef struct indirect_block {
         } data;
 
         char padding[DISK_BLOCK_SIZE];
-    }
+    };
 }* indirect_block_t;
 
 /*
@@ -74,7 +74,7 @@ typedef struct dir_data_block {
         } data;
 
         char padding[DISK_BLOCK_SIZE];
-    }
+    };
 }* dir_data_block_t;
 
 /*
@@ -85,7 +85,7 @@ typedef struct free_block {
     union {
         char next_free_block[4];
         char padding[DISK_BLOCK_SIZE];
-    }
+    };
 }* free_block_t;
 
 /*
