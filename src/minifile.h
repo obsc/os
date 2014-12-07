@@ -2,6 +2,9 @@
 #define __MINIFILE_H__
 
 #include "defs.h"
+#include "disk.h"
+
+disk_t disk;
 
 /*
  * Definitions for minifiles.
