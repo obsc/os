@@ -121,7 +121,7 @@ int inputfile(char *fname) {
 	printf("---inputting %s: input \"ctrl-D,ENTER\" on a new line to exit---\n",fname);
 	do {
 		memset(str,'\0',BUFFER_SIZE);
-		gets(str);
+		fgets(str, BUFFER_SIZE, stdin);
 		if(str[0] == 4) //that's what ctrl-D puts in ((char)4)
 			break;
 		str[strlen(str)] = '\n';
@@ -170,7 +170,7 @@ int shell(int *g) {
 		memset(arg1,'\0',BUFFER_SIZE);
 		memset(arg2,'\0',BUFFER_SIZE);
 		put_prompt();
-		gets(command);
+		fgets(command, BUFFER_SIZE, stdin);
 		//extract first three strings in command (delimited by spaces)
 		sscanf(command,"%s %s %s",func,arg1,arg2);
 		if(strcmp(func,"help") == 0)

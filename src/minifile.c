@@ -11,50 +11,50 @@ struct minifile {
   int dummy;
 };
 
-minifile_t minifile_creat(char *filename){
-
+minifile_t minifile_creat(char *filename) {
+    return NULL;
 }
 
-minifile_t minifile_open(char *filename, char *mode){
-
+minifile_t minifile_open(char *filename, char *mode) {
+    return NULL;
 }
 
-int minifile_read(minifile_t file, char *data, int maxlen){
-
+int minifile_read(minifile_t file, char *data, int maxlen) {
+    return 0;
 }
 
-int minifile_write(minifile_t file, char *data, int len){
-
+int minifile_write(minifile_t file, char *data, int len) {
+    return 0;
 }
 
-int minifile_close(minifile_t file){
-
+int minifile_close(minifile_t file) {
+    return 0;
 }
 
-int minifile_unlink(char *filename){
-
+int minifile_unlink(char *filename) {
+    return 0;
 }
 
-int minifile_mkdir(char *dirname){
-
+int minifile_mkdir(char *dirname) {
+    return 0;
 }
 
-int minifile_rmdir(char *dirname){
-
+int minifile_rmdir(char *dirname) {
+    return 0;
 }
 
-int minifile_stat(char *path){
-
-} 
-
-int minifile_cd(char *path){
-
+int minifile_stat(char *path) {
+    return 0;
 }
 
-char **minifile_ls(char *path){
-
+int minifile_cd(char *path) {
+    return 0;
 }
 
-char* minifile_pwd(void){
+char **minifile_ls(char *path) {
+    return NULL;
+}
 
+char* minifile_pwd(void) {
+    return NULL;
 }

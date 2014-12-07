@@ -31,6 +31,7 @@ conn-network5
 handshake
 messenger
 cache_test
+shell
 .depend
 *.o
 
