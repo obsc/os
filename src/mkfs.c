@@ -9,8 +9,8 @@
 #include "minifile.h"
 
 int mkfs(int *arg) {
-    //make datastructs
-    return -1;
+    
+    return 0;
 }
 
 int main(int argc, char** argv) {

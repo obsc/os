@@ -109,6 +109,13 @@ struct minifile {
 
 disk_t *disk;
 
+/* Handler for disk operations
+ * Assumes interrupts are disabled within
+ */
+void minifile_handle(disk_interrupt_arg_t *arg) {
+
+}
+
 minifile_t minifile_creat(char *filename) {
     return NULL;
 }

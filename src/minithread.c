@@ -312,10 +312,17 @@ network_handler(network_interrupt_arg_t *arg) {
     set_interrupt_level(old_level);
 }
 
+/*
+ * Handler called upon disk requests completion
+ */
 void disk_handler(void *arg) {
-    disk_interrupt_arg_t *interrupt;
-    interrupt = (disk_interrupt_arg_t *) arg;
-    //TODO
+    interrupt_level_t old_level;
+
+    if ( !arg ) return;
+
+    old_level = set_interrupt_level(DISABLED);
+    minifile_handle(arg);
+    set_interrupt_level(old_level);
 }
 
 /*

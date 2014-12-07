@@ -17,6 +17,9 @@ disk_t *disk;
 
 typedef struct minifile* minifile_t;
 
+/* Handler for disk operations */
+void minifile_handle(disk_interrupt_arg_t *arg);
+
 /* 
  * General requiremens:
  *     If filenames and/or dirnames begin with a "/" they are absolute
