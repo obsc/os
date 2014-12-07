@@ -1,4 +1,5 @@
 #include "minifile.h"
+#include "disk.h"
 
 /*
  * struct minifile:
@@ -10,6 +11,8 @@ struct minifile {
   /* add members here */
   int dummy;
 };
+
+disk_t *disk;
 
 minifile_t minifile_creat(char *filename) {
     return NULL;

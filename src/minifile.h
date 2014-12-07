@@ -4,7 +4,7 @@
 #include "defs.h"
 #include "disk.h"
 
-disk_t disk;
+disk_t *disk;
 
 /*
  * Definitions for minifiles.

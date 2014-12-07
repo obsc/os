@@ -334,8 +334,8 @@ void disk_handler(void *arg) {
  */
 void minithread_system_initialize(proc_t mainproc, arg_t mainarg) {
     interrupt_level_t old_level;
-    disk = (disk_t *) malloc (sizeof(struct disk_t));
     //initialize disk
+    disk = (disk_t *) malloc (sizeof(disk_t));
     disk_initialize(disk);
     install_disk_handler(disk_handler);
     // Use time to seed the random function
