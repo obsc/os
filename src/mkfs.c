@@ -8,9 +8,7 @@
 
 #define DISK_SIZE 1000
 
-// Initialize all the free inodes
-// Returns -1 on failure
-int initialize_inodes(int max_inode_index) {
+int intitialize_free_blocks(int start, int end) {
     int i;
     int prev_ind;
     free_block_t freeblock;
@@ -19,44 +17,14 @@ int initialize_inodes(int max_inode_index) {
     freeblock = (free_block_t) malloc (sizeof (struct free_block));
 
     prev_ind = 0;
-    for (i = max_inode_index; i > 1; i--) {
+    for (i = end; i > start - 1; i--) {
         pack_unsigned_int(freeblock->next_free_block, prev_ind);
         prev_ind = i;
 
         req = write_block(i, (char *) freeblock);
         semaphore_P(req->wait);
         if (req->reply != DISK_REPLY_OK) {
-            printf("Failed to write free inode block: %i\n", i);
-            free(freeblock);
-            free(req);
-            return -1;
-        }
-        free(req);
-    }
-
-    free(freeblock);
-    return 0;
-}
-
-// Initialize all free data blocks
-// Returns -1 on failure
-int initialize_free_data(int max_inode_index, int size) {
-    int i;
-    int prev_ind;
-    free_block_t freeblock;
-    waiting_request_t req;
-
-    freeblock = (free_block_t) malloc (sizeof (struct free_block));
-
-    prev_ind = 0;
-    for (i = size; i > max_inode_index + 1; i--) {
-        pack_unsigned_int(freeblock->next_free_block, prev_ind);
-        prev_ind = i;
-
-        req = write_block(i, (char *) freeblock);
-        semaphore_P(req->wait);
-        if (req->reply != DISK_REPLY_OK) {
-            printf("Failed to write free data block: %i\n", i);
+            printf("Failed to write free block: %i\n", i);
             free(freeblock);
             free(req);
             return -1;
@@ -81,12 +49,12 @@ int initialize_root_dir(int max_inode_index) {
     root_dir = (dir_data_block_t) malloc (sizeof (struct dir_data_block));
 
     // Construct directory
-    pack_unsigned_int(root_dir->inode_ptrs[0], 1);
-    memcpy(root_dir->dir_entries[0], parent, 3);
-    pack_unsigned_int(root_dir->inode_ptrs[1], 1);
-    memcpy(root_dir->dir_entries[1], self, 2);
+    pack_unsigned_int(root_dir->data.inode_ptrs[0], 1);
+    memcpy(root_dir->data.dir_entries[0], parent, 3);
+    pack_unsigned_int(root_dir->data.inode_ptrs[1], 1);
+    memcpy(root_dir->data.dir_entries[1], self, 2);
     for (i = 2; i < ENTRIES_PER_TABLE; i++) {
-        pack_unsigned_int(root_dir->inode_ptrs[i], 0);
+        pack_unsigned_int(root_dir->data.inode_ptrs[i], 0);
     }
 
     req = write_block(max_inode_index + 1, (char *) root_dir);
@@ -103,13 +71,13 @@ int initialize_root_dir(int max_inode_index) {
     root_inode = (inode_t) malloc (sizeof (struct inode));
 
     // Construct new inode
-    root_inode->inode_type = DIR_INODE;
-    pack_unsigned_int(root_inode->size, 2);
-    pack_unsigned_int(root_inode->direct_ptrs[0], max_inode_index + 1);
+    root_inode->data.inode_type = DIR_INODE;
+    pack_unsigned_int(root_inode->data.size, 2);
+    pack_unsigned_int(root_inode->data.direct_ptrs[0], max_inode_index + 1);
     for (i = 1; i < DIRECT_BLOCKS; i++) {
-        pack_unsigned_int(root_inode->direct_ptrs[i], 0);
+        pack_unsigned_int(root_inode->data.direct_ptrs[i], 0);
     }
-    pack_unsigned_int(root_inode->indirect_ptr, 0);
+    pack_unsigned_int(root_inode->data.indirect_ptr, 0);
 
     req = write_block(1, (char *) root_inode);
     semaphore_P(req->wait);
@@ -144,14 +112,14 @@ int mkfs(int *arg) {
     pack_unsigned_int(sprblk->data.first_free_data_block, 0);
 
     printf("Writing free inodes\n");
-    if (initialize_inodes(max_inode_index) == -1) {
+    if (initialize_free_blocks(2, max_inode_index) == -1) {
         return -1;
     }
     pack_unsigned_int(sprblk->data.first_free_inode, 2);
     printf("Successfully written free inodes\n");
 
     printf("Writing free data blocks\n");
-    if (initialize_free_data(max_inode_index, size) == -1) {
+    if (initialize_free_blocks(max_inode_index + 2, size) == -1) {
         return -1;
     }
     pack_unsigned_int(sprblk->data.first_free_data_block, max_inode_index + 2);
