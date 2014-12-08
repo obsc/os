@@ -76,6 +76,8 @@ int validate_free_inodes() {
 
     dirty = 0;
     nextid = free_inode;
+    prevblock = NULL;
+    nextblock = NULL;
 
     while (nextid != 0) {
         if (nextid > max_inode_index) { // inode pointing to data
@@ -111,6 +113,8 @@ int validate_free_inodes() {
             }
         }
 
+        nextblock = (free_block_t) malloc (sizeof (struct free_block));
+
         req = read_block(nextid, (char *) nextblock);
         semaphore_P(req->wait);
         if (req->reply != DISK_REPLY_OK) {
@@ -122,11 +126,13 @@ int validate_free_inodes() {
 
         inode_flags[nextid] = 1;
 
+        free(prevblock);
         prevblock = nextblock;
         previd = nextid;
         nextid = unpack_unsigned_int(nextblock->next_free_block);
     }
 
+    free(nextblock);
     return 0;
 }
 
