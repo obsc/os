@@ -1,12 +1,9 @@
 /*
  * A Map of Request to Data structures
  */
-#include "cache.h"
+#include "reqmap.h"
 #include <stdlib.h>
 #include <stdio.h>
-#include "miniroute.h"
-#include "alarm.h"
-#include "network.h"
 #include "list.h"
 
 #define TABLE_MULT 2
@@ -186,7 +183,7 @@ int reqmap_delete(reqmap_t reqmap, int blockid, void *buffer) {
     hashed_key = hash_naive(blockid, reqmap->max_size);
     tup = reqmap_contains(reqmap, blockid, buffer);
     if (!tup) return -1;
-    if (list_delete(reqmap->buckets[hashed_key], tup->chain_node) == -1) return -1;
+    if (list_delete(reqmap->buckets[hashed_key], tup->node) == -1) return -1;
     free(tup);
     return 0;
 }
