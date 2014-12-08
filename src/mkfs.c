@@ -120,7 +120,7 @@ int mkfs(int *arg) {
     printf("Successfully written free inodes\n");
 
     printf("Writing free data blocks\n");
-    if (initialize_free_blocks(max_inode_index + 2, size) == -1) {
+    if (initialize_free_blocks(max_inode_index + 2, size - 1) == -1) {
         return -1;
     }
     pack_unsigned_int(sprblk->data.first_free_data_block, max_inode_index + 2);
