@@ -77,6 +77,14 @@ typedef struct free_block {
     };
 }* free_block_t;
 
+/*
+ * Structure representing a waiting disk request
+ */
+typedef struct waiting_request {
+    disk_reply_t reply;
+    semaphore_t wait;
+}* waiting_request_t;
+
 disk_t *disk;
 
 /*
@@ -95,6 +103,9 @@ void minifile_handle(disk_interrupt_arg_t *arg);
 
 /* Initialize minifile */
 void minifile_initialize();
+
+waiting_request_t read_block(int blockid, char* buffer);
+waiting_request_t write_block(int blockid, char* buffer);
 
 /* 
  * General requiremens:

@@ -2,6 +2,7 @@
 #include "minifile.h"
 #include "synch.h"
 #include "disk.h"
+#include "reqmap.h"
 
 /*
  * Structure representing an indirect block.
@@ -38,11 +39,8 @@ struct minifile {
     int cursor;
 };
 
-typedef struct waiting_request {
-    semaphore_t wait;
-}* waiting_request_t;
-
 disk_t *disk;
+reqmap_t requests;
 file_data_t *file_tbl;
 
 // typedef struct {
@@ -61,11 +59,66 @@ file_data_t *file_tbl;
  * Assumes interrupts are disabled within
  */
 void minifile_handle(disk_interrupt_arg_t *arg) {
+    int blockid;
+    char* buffer;
+    waiting_request_t req;
+    void* req_addr;
+
+    blockid = arg->request.blockid;
+    buffer = arg->request.buffer;
+    reqmap_get(requests, blockid, buffer, &req_addr);
+    req = (waiting_request_t) req_addr;
+
+    req->reply = arg->reply;
+    semaphore_V(req->wait);
+
+    reqmap_delete(requests, blockid, buffer);
+
     free(arg);
 }
 
+/* Initialize minifile globals
+ */
 void minifile_initialize() {
     file_tbl = (file_data_t *) calloc (disk_size, sizeof(file_data_t));
+
+    if (!file_tbl) return;
+
+    requests = reqmap_new(MAX_PENDING_DISK_REQUESTS);
+    if (!requests) {
+        free(file_tbl);
+    }
+}
+
+waiting_request_t createWaiting(int blockid, char* buffer) {
+    waiting_request_t req;
+
+    req = (waiting_request_t) malloc (sizeof (struct waiting_request));
+    if (!req) return NULL;
+
+    req->wait = semaphore_new();
+    if (!req->wait) {
+        free(req);
+        return NULL;
+    }
+    semaphore_initialize(req->wait, 0);
+
+    reqmap_set(requests, blockid, buffer, req);
+    return req;
+}
+
+waiting_request_t read_block(int blockid, char* buffer) {
+    waiting_request_t req = createWaiting(blockid, buffer);
+    if (!req) return NULL;
+    disk_read_block(disk, blockid, buffer);
+    return req;
+}
+
+waiting_request_t write_block(int blockid, char* buffer) {
+    waiting_request_t req = createWaiting(blockid, buffer);
+    if (!req) return NULL;
+    disk_write_block(disk, blockid, buffer);
+    return req;
 }
 
 minifile_t minifile_creat(char *filename) {
