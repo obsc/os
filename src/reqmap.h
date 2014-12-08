@@ -15,19 +15,18 @@ extern reqmap_t reqmap_new(int);
 
 /*
  * Set the specified key (int, void *) as this value. Returns 0 (success) or -1 (failure)
- * Also returns the evicted value if applicable.
  */
-extern int reqmap_set(reqmap_t, int, void *, void*);
+extern int reqmap_set(reqmap_t map, int blockid, void *buffer, void *value);
 
 /*
  * get the value of the specified key (int, void *). Returns 0 (success) or -1 (failure)
  */
-extern int reqmap_get(reqmap_t, int, void *, void**);
+extern int reqmap_get(reqmap_t map, int blockid, void *buffer, void **value);
 
 /*
  * delete the corresponding key (int, void *) from the reqmap. Returns 0 (success) or -1 (failure)
  */
-extern int reqmap_delete(reqmap_t, int, void *);
+extern int reqmap_delete(reqmap_t map, int blockid, void *buffer);
 
 /*
  * Free the reqmap and return 0 (success) or -1 (failure).
