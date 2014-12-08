@@ -345,6 +345,7 @@ void minithread_system_initialize(proc_t mainproc, arg_t mainarg) {
     disk = (disk_t *) malloc (sizeof(disk_t));
     disk_initialize(disk);
     install_disk_handler(disk_handler);
+    minifile_initialize();
     // Use time to seed the random function
     srand(time(NULL));
     // Initialize globals

@@ -4,6 +4,79 @@
 #include "defs.h"
 #include "disk.h"
 
+#define RATIO_INODE 0.1
+#define MAGIC 4411
+#define DIRECT_BLOCKS 11
+#define DIRECT_PER_TABLE 1023
+#define ENTRIES_PER_TABLE 15
+
+enum { DIR_INODE = 1, FILE_INODE };
+
+/*
+ * Structure representing the superblock of a filesystem.
+ * Keeps track of general information for the file system.
+ */
+typedef struct superblock {
+    union {
+        struct {
+            char magic_number[4];
+            char disk_size[4];
+
+            char root_inode[4];
+
+            char first_free_inode[4];
+            char first_free_data_block[4];
+        } data;
+
+        char padding[DISK_BLOCK_SIZE];
+    };
+}* superblock_t;
+
+/*
+ * Structure representing an inode.
+ * Acts as both directory and file inodes.
+ * Keeps direct pointers and an indirect pointer.
+ */
+typedef struct inode {
+    union {
+        struct {
+            char inode_type;
+            char size[4];
+
+            char direct_ptrs[DIRECT_BLOCKS][4];
+            char indirect_ptr[4];
+        } data;
+
+        char padding[DISK_BLOCK_SIZE];
+    };
+}* inode_t;
+
+/*
+ * Structure representing a directory.
+ * A table of names and their mappings to inode ptrs.
+ */
+typedef struct dir_data_block {
+    union {
+        struct {
+            char dir_entries[ENTRIES_PER_TABLE][256];
+            char inode_ptrs[ENTRIES_PER_TABLE][4];
+        } data;
+
+        char padding[DISK_BLOCK_SIZE];
+    };
+}* dir_data_block_t;
+
+/*
+ * Structure representing a free block. Acts like a node in a queue.
+ * Keeps a reference to the next free block.
+ */
+typedef struct free_block {
+    union {
+        char next_free_block[4];
+        char padding[DISK_BLOCK_SIZE];
+    };
+}* free_block_t;
+
 disk_t *disk;
 
 /*
@@ -19,6 +92,9 @@ typedef struct minifile* minifile_t;
 
 /* Handler for disk operations */
 void minifile_handle(disk_interrupt_arg_t *arg);
+
+/* Initialize minifile */
+void minifile_initialize();
 
 /* 
  * General requiremens:

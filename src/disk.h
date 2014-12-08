@@ -45,14 +45,14 @@ typedef struct {
 } disk_layout_t;
 
 typedef enum { DISK_RESET, /* required after disk crash */
-	       DISK_SHUTDOWN,
-	       DISK_READ,
-	       DISK_WRITE } disk_request_type_t ;
+               DISK_SHUTDOWN,
+               DISK_READ,
+               DISK_WRITE } disk_request_type_t ;
 
 typedef enum { DISK_REPLY_OK,
-	       DISK_REPLY_FAILED, /* disk failed on this request for no apparent reason */
-	       DISK_REPLY_ERROR, /* disk nonexistent or block outside disk requested */ 
-	       DISK_REPLY_CRASHED } disk_reply_t;
+               DISK_REPLY_FAILED, /* disk failed on this request for no apparent reason */
+               DISK_REPLY_ERROR, /* disk nonexistent or block outside disk requested */ 
+               DISK_REPLY_CRASHED } disk_reply_t;
 
 /* 
  * Datastructure used to make and receive replies to disk
