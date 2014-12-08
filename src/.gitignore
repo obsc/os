@@ -32,6 +32,9 @@ handshake
 messenger
 cache_test
 shell
+mkfs
+fsck
+MINIFILESYSTEM
 .depend
 *.o
 

@@ -1,1 +1,3 @@
 changed gets(arg) to fgets(arg, BUFFER_SIZE, stdin) in shell.c
+didn't use data_interrupt_t
+mkfs fails if size < 10

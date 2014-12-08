@@ -312,10 +312,17 @@ network_handler(network_interrupt_arg_t *arg) {
     set_interrupt_level(old_level);
 }
 
+/*
+ * Handler called upon disk requests completion
+ */
 void disk_handler(void *arg) {
-    disk_interrupt_arg_t *interrupt;
-    interrupt = (disk_interrupt_arg_t *) arg;
-    //TODO
+    interrupt_level_t old_level;
+
+    if ( !arg ) return;
+
+    old_level = set_interrupt_level(DISABLED);
+    minifile_handle(arg);
+    set_interrupt_level(old_level);
 }
 
 /*
@@ -338,6 +345,7 @@ void minithread_system_initialize(proc_t mainproc, arg_t mainarg) {
     disk = (disk_t *) malloc (sizeof(disk_t));
     disk_initialize(disk);
     install_disk_handler(disk_handler);
+    minifile_initialize();
     // Use time to seed the random function
     srand(time(NULL));
     // Initialize globals

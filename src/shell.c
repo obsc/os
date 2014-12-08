@@ -12,6 +12,7 @@
 
 #define IDstring "PortOS filesystem v1.0"
 #define BUFFER_SIZE 128
+#define DISK_SIZE 1000
 
 //move file from NT to our file system
 int importfile(char *fname,char *ntfname) {
@@ -228,6 +229,10 @@ int shell(int *g) {
 }
 
 int main(int argc, char** argv) {
-    minithread_system_initialize(shell, NULL);
-    return -1;
+		use_existing_disk = 1;
+		disk_name = "MINIFILESYSTEM";
+		disk_flags = DISK_READWRITE;
+		disk_size = DISK_SIZE;
+		minithread_system_initialize(shell, NULL);
+		return -1;
 }
