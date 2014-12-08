@@ -40,7 +40,7 @@ int mkfs(int *arg) {
     int max_inode_index;
     superblock_t sprblk;
 
-    size = disk->layout->size;
+    size = disk->layout.size;
     max_inode_index = RATIO_INODE * size;
 
     // Initialize superblock

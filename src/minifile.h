@@ -3,6 +3,7 @@
 
 #include "defs.h"
 #include "disk.h"
+#include "synch.h"
 
 #define RATIO_INODE 0.1
 #define MAGIC 4411
