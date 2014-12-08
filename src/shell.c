@@ -12,6 +12,7 @@
 
 #define IDstring "PortOS filesystem v1.0"
 #define BUFFER_SIZE 128
+#define DISK_SIZE 1000
 
 //move file from NT to our file system
 int importfile(char *fname,char *ntfname) {

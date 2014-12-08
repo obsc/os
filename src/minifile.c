@@ -55,13 +55,12 @@ file_data_t *file_tbl;
 //   int blocknum;
 //   char* buffer; /* pointer to the memory buffer */
 //   disk_request_type_t type; /* type of disk request */
-// } disk_request_t; 
+// } disk_request_t;
 
 /* Handler for disk operations
  * Assumes interrupts are disabled within
  */
 void minifile_handle(disk_interrupt_arg_t *arg) {
-    free(arg->request);
     free(arg);
 }
 
