@@ -9,7 +9,7 @@
 
 #define DISK_SIZE 1000
 
-int intitialize_free_blocks(int start, int end) {
+int initialize_free_blocks(int start, int end) {
     int i;
     int prev_ind;
     free_block_t freeblock;
