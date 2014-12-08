@@ -66,7 +66,7 @@ int validate_superblock() {
 }
 
 // Validates the free inodes linked list
-int validate_free_inodes(int isData) {
+int validate_free_blocks(int isData) {
     free_block_t prevblock;
     free_block_t nextblock;
     int previd;
