@@ -75,7 +75,7 @@ reqmap_t reqmap_new(int size) {
 //  }
 //}
 
-int hash_naive(int value, int size) {
+int hash_function(int value, int size) {
     int result;
 
     result = value % (TABLE_MULT * size);
@@ -102,7 +102,7 @@ tuple_t reqmap_contains(reqmap_t reqmap, int blockid, void *buffer) {
   //  }
 
     if (!reqmap || !buffer) return NULL;
-    hashed_key = hash_naive(blockid, reqmap->max_size);
+    hashed_key = hash_function(blockid, reqmap->max_size);
     node = list_head(reqmap->buckets[hashed_key]);
     while (node) {
         result = (tuple_t) node_value(node);
@@ -154,7 +154,7 @@ int reqmap_set(reqmap_t reqmap, int blockid, void *buffer, void *value) {
     tuple_t new_kv;
 
     if (!reqmap || !buffer || !value) return -1;
-    hashed_key = hash_naive(blockid, reqmap->max_size);
+    hashed_key = hash_function(blockid, reqmap->max_size);
     found_kv = reqmap_contains(reqmap, blockid, buffer);
     if (!found_kv) {
         //hashed_key = hash(key);
@@ -180,7 +180,7 @@ int reqmap_delete(reqmap_t reqmap, int blockid, void *buffer) {
     int hashed_key;
     tuple_t tup;
 
-    hashed_key = hash_naive(blockid, reqmap->max_size);
+    hashed_key = hash_function(blockid, reqmap->max_size);
     tup = reqmap_contains(reqmap, blockid, buffer);
     if (!tup) return -1;
     if (list_delete(reqmap->buckets[hashed_key], tup->node) == -1) return -1;
