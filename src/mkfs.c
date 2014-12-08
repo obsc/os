@@ -132,7 +132,7 @@ int mkfs(int *arg) {
     superblock_t sprblk;
     waiting_request_t req;
 
-    size = disk->layout->size;
+    size = disk->layout.size;
     max_inode_index = RATIO_INODE * size;
 
     // Initialize superblock

@@ -64,7 +64,7 @@ void minifile_handle(disk_interrupt_arg_t *arg) {
     waiting_request_t req;
     void* req_addr;
 
-    blockid = arg->request.blockid;
+    blockid = arg->request.blocknum;
     buffer = arg->request.buffer;
     reqmap_get(requests, blockid, buffer, &req_addr);
     req = (waiting_request_t) req_addr;
@@ -96,7 +96,7 @@ waiting_request_t createWaiting(int blockid, char* buffer) {
     req = (waiting_request_t) malloc (sizeof (struct waiting_request));
     if (!req) return NULL;
 
-    req->wait = semaphore_new();
+    req->wait = semaphore_create();
     if (!req->wait) {
         free(req);
         return NULL;
