@@ -56,10 +56,9 @@ char* get_block_blocking(int block_num) {
     return block;
 }
 
-inode_t get_inode_indir(indirect_block_t indir, int cur_size) {
+inode_t get_inode_indir(indirect_block_t indir, char *path, int cur_size) {
 	unsigned int blockid;
 	dir_data_block_t cur_block;
-	waiting_request_t req;
 	int acc;
 	int size;
 	int inode_num;
@@ -110,13 +109,12 @@ inode_t get_inode_indir(indirect_block_t indir, int cur_size) {
 	}
 	indirect = (indirect_block_t) get_block_blocking(unpack_unsigned_int(indir->data.indirect_ptr));
 	free(indir);
-	return get_inode_indir(indirect, size);
+	return get_inode_indir(indirect, path, size);
 }
 
 inode_t get_inode_helper(char *path, inode_t inode) {
 	unsigned int blockid;
 	dir_data_block_t cur_block;
-	waiting_request_t req;
 	int acc;
 	int size;
 	int inode_num;
@@ -161,7 +159,7 @@ inode_t get_inode_helper(char *path, inode_t inode) {
 	}
 	indir = (indirect_block_t) get_block_blocking(unpack_unsigned_int(inode->data.indirect_ptr));
 
-    return get_inode_indir(indir, size);
+    return get_inode_indir(indir, path, size);
 }
 
 inode_t get_inode(char *path) {
