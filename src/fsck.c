@@ -15,7 +15,7 @@ int root_inode_num;
 int free_inode;
 int free_data_block;
 
-char* inode_flags;
+char* block_flags;
 
 // Validates the superblock
 int validate_superblock() {
@@ -66,7 +66,7 @@ int validate_superblock() {
 }
 
 // Validates the free inodes linked list
-int validate_free_inodes() {
+int validate_free_inodes(int isData) {
     free_block_t prevblock;
     free_block_t nextblock;
     int previd;
@@ -75,22 +75,32 @@ int validate_free_inodes() {
     int dirty;
 
     dirty = 0;
-    nextid = free_inode;
+    nextid = isData ? free_data_block : free_inode;
     prevblock = NULL;
     nextblock = NULL;
 
     while (nextid != 0) {
-        if (nextid > max_inode_index) { // inode pointing to data
+        if (!isData && nextid > max_inode_index) { // inode pointing to data
             printf("Free inode pointing to data block, truncating list\n");
             dirty = 1;
-        } else if (inode_flags[nextid] == 1) { // cycle
+        } else if (!isData && block_flags[nextid] == 1) { // inode cycle
             printf("Free inode list has a cyle, truncating list\n");
+            dirty = 1;
+        } else if (isData && nextid <= max_inode_index) { // data to inode
+            printf("Free data pointing to inode block, truncating list\n");
+            dirty = 1;
+        } else if (isData && block_flags[nextid] == 1) { // data cycle
+            printf("Free data list has a cycle, truncating list\n");
             dirty = 1;
         }
 
         if (dirty) {
             if (prevblock == NULL) { // First block after superblock
-                pack_unsigned_int(sprblk->data.first_free_inode, 0);
+                if (!isData) {
+                    pack_unsigned_int(sprblk->data.first_free_inode, 0);
+                } else {
+                    pack_unsigned_int(sprblk->data.first_free_data_block, 0);
+                }
                 req = write_block(0, (char *) sprblk);
                 semaphore_P(req->wait);
                 if (req->reply != DISK_REPLY_OK) {
@@ -104,7 +114,7 @@ int validate_free_inodes() {
                 pack_unsigned_int(prevblock->next_free_block, 0);
                 req = write_block(previd, (char *) prevblock);
                 if (req->reply != DISK_REPLY_OK) {
-                    printf("Failed to write to free inode block: %i\n", previd);
+                    printf("Failed to write to free block: %i\n", previd);
                     free(req);
                     return -1;
                 }
@@ -118,13 +128,13 @@ int validate_free_inodes() {
         req = read_block(nextid, (char *) nextblock);
         semaphore_P(req->wait);
         if (req->reply != DISK_REPLY_OK) {
-            printf("Failed to read free inode block: %i\n", nextid);
+            printf("Failed to read free block: %i\n", nextid);
             free(req);
             return -1;
         }
         free(req);
 
-        inode_flags[nextid] = 1;
+        block_flags[nextid] = 1;
 
         free(prevblock);
         prevblock = nextblock;
@@ -141,20 +151,21 @@ int fsck(int *arg) {
     max_inode_index = RATIO_INODE * size;
 
     sprblk = (superblock_t) malloc (sizeof (struct superblock));
-    inode_flags = (char *) calloc (size, 1);
+    block_flags = (char *) calloc (size, 1);
 
     printf("Validating superblock\n");
     if (validate_superblock() == -1) return -1;
 
     printf("Validating free inodes blocks\n");
-    if (validate_free_inodes() == -1) return -1;
+    if (validate_free_blocks(0) == -1) return -1;
 
     printf("Validating free data blocks\n");
+    if (validate_free_blocks(1) == -1) return -1;
 
     printf("File system validated\n");
 
     free(sprblk);
-    free(inode_flags);
+    free(block_flags);
     return 0;
 }
 
