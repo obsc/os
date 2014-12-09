@@ -57,144 +57,128 @@ char* get_block_blocking(int block_num) {
 }
 
 inode_t get_inode_indir(indirect_block_t indir, char *path, int cur_size) {
-	unsigned int blockid;
-	dir_data_block_t cur_block;
-	int acc;
-	int size;
-	int inode_num;
-	int num_to_check;
-	inode_t result;
-	indirect_block_t indirect;
-    cur_block = (dir_data_block_t) malloc (sizeof(struct dir_data_block));
-    if (!cur_block || cur_size == 0) {
-    	free(cur_block);
-    	free(indir);
-    	return NULL;
-    }
-    size = cur_size;
-	for (acc = 0; acc < DIRECT_BLOCKS; acc++) {
-		blockid = unpack_unsigned_int(indir->data.direct_ptrs[acc]);
-		if (blockid == 0) {
-			free(cur_block);
-			free(indir);
-			return NULL;
-		}
-		cur_block = (dir_data_block_t) get_block_blocking(blockid);
+    unsigned int blockid;
+    dir_data_block_t cur_block;
+    int acc;
+    int size;
+    int inode_num;
+    int num_to_check;
+    inode_t result;
+    indirect_block_t indirect;
 
-		if (size > ENTRIES_PER_TABLE) {
-			num_to_check = ENTRIES_PER_TABLE;
-			size = size - ENTRIES_PER_TABLE;
-		} else {
-			num_to_check = size;
-			size = 0;
-		}
-		for (acc = 0; acc < num_to_check; acc++) {
-			inode_num = unpack_unsigned_int(cur_block->data.inode_ptrs[acc]);
-			if ((strcmp(cur_block->data.dir_entries[acc], path) == 0) 
-				&& inode_num != 0) {
-				free(cur_block);
-				free(indir);
-				result = (inode_t) malloc (sizeof(struct inode));
-				if (!result) return NULL;
-				result = (inode_t) get_block_blocking(inode_num);
-				return result;
-			}
-		}
-	}
-	free(cur_block);
-	indirect = (indirect_block_t) malloc (sizeof(struct indirect_block));
-	if (!indirect) {
-		free(indir);
-		return NULL;
-	}
-	indirect = (indirect_block_t) get_block_blocking(unpack_unsigned_int(indir->data.indirect_ptr));
-	free(indir);
-	return get_inode_indir(indirect, path, size);
+    if (cur_size == 0) {
+        free(indir);
+        return NULL;
+    }
+
+    size = cur_size;
+    for (acc = 0; acc < DIRECT_PER_TABLE; acc++) {
+        blockid = unpack_unsigned_int(indir->data.direct_ptrs[acc]);
+        if (blockid == 0) {
+            free(cur_block);
+            free(indir);
+            return NULL;
+        }
+        cur_block = (dir_data_block_t) get_block_blocking(blockid);
+
+        if (size > ENTRIES_PER_TABLE) {
+            num_to_check = ENTRIES_PER_TABLE;
+            size = size - ENTRIES_PER_TABLE;
+        } else {
+            num_to_check = size;
+            size = 0;
+        }
+        for (acc = 0; acc < num_to_check; acc++) {
+            inode_num = unpack_unsigned_int(cur_block->data.inode_ptrs[acc]);
+            if ((strcmp(cur_block->data.dir_entries[acc], path) == 0) 
+                && inode_num != 0) {
+                free(cur_block);
+                free(indir);
+                result = (inode_t) get_block_blocking(inode_num);
+                return result;
+            }
+        }
+    }
+    free(cur_block);
+    indirect = (indirect_block_t) get_block_blocking(unpack_unsigned_int(indir->data.indirect_ptr));
+    free(indir);
+    return get_inode_indir(indirect, path, size);
 }
 
-inode_t get_inode_helper(char *path, inode_t inode) {
-	unsigned int blockid;
-	dir_data_block_t cur_block;
-	int acc;
-	int size;
-	int inode_num;
-	int num_to_check;
-	inode_t result;
-	indirect_block_t indir;
-    cur_block = (dir_data_block_t) malloc (sizeof(struct dir_data_block));
+inode_t get_inode_helper(char *item, inode_t dir) {
+    unsigned int blockid;
+    dir_data_block_t cur_block;
+    int acc;
+    int size;
+    int inode_num;
+    int num_to_check;
+    inode_t result;
+    indirect_block_t indir;
 
-	size = unpack_unsigned_int(inode->data.size);
+    size = unpack_unsigned_int(dir->data.size);
 
-	for (acc = 0; acc < DIRECT_BLOCKS; acc++) {
-		blockid = unpack_unsigned_int(inode->data.direct_ptrs[acc]);
-		if (blockid == 0) {
-			free(cur_block);
-			return NULL;
-		}
-		cur_block = (dir_data_block_t) get_block_blocking(blockid);
+    for (acc = 0; acc < DIRECT_BLOCKS; acc++) {
+        blockid = unpack_unsigned_int(dir->data.direct_ptrs[acc]);
+        if (blockid == 0) {
+            free(cur_block);
+            return NULL;
+        }
+        cur_block = (dir_data_block_t) get_block_blocking(blockid);
 
-		if (size > ENTRIES_PER_TABLE) {
-			num_to_check = ENTRIES_PER_TABLE;
-			size = size - ENTRIES_PER_TABLE;
-		} else {
-			num_to_check = size;
-			size = 0;
-		}
-		for (acc = 0; acc < num_to_check; acc++) {
-			inode_num = unpack_unsigned_int(cur_block->data.inode_ptrs[acc]);
-			if ((strcmp(cur_block->data.dir_entries[acc], path) == 0) 
-				&& inode_num != 0) {
-				free(cur_block);
-				result = (inode_t) malloc (sizeof(struct inode));
-				if (!result) return NULL;
-				result = (inode_t) get_block_blocking(inode_num);
-				return result;
-			}
-		}
-	}
-	free(cur_block);
-	indir = (indirect_block_t) malloc (sizeof(struct indirect_block));
-	if (!indir) {
-		return NULL;
-	}
-	indir = (indirect_block_t) get_block_blocking(unpack_unsigned_int(inode->data.indirect_ptr));
+        if (size > ENTRIES_PER_TABLE) {
+            num_to_check = ENTRIES_PER_TABLE;
+            size = size - ENTRIES_PER_TABLE;
+        } else {
+            num_to_check = size;
+            size = 0;
+        }
+        for (acc = 0; acc < num_to_check; acc++) {
+            inode_num = unpack_unsigned_int(cur_block->data.inode_ptrs[acc]);
+            if ((strcmp(cur_block->data.dir_entries[acc], item) == 0) 
+                && inode_num != 0) {
+                free(cur_block);
+                result = (inode_t) get_block_blocking(inode_num);
+                return result;
+            }
+        }
+    }
+    free(cur_block);
+    indir = (indirect_block_t) get_block_blocking(unpack_unsigned_int(dir->data.indirect_ptr));
 
-    return get_inode_indir(indir, path, size);
+    return get_inode_indir(indir, item, size);
 }
 
 inode_t get_inode(char *path) {
-	inode_t current;
+    inode_t current;
     inode_t found;
     char *token;
     thread_files_t cur_thread;
 
-	if (!path) return NULL;
-	if (strlen(path) == 0) return NULL; 
+    if (!path) return NULL;
+    if (strlen(path) == 0) return NULL; 
 
-	current = (inode_t) malloc (sizeof(struct inode));
 
-	if (path[0] == '/') {
-		current = (inode_t) get_block_blocking(minifile_get_root_num());
-	} else {
-		cur_thread = minithread_directory();
-		if (!cur_thread) {
-			free(current);
-			return NULL;
-		}
-		current = (inode_t) get_block_blocking(cur_thread->inode_num);
-	}
+    if (path[0] == '/') {
+        current = (inode_t) get_block_blocking(minifile_get_root_num());
+    } else {
+        cur_thread = minithread_directory();
+        if (!cur_thread) {
+            return NULL;
+        }
+        current = (inode_t) get_block_blocking(cur_thread->inode_num);
+    }
 
-	token = strtok(path, "/");
+    token = strtok(path, "/");
 
-	while (token != NULL) {
-		found = get_inode_helper(token, current);
-		free(current);
-		if (!found) {
-			return NULL;
-		}
-		current = found;
-		token = strtok(NULL, "/");
-	}
+    while (token != NULL) {
+        found = get_inode_helper(token, current);
+        free(current);
+        if (!found) {
+            return NULL;
+        }
+        current = found;
+        token = strtok(NULL, "/");
+    }
     return current;
 }
 
@@ -326,10 +310,24 @@ int minifile_rmdir(char *dirname) {
 }
 
 int minifile_stat(char *path) {
-    return 0;
+    inode_t block;
+
+    block = get_inode(path);
+    if (!block) return -1;
+    if (block->data.inode_type == FILE_INODE) {
+        return unpack_unsigned_int(block->data.size);
+    } else return -2;
 }
 
 int minifile_cd(char *path) {
+    inode_t block;
+
+    block = get_inode(path);
+    if (!block || block->data.inode_type == FILE_INODE) return -1;
+    else {
+        
+    }
+
     return 0;
 }
 
