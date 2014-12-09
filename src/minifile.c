@@ -432,13 +432,40 @@ int minifile_cd(char *path) {
     return 0;
 }
 
+int ls_helper(char *item, int inode_num, void *arg, void *result) {
+    char ***file_list_ptr;
+    int len;
+
+    file_list_ptr = (char ***) result;
+    len = strlen(item);
+    **file_list_ptr = (char *) malloc (len + 1);
+    memcpy(**file_list_ptr, item, len + 1);
+
+    *file_list_ptr += 1;
+
+    return -1;
+}
+
 char **minifile_ls(char *path) {
-    printf("%s\n", path);
-    return NULL;
+    inode_t block;
+    int size;
+    char **file_list;
+    char **ptr
+
+    block = get_inode(path);
+    if (!block || block->data.inode_type == FILE_INODE) return -1;
+    else {
+        size = unpack_unsigned_int(block->data.size);
+        file_list = (char **) malloc (sizeof(char *) * size);
+        ptr = file_list
+        dir_iterate(block, ls_helper, NULL, &ptr);
+    }
+
+    return file_list;
 }
 
 void add_to_path(void *item, void *ptr) {
-    char** path_ptr;
+    char **path_ptr;
     str_and_len_t dir;
 
     path_ptr = (char **) ptr;
@@ -452,8 +479,8 @@ void add_to_path(void *item, void *ptr) {
 
 char* minifile_pwd(void) {
     thread_files_t files;
-    char* path;
-    char* ptr;
+    char *path;
+    char *ptr;
 
     files = minithread_directory();
     if (!files) return NULL;
