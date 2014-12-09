@@ -349,7 +349,7 @@ int minifile_cd(char *path) {
     else {
     	memcpy(path_copy, path, strlen(path)+1);
         files = minithread_directory();
-        if (path[0] == "/") {
+        if (path_copy[0] == '/') {
         	files->path_len = 0;
         	temp = queue_length(files->path);
         	for (acc = 0; acc < temp; acc++) {
@@ -373,7 +373,7 @@ int minifile_cd(char *path) {
         			free(result);
         		}
     		} else if (strcmp(token, ".") != 0) {
-    			result = (str_and_len_t) malloc (sizeof(str_and_len));
+    			result = (str_and_len_t) malloc (sizeof(struct str_and_len));
         		memcpy(result->data, token, strlen(token));
         		result->data = strlen(token);
         		files->path_len += strlen(token) + 1;
