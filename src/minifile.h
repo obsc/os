@@ -79,6 +79,30 @@ typedef struct free_block {
 }* free_block_t;
 
 /*
+ * Structure representing an indirect block.
+ * A list of direct pointers with a single indirect pointer.
+ */
+typedef struct indirect_block {
+    union {
+        struct {
+            char direct_ptrs[DIRECT_PER_TABLE][4];
+            char indirect_ptr[4];
+        } data;
+
+        char padding[DISK_BLOCK_SIZE];
+    };
+}* indirect_block_t;
+
+/*
+ * Struct representing a the filedata a thread has
+ */
+typedef struct thread_files {
+    queue_t path;
+    inode_t curdir;
+    // Other stuff here pls
+}* thread_files_t;
+
+/*
  * Structure representing a waiting disk request
  */
 typedef struct waiting_request {
@@ -102,11 +126,11 @@ typedef struct minifile* minifile_t;
 /* Handler for disk operations */
 void minifile_handle(disk_interrupt_arg_t *arg);
 
-/* Initialize minifile */
-void minifile_initialize();
-
 waiting_request_t read_block(int blockid, char* buffer);
 waiting_request_t write_block(int blockid, char* buffer);
+
+/* Initialize minifile */
+void minifile_initialize();
 
 /* 
  * General requiremens:

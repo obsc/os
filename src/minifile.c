@@ -1,23 +1,10 @@
 #include "defs.h"
 #include "minifile.h"
 #include "synch.h"
+#include "queue.h"
 #include "disk.h"
 #include "reqmap.h"
-
-/*
- * Structure representing an indirect block.
- * A list of direct pointers with a single indirect pointer.
- */
-typedef struct indirect_block {
-    union {
-        struct {
-            char direct_ptrs[DIRECT_PER_TABLE][4];
-            char indirect_ptr[4];
-        } data;
-
-        char padding[DISK_BLOCK_SIZE];
-    };
-}* indirect_block_t;
+#include "miniheader.h"
 
 /*
  * System wide-structure represnting a file.
@@ -42,6 +29,9 @@ struct minifile {
 disk_t *disk;
 reqmap_t requests;
 file_data_t *file_tbl;
+
+superblock_t disk_superblock;
+inode_t disk_root;
 
 // typedef struct {
 //   disk_t* disk;
@@ -77,19 +67,6 @@ void minifile_handle(disk_interrupt_arg_t *arg) {
     free(arg);
 }
 
-/* Initialize minifile globals
- */
-void minifile_initialize() {
-    file_tbl = (file_data_t *) calloc (disk_size, sizeof(file_data_t));
-
-    if (!file_tbl) return;
-
-    requests = reqmap_new(MAX_PENDING_DISK_REQUESTS);
-    if (!requests) {
-        free(file_tbl);
-    }
-}
-
 waiting_request_t createWaiting(int blockid, char* buffer) {
     waiting_request_t req;
 
@@ -119,6 +96,48 @@ waiting_request_t write_block(int blockid, char* buffer) {
     if (!req) return NULL;
     disk_write_block(disk, blockid, buffer);
     return req;
+}
+
+/* Initialize minifile globals
+ */
+void minifile_initialize() {
+    waiting_request_t req;
+    int magic_num;
+    int root_num;
+
+    file_tbl = (file_data_t *) calloc (disk_size, sizeof(file_data_t));
+
+    if (!file_tbl) return;
+
+    requests = reqmap_new(MAX_PENDING_DISK_REQUESTS);
+    if (!requests) {
+        free(file_tbl);
+    }
+
+    req = read_block(0, (char *) disk_superblock);
+    semaphore_P(req->wait);
+    if (req->reply != DISK_REPLY_OK) {
+        printf("Failed to load superblock\n");
+        free(req);
+        return -1;
+    }
+    free(req);
+
+    magic_num = unpack_unsigned_int(disk_superblock->data.magic_number);
+    if (magic_num != MAGIC) {
+        printf("Invalid magic number\n");
+        return -1;
+    }
+    root_num = unpack_unsigned_int(disk_superblock->data.root_inode);
+
+    req = read_block(root_num, (char *) disk_root);
+    semaphore_P(req->wait);
+    if (req->reply != DISK_REPLY_OK) {
+        printf("Failed to load root\n");
+        free(req);
+        return -1;
+    }
+    free(req);
 }
 
 minifile_t minifile_creat(char *filename) {

@@ -12,6 +12,7 @@
 #define __MINITHREAD_H__
 
 #include "machineprimitives.h"
+#include "minifile.h"
 
 #define PERIOD 100  // Represents how long each clock tick is
 
@@ -25,6 +26,8 @@ typedef enum {NEW = 1, WAITING, READY, RUNNING, ZOMBIE} status_t;
 typedef struct minithread *minithread_t;
 
 long time_ticks; // Current time in number of interrupt ticks
+
+extern thread_files_t minithread_directory();
 
 /*
  * minithread_t

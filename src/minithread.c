@@ -39,6 +39,7 @@ struct minithread {
     int id; // Id of the minithread
     status_t status; // Status: NEW, WAITING, READY, RUNNING, ZOMBIE
     int level; // The priority level of the thread
+    thread_files_t files;
     stack_pointer_t base;
     stack_pointer_t top;
 };
@@ -136,6 +137,14 @@ void minithread_next() {
     }
 }
 
+thread_files_t minithread_directory() {
+    if (cur_thread) {
+        return cur_thread->files;
+    } else {
+        return NULL;
+    }
+}
+
 /* Called after a thread ends operation */
 int minithread_exit(int *i) {
     interrupt_level_t old_level;
@@ -160,6 +169,10 @@ minithread_t minithread_fork(proc_t proc, arg_t arg) {
     return t;
 }
 
+void copy_queue(void* elem, void* q) {
+    queue_append((queue_t) q, elem);
+}
+
 /*
  * Creates a new thread control block. Returns NULL on failure
  */
@@ -174,6 +187,15 @@ minithread_t minithread_create(proc_t proc, arg_t arg) {
 
     t->status = NEW;
     t->level = 0;
+    t->files = (thread_files_t) malloc (sizeof(struct thread_files));
+    
+    t->files->path = queue_new();
+    if (cur_thread) {
+        t->files->curdir = cur_thread->files->curdir;
+        queue_iterate(cur_thread->files->path, copy_queue, t->files->path);
+    } else {
+        t->files->curdir = minifile_get_root();
+    }
 
     minithread_allocate_stack(&(t->base), &(t->top));
     minithread_initialize_stack(&(t->top), proc, arg, minithread_exit, NULL);
