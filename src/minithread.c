@@ -188,7 +188,7 @@ minithread_t minithread_create(proc_t proc, arg_t arg) {
     t->status = NEW;
     t->level = 0;
 
-    if (cur_thread) {
+    if (cur_thread && use_existing_disk) {
         t->files = (thread_files_t) malloc (sizeof(struct thread_files));
         t->files->path = queue_new();
         if (cur_thread->files) {

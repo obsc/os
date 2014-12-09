@@ -123,6 +123,7 @@ void minifile_initialize_blocks() {
     waiting_request_t req;
     int magic_num;
 
+    if (!use_existing_disk) return;
     req = read_block(0, (char *) disk_superblock);
     semaphore_P(req->wait);
     if (req->reply != DISK_REPLY_OK) {
@@ -137,7 +138,6 @@ void minifile_initialize_blocks() {
         printf("Invalid magic number\n");
         return;
     }
-    init_done = 1;
 }
 
 int minifile_get_root_num() {
@@ -151,6 +151,7 @@ inode_t minifile_get_inode(int inode_num) {
     n = (inode_t) malloc (sizeof(struct inode));
 
     req = read_block(inode_num, (char *) n);
+    semaphore_P(req->wait);
     if (req->reply != DISK_REPLY_OK) {
         printf("Failed to load inode: %i\n", inode_num);
         free(req);
