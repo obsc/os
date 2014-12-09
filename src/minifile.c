@@ -24,7 +24,7 @@ typedef struct file_data {
  *     the opened file like the position of the cursor, etc.
  */
 struct minifile {
-    int inodeNum;
+    int inode_num;
     int cursor;
 };
 
@@ -35,10 +35,54 @@ disk_t *disk;
 reqmap_t requests;
 file_data_t *file_tbl;
 
+semaphore_t metadata_lock;
 superblock_t disk_superblock;
 
 char delim[1] = "/";
 char null_term[1] = "\0";
+
+waiting_request_t createWaiting(int blockid, char* buffer) {
+    waiting_request_t req;
+
+    req = (waiting_request_t) malloc (sizeof (struct waiting_request));
+    if (!req) return NULL;
+
+    req->wait = semaphore_create();
+    if (!req->wait) {
+        free(req);
+        return NULL;
+    }
+    semaphore_initialize(req->wait, 0);
+
+    reqmap_set(requests, blockid, buffer, req);
+    return req;
+}
+
+waiting_request_t read_block(int blockid, char* buffer) {
+    waiting_request_t req = createWaiting(blockid, buffer);
+    if (!req) return NULL;
+    disk_read_block(disk, blockid, buffer);
+    return req;
+}
+
+waiting_request_t write_block(int blockid, char* buffer) {
+    waiting_request_t req = createWaiting(blockid, buffer);
+    if (!req) return NULL;
+    disk_write_block(disk, blockid, buffer);
+    return req;
+}
+
+void write_block_blocking(int block_num, char* block) {
+    waiting_request_t req;
+
+    req = write_block(block_num, block);
+    semaphore_P(req->wait);
+    if (req->reply != DISK_REPLY_OK) {
+        free(req);
+        return;
+    }
+    free(req);
+}
 
 char* get_block_blocking(int block_num) {
     waiting_request_t req;
@@ -194,6 +238,39 @@ inode_t get_inode(char *path, int *inode_num) {
     return current;
 }
 
+char* get_free_inode_block(int *block_num) {
+    free_block_t freeblock;
+    int nextblock;
+
+    *block_num = unpack_unsigned_int(disk_superblock->data.first_free_inode);
+
+    if (*block_num == 0) {
+        return NULL;
+    } else {
+        freeblock = get_block_blocking(*block_num);
+        nextblock = unpack_unsigned_int(freeblock->next_free_block);
+        pack_unsigned_int(disk_superblock->data.first_free_inode, nextblock);
+        write_block_blocking(0, disk_superblock);
+    }
+    return freeblock;
+}
+
+char* get_free_data_block(int *block_num) {
+    free_block_t freeblock;
+    int nextblock;
+
+    *block_num = unpack_unsigned_int(disk_superblock->data.first_free_data_block);
+
+    if (*block_num == 0) {
+        return NULL;
+    } else {
+        freeblock = get_block_blocking(*block_num);
+        nextblock = unpack_unsigned_int(freeblock->next_free_block);
+        pack_unsigned_int(disk_superblock->data.first_free_data_block, nextblock);
+        write_block_blocking(0, disk_superblock);
+    }
+    return freeblock;
+}
 
 /* Handler for disk operations
  * Assumes interrupts are disabled within
@@ -217,37 +294,6 @@ void minifile_handle(disk_interrupt_arg_t *arg) {
     free(arg);
 }
 
-waiting_request_t createWaiting(int blockid, char* buffer) {
-    waiting_request_t req;
-
-    req = (waiting_request_t) malloc (sizeof (struct waiting_request));
-    if (!req) return NULL;
-
-    req->wait = semaphore_create();
-    if (!req->wait) {
-        free(req);
-        return NULL;
-    }
-    semaphore_initialize(req->wait, 0);
-
-    reqmap_set(requests, blockid, buffer, req);
-    return req;
-}
-
-waiting_request_t read_block(int blockid, char* buffer) {
-    waiting_request_t req = createWaiting(blockid, buffer);
-    if (!req) return NULL;
-    disk_read_block(disk, blockid, buffer);
-    return req;
-}
-
-waiting_request_t write_block(int blockid, char* buffer) {
-    waiting_request_t req = createWaiting(blockid, buffer);
-    if (!req) return NULL;
-    disk_write_block(disk, blockid, buffer);
-    return req;
-}
-
 /* Initialize minifile globals */
 void minifile_initialize() {
     file_tbl = (file_data_t *) calloc (disk_size, sizeof(file_data_t));
@@ -260,6 +306,8 @@ void minifile_initialize() {
         return;
     }
 
+    metadata_lock = semaphore_create();
+    semaphore_initialize(metadata_lock, 1);
     disk_superblock = (superblock_t) malloc (sizeof(struct superblock));
 }
 
@@ -313,8 +361,64 @@ int minifile_unlink(char *filename) {
     return 0;
 }
 
-int minifile_mkdir(char *dirname) {
+int mkdir_helper(inode_t dir, int inode_num, char *name) {
+    int direct_ind;
+    dir_data_block_t direct_block;
+    int direct_block_num;
+    int entry_num;
+
+    size = unpack_unsigned_int(dir->data.size);
+    pack_unsigned_int(dir, size + 1);
+    if (size < DIRECT_BLOCKS * ENTRIES_PER_TABLE) { // found in a direct block
+        direct_ind = size / ENTRIES_PER_TABLE;
+        entry_num = size % ENTRIES_PER_TABLE;
+        direct_block_num = unpack_unsigned_int(dir->data.direct_ptrs[direct_ind]);
+        if (entry_num == 0) { // New direct block
+            direct_block = (dir_data_block_t) get_free_data_block(&direct_block_num);
+            if (!direct_block) {
+                free(dir);
+                return -1;
+            }
+            pack_unsigned_int(dir->data.direct_ptrs[direct_ind], direct_block_num);
+        } else if (direct_block_num == 0) {
+            free(dir);
+            return -1;
+        } else {
+            direct_block = (dir_data_block_t) get_block_blocking(direct_block_num);
+        }
+
+    }
     return 0;
+}
+
+int minifile_mkdir(char *dirname) {
+    thread_files_t files;
+    char *dir;
+    char *name;
+    inode_t prevdir;
+    int prevdir_num;
+    int size;
+
+    name = strrchr(dirname, '/') + 1;
+    if (!name) { // Current directory
+        files = minithread_directory();
+        if (!files) return -1;
+        prevdir = get_block_blocking(files->inode_num);
+        prevdir_num = files->inode_num;
+    } else {
+        dir = (char *) malloc (name - dirname + 2);
+        memcpy(dir, dirname, name - dirname + 1);
+        memcpy(dir + name - dirname + 1, null_term, 1);
+        prevdir = get_inode(dir, &prevdir_num);
+        free(dir);
+    }
+
+    if (!prevdir || prevdir->data.inode_type == FILE_INODE) {
+        free(prevdir);
+        return -1;
+    }
+
+    return mkdir_helper(prevdir, prevdir_num, name);
 }
 
 int minifile_rmdir(char *dirname) {
@@ -324,12 +428,18 @@ int minifile_rmdir(char *dirname) {
 int minifile_stat(char *path) {
     inode_t block;
     int dummy;
+    int size;
 
     block = get_inode(path, &dummy);
     if (!block) return -1;
     if (block->data.inode_type == FILE_INODE) {
-        return unpack_unsigned_int(block->data.size);
-    } else return -2;
+        size = unpack_unsigned_int(block->data.size);
+        free(block);
+        return size;
+    } else {
+        free(block);
+        return -2;
+    }
 }
 
 int minifile_cd(char *path) {
@@ -429,7 +539,10 @@ char **minifile_ls(char *path) {
         block = get_inode(path, &dummy);
     }
 
-    if (!block || block->data.inode_type == FILE_INODE) return NULL;
+    if (!block || block->data.inode_type == FILE_INODE) {
+        free(block);
+        return NULL;
+    }
     else {
         size = unpack_unsigned_int(block->data.size);
         file_list = (char **) malloc (sizeof(char *) * (size + 1));
@@ -438,6 +551,7 @@ char **minifile_ls(char *path) {
         file_list[size] = NULL;
     }
 
+    free(block);
     return file_list;
 }
 
