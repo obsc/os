@@ -450,15 +450,24 @@ char **minifile_ls(char *path) {
     inode_t block;
     int size;
     char **file_list;
-    char **ptr
+    char **ptr;
+    thread_files_t files;
 
-    block = get_inode(path);
-    if (!block || block->data.inode_type == FILE_INODE) return -1;
+    if (strlen(path) == 0) {
+        files = minithread_directory();
+        if (!files) return NULL;
+        block = (inode_t) get_block_blocking(files->inode_num);
+    } else {
+        block = get_inode(path);
+    }
+
+    if (!block || block->data.inode_type == FILE_INODE) return NULL;
     else {
         size = unpack_unsigned_int(block->data.size);
-        file_list = (char **) malloc (sizeof(char *) * size);
-        ptr = file_list
+        file_list = (char **) malloc (sizeof(char *) * (size + 1));
+        ptr = file_list;
         dir_iterate(block, ls_helper, NULL, &ptr);
+        file_list[size] = NULL;
     }
 
     return file_list;

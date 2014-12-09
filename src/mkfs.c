@@ -68,7 +68,7 @@ int initialize_root_dir(int max_inode_index) {
     }
     free(root_dir);
     free(req);
-    
+
     root_inode = (inode_t) malloc (sizeof (struct inode));
 
     // Construct new inode
