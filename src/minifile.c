@@ -4,7 +4,26 @@
 #include "queue.h"
 #include "disk.h"
 #include "reqmap.h"
+<<<<<<< Updated upstream
 #include "miniheader.h"
+=======
+#include <string.h>
+
+/*
+ * Structure representing an indirect block.
+ * A list of direct pointers with a single indirect pointer.
+ */
+typedef struct indirect_block {
+    union {
+        struct {
+            char direct_ptrs[DIRECT_PER_TABLE][4];
+            char indirect_ptr[4];
+        } data;
+
+        char padding[DISK_BLOCK_SIZE];
+    };
+}* indirect_block_t;
+>>>>>>> Stashed changes
 
 /*
  * System wide-structure represnting a file.
@@ -32,6 +51,23 @@ file_data_t *file_tbl;
 
 superblock_t disk_superblock;
 inode_t disk_root;
+
+inode_t get_inode(char *path) {
+	inode_t current;
+	char *token;
+
+	if (!path) return NULL;
+	if (strlen(path) == 0) return NULL; 
+
+	if (path[0] == '/') {
+		//current = root
+	} else {
+		//current = current
+	}
+
+	token = strtok(path, "/");
+	while 
+}
 
 // typedef struct {
 //   disk_t* disk;
