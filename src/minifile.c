@@ -400,13 +400,14 @@ int write_new_dir(int prevdir, dir_data_block_t dir, int dir_num, int entry_num,
     dir_data_block_t newdir_data;
     int newdir_num;
     int newdir_data_num;
+    int i;
 
-    newdir = get_free_inode_block(&newdir_num);
-    newdir_data = get_free_data_block(&newdir_data_num);
+    newdir = (inode_t) get_free_inode_block(&newdir_num);
+    newdir_data = (dir_data_block_t) get_free_data_block(&newdir_data_num);
 
     if (!newdir || !newdir_data) {
-        set_free_inode_block(newdir_num, newdir);
-        set_free_data_block(newdir_data_num, newdir_data);
+        set_free_inode_block(newdir_num, (char *) newdir);
+        set_free_data_block(newdir_data_num, (char *) newdir_data);
         free(newdir);
         free(newdir_data);
         return -1;
@@ -420,7 +421,7 @@ int write_new_dir(int prevdir, dir_data_block_t dir, int dir_num, int entry_num,
         pack_unsigned_int(newdir_data->data.inode_ptrs[i], 0);
     }
 
-    newdir->inode_type = DIR_INODE;
+    newdir->data.inode_type = DIR_INODE;
     pack_unsigned_int(newdir->data.size, 2);
     pack_unsigned_int(newdir->data.direct_ptrs[0], newdir_data_num);
     for (i = 1; i < DIRECT_BLOCKS; i++) {
@@ -428,8 +429,8 @@ int write_new_dir(int prevdir, dir_data_block_t dir, int dir_num, int entry_num,
     }
     pack_unsigned_int(newdir->data.indirect_ptr, 0);
 
-    strcpy(dir->dir_entries[entry_num], name);
-    pack_unsigned_int(dir->inode_ptrs[entry_num], newdir_num);
+    strcpy(dir->data.dir_entries[entry_num], name);
+    pack_unsigned_int(dir->data.inode_ptrs[entry_num], newdir_num);
 
     write_block_blocking(newdir_data_num, (char *) newdir_data);
     write_block_blocking(newdir_num, (char *) newdir);
@@ -437,6 +438,7 @@ int write_new_dir(int prevdir, dir_data_block_t dir, int dir_num, int entry_num,
 
     free(newdir);
     free(newdir_data);
+    return 0;
 }
 
 int mkdir_helper(inode_t dir, int inode_num, char *name) {
@@ -465,15 +467,15 @@ int mkdir_helper(inode_t dir, int inode_num, char *name) {
         } else {
             direct_block = (dir_data_block_t) get_block_blocking(direct_block_num);
         }
-        if (write_new_dir(inode_num) == -1) {
+        if (write_new_dir(inode_num, direct_block, direct_block_num, entry_num, name) == -1) {
             if (entry_num == 0) {
-                set_free_data_block(direct_block_num, direct_block);
+                set_free_data_block(direct_block_num, (char *) direct_block);
             }
             free(direct_block);
             free(dir);
             return -1;
         }
-        write_block_blocking(inode_num, dir);
+        write_block_blocking(inode_num, (char *) dir);
         free(dir);
         return 0;
     }
