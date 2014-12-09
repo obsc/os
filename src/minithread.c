@@ -412,7 +412,7 @@ void minithread_system_initialize(proc_t mainproc, arg_t mainarg) {
     network_initialize(network_handler);
     miniroute_initialize();
     minimsg_initialize();
-    miniterm_initialize();
+    //miniterm_initialize();
     minisocket_initialize();
     // Switch into our first thread
     minithread_switch(&system_stack, &(cur_thread->top));

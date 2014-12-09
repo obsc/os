@@ -103,7 +103,7 @@ int dir_iterate_indir(indirect_block_t indir, dir_func_t f, void* arg, void* res
     indirect = (indirect_block_t) get_block_blocking(unpack_unsigned_int(indir->data.indirect_ptr));
     free(indir);
 
-    return get_inode_indir(indirect, f, arg, result, size);
+    return dir_iterate_indir(indirect, f, arg, result, size);
 }
 
 int dir_iterate(inode_t dir, dir_func_t f, void* arg, void* result) {
@@ -143,7 +143,7 @@ int dir_iterate(inode_t dir, dir_func_t f, void* arg, void* result) {
     free(cur_block);
     indir = (indirect_block_t) get_block_blocking(unpack_unsigned_int(dir->data.indirect_ptr));
 
-    return get_inode_indir(indir, f, arg, result, size);
+    return dir_iterate_indir(indir, f, arg, result, size);
 }
 
 // inode_t get_inode_indir(indirect_block_t indir, char *path, int cur_size) {
@@ -238,9 +238,12 @@ int dir_iterate(inode_t dir, dir_func_t f, void* arg, void* result) {
 //     return get_inode_indir(indir, item, size);
 // }
 
-inode_t get_inode_helper(char *item, int inode_num, void *arg, void *result) {
+int get_inode_helper(char *item, int inode_num, void *arg, void *result) {
+    inode_t *res;
+
     if ((strcmp(item, (char *) arg) == 0) && inode_num != 0) {
-        *result = (inode_t) get_block_blocking(inode_num);
+        res = (inode_t *) result;
+        *res = (inode_t) get_block_blocking(inode_num);
         return 0;
     }
     return -1;
@@ -253,7 +256,7 @@ inode_t get_inode(char *path) {
     thread_files_t cur_thread;
 
     if (!path) return NULL;
-    if (strlen(path) == 0) return NULL; 
+    if (strlen(path) == 0) return NULL;
 
 
     if (path[0] == '/') {
@@ -430,6 +433,7 @@ int minifile_cd(char *path) {
 }
 
 char **minifile_ls(char *path) {
+    printf("%s\n", path);
     return NULL;
 }
 
