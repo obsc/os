@@ -154,7 +154,7 @@ int main(int argc, char** argv) {
     use_existing_disk = 0;
     disk_name = "MINIFILESYSTEM";
     disk_flags = DISK_READWRITE;
-    disk_size = DISK_SIZE;
+    disk_size = atoi(argv[1]);
 
     minithread_system_initialize(mkfs, NULL);
     return -1;
