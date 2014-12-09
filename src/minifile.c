@@ -160,7 +160,6 @@ int get_inode_helper(char *item, int inode_num, void *arg, void *result) {
 inode_t get_inode(char *path, int *inode_num) {
     inode_t current;
     int found;
-    inode_t found;
     char *token;
     thread_files_t cur_thread;
 
