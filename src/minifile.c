@@ -35,10 +35,57 @@ superblock_t disk_superblock;
 
 char delim[1] = "/";
 char null_term[1] = "\0";
+inode_t get_inode_block(int inode_num);
+
+inode_t get_inode_indir()
+
+inode_t get_inode_helper(char *path, inode_t inode) {
+	unsigned int blockid;
+	dir_data_block_t cur_block;
+	int acc;
+	int size;
+	int inode_num;
+	char *data;
+	int num_to_check;
+	cur_block = (dir_data_block_t) malloc (sizeof(struct dir_data_block));
+	size = unpack_unsigned_int(inode->data.size);
+
+
+
+	for (acc = 0; acc < DIRECT_BLOCKS; acc++) {
+		blockid = unpack_unsigned_int(current->data.direct_ptrs[acc]);
+		if (blockid == 0) return NULL;
+		req = read_block(blockid, (char *) cur_block);
+		semaphore_P(req->wait);
+		if (req->reply != DISK_REPLY_OK) {
+    		free(req);
+    		return NULL;
+		}
+		free(req);
+		if (size > ENTRIES_PER_TABLE) {
+			num_to_check = ENTRIES_PER_TABLE;
+			size = size - ENTRIES_PER_TABLE;
+		} else {
+			num_to_check = size;
+			size = 0;
+		}
+		for (acc = 0; acc < num_to_check; acc++) {
+			inode_num = unpack_unsigned_int(cur_block->data.inode_ptrs[acc]);
+			if ((strcmp(cur_block->data.dir_entries[acc], path) == 0) 
+				&& inode_num != 0) {
+				return get_inode_block(inode_num);
+			}
+		}
+	}
+
+
+
+}
 
 inode_t get_inode(char *path) {
-	//inode_t current;
+	inode_t current;
 	char *token;
+	inode_t found;
 
 	if (!path) return NULL;
 	if (strlen(path) == 0) return NULL; 
@@ -50,8 +97,13 @@ inode_t get_inode(char *path) {
 	}
 
 	token = strtok(path, "/");
+
+	while (token != NULL) {
+
+	}
     return NULL;
 }
+
 
 /* Handler for disk operations
  * Assumes interrupts are disabled within
