@@ -56,24 +56,30 @@ char* get_block_blocking(int block_num) {
     return block;
 }
 
-inode_t get_inode_indir() {
-    return NULL;
-}
-
-inode_t get_inode_helper(char *path, inode_t inode) {
+inode_t get_inode_indir(indirect_block_t indir, int cur_size) {
 	unsigned int blockid;
 	dir_data_block_t cur_block;
+	waiting_request_t req;
 	int acc;
 	int size;
 	int inode_num;
 	int num_to_check;
-
+	inode_t result;
+	indirect_block_t indirect;
     cur_block = (dir_data_block_t) malloc (sizeof(struct dir_data_block));
-	size = unpack_unsigned_int(inode->data.size);
-
+    if (!cur_block || cur_size == 0) {
+    	free(cur_block);
+    	free(indir);
+    	return NULL;
+    }
+    size = cur_size;
 	for (acc = 0; acc < DIRECT_BLOCKS; acc++) {
-		blockid = unpack_unsigned_int(inode->data.direct_ptrs[acc]);
-		if (blockid == 0) return NULL;
+		blockid = unpack_unsigned_int(indir->data.direct_ptrs[acc]);
+		if (blockid == 0) {
+			free(cur_block);
+			free(indir);
+			return NULL;
+		}
 		cur_block = (dir_data_block_t) get_block_blocking(blockid);
 
 		if (size > ENTRIES_PER_TABLE) {
@@ -87,35 +93,111 @@ inode_t get_inode_helper(char *path, inode_t inode) {
 			inode_num = unpack_unsigned_int(cur_block->data.inode_ptrs[acc]);
 			if ((strcmp(cur_block->data.dir_entries[acc], path) == 0) 
 				&& inode_num != 0) {
-				return (inode_t) get_block_blocking(inode_num);
+				free(cur_block);
+				free(indir);
+				result = (inode_t) malloc (sizeof(struct inode));
+				if (!result) return NULL;
+				result = (inode_t) get_block_blocking(inode_num);
+				return result;
 			}
 		}
 	}
+	free(cur_block);
+	indirect = (indirect_block_t) malloc (sizeof(struct indirect_block));
+	if (!indirect) {
+		free(indir);
+		return NULL;
+	}
+	indirect = (indirect_block_t) get_block_blocking(unpack_unsigned_int(indir->data.indirect_ptr));
+	free(indir);
+	return get_inode_indir(indirect, size);
+}
 
+inode_t get_inode_helper(char *path, inode_t inode) {
+	unsigned int blockid;
+	dir_data_block_t cur_block;
+	waiting_request_t req;
+	int acc;
+	int size;
+	int inode_num;
+	int num_to_check;
+	inode_t result;
+	indirect_block_t indir;
+    cur_block = (dir_data_block_t) malloc (sizeof(struct dir_data_block));
 
-    return NULL;
+	size = unpack_unsigned_int(inode->data.size);
+
+	for (acc = 0; acc < DIRECT_BLOCKS; acc++) {
+		blockid = unpack_unsigned_int(inode->data.direct_ptrs[acc]);
+		if (blockid == 0) {
+			free(cur_block);
+			return NULL;
+		}
+		cur_block = (dir_data_block_t) get_block_blocking(blockid);
+
+		if (size > ENTRIES_PER_TABLE) {
+			num_to_check = ENTRIES_PER_TABLE;
+			size = size - ENTRIES_PER_TABLE;
+		} else {
+			num_to_check = size;
+			size = 0;
+		}
+		for (acc = 0; acc < num_to_check; acc++) {
+			inode_num = unpack_unsigned_int(cur_block->data.inode_ptrs[acc]);
+			if ((strcmp(cur_block->data.dir_entries[acc], path) == 0) 
+				&& inode_num != 0) {
+				free(cur_block);
+				result = (inode_t) malloc (sizeof(struct inode));
+				if (!result) return NULL;
+				result = (inode_t) get_block_blocking(inode_num);
+				return result;
+			}
+		}
+	}
+	free(cur_block);
+	indir = (indirect_block_t) malloc (sizeof(struct indirect_block));
+	if (!indir) {
+		return NULL;
+	}
+	indir = (indirect_block_t) get_block_blocking(unpack_unsigned_int(inode->data.indirect_ptr));
+
+    return get_inode_indir(indir, size);
 }
 
 inode_t get_inode(char *path) {
-	//inode_t current;
-    //inode_t found;
+	inode_t current;
+    inode_t found;
     char *token;
+    thread_files_t cur_thread;
 
 	if (!path) return NULL;
 	if (strlen(path) == 0) return NULL; 
 
+	current = (inode_t) malloc (sizeof(struct inode));
+
 	if (path[0] == '/') {
-		//current = root
+		current = (inode_t) get_block_blocking(minifile_get_root_num());
 	} else {
-		//current = current
+		cur_thread = minithread_directory();
+		if (!cur_thread) {
+			free(current);
+			return NULL;
+		}
+		current = (inode_t) get_block_blocking(cur_thread->inode_num);
 	}
 
 	token = strtok(path, "/");
 
 	while (token != NULL) {
-
+		found = get_inode_helper(token, current);
+		free(current);
+		if (!found) {
+			return NULL;
+		}
+		current = found;
+		token = strtok(NULL, "/");
 	}
-    return NULL;
+    return current;
 }
 
 
