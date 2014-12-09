@@ -99,6 +99,7 @@ typedef struct indirect_block {
  */
 typedef struct thread_files {
     queue_t path;
+    int inode_num;
     inode_t curdir;
     // Other stuff here pls
 }* thread_files_t;
@@ -133,8 +134,14 @@ waiting_request_t write_block(int blockid, char* buffer);
 /* Initialize minifile */
 void minifile_initialize();
 
+/* Initialize default blocks */
+void minifile_initialize_blocks();
+
 /* Returns an inode of the root directory */
-inode_t minifile_get_root();
+int minifile_get_root_num();
+
+/* Returns an inode given an inode number */
+inode_t minifile_get_inode(int inode_num);
 
 /* 
  * General requiremens:

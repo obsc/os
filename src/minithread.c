@@ -187,14 +187,17 @@ minithread_t minithread_create(proc_t proc, arg_t arg) {
 
     t->status = NEW;
     t->level = 0;
-    t->files = (thread_files_t) malloc (sizeof(struct thread_files));
 
-    t->files->path = queue_new();
     if (cur_thread) {
-        t->files->curdir = cur_thread->files->curdir;
-        queue_iterate(cur_thread->files->path, copy_queue, t->files->path);
-    } else {
-        t->files->curdir = minifile_get_root();
+        t->files = (thread_files_t) malloc (sizeof(struct thread_files));
+        t->files->path = queue_new();
+        if (cur_thread->files) {
+            queue_iterate(cur_thread->files->path, copy_queue, t->files->path);
+            t->files->inode_num = cur_thread->files->inode_num;
+        } else {
+            t->files->inode_num = minifile_get_root_num();
+        }
+        t->files->curdir = minifile_get_inode(t->files->inode_num);
     }
 
     minithread_allocate_stack(&(t->base), &(t->top));
@@ -347,6 +350,21 @@ void disk_handler(void *arg) {
     set_interrupt_level(old_level);
 }
 
+proc_t temp_mainproc;
+arg_t temp_mainarg;
+
+/*
+ * Initializes file system blocks
+ * This is required as we can only wait on I/O after threads are started
+ */
+int init_blocks(int *arg) {
+    minifile_initialize_blocks();
+
+    minithread_fork(temp_mainproc, temp_mainarg);
+    minithread_fork(reaper, NULL);
+    return 0;
+}
+
 /*
  * Initialization.
  *
@@ -382,8 +400,9 @@ void minithread_system_initialize(proc_t mainproc, arg_t mainarg) {
     garbage = semaphore_create();
     semaphore_initialize(garbage, 0);
     // Initialize threads
-    minithread_fork(reaper, NULL);
-    cur_thread = minithread_create(mainproc, mainarg);
+    temp_mainproc = mainproc;
+    temp_mainarg = mainarg;
+    cur_thread = minithread_create(init_blocks, NULL);
     // Disable interrupts for first switch
     old_level = set_interrupt_level(DISABLED);
     // Initialize clock

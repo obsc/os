@@ -32,7 +32,6 @@ reqmap_t requests;
 file_data_t *file_tbl;
 
 superblock_t disk_superblock;
-inode_t disk_root;
 
 inode_t get_inode(char *path) {
 	//inode_t current;
@@ -104,13 +103,8 @@ waiting_request_t write_block(int blockid, char* buffer) {
     return req;
 }
 
-/* Initialize minifile globals
- */
+/* Initialize minifile globals */
 void minifile_initialize() {
-    waiting_request_t req;
-    int magic_num;
-    int root_num;
-
     file_tbl = (file_data_t *) calloc (disk_size, sizeof(file_data_t));
 
     if (!file_tbl) return;
@@ -120,6 +114,14 @@ void minifile_initialize() {
         free(file_tbl);
         return;
     }
+
+    disk_superblock = (superblock_t) malloc (sizeof(struct superblock));
+}
+
+/* Initialize minifile global blocks */
+void minifile_initialize_blocks() {
+    waiting_request_t req;
+    int magic_num;
 
     req = read_block(0, (char *) disk_superblock);
     semaphore_P(req->wait);
@@ -135,20 +137,29 @@ void minifile_initialize() {
         printf("Invalid magic number\n");
         return;
     }
-    root_num = unpack_unsigned_int(disk_superblock->data.root_inode);
-
-    req = read_block(root_num, (char *) disk_root);
-    semaphore_P(req->wait);
-    if (req->reply != DISK_REPLY_OK) {
-        printf("Failed to load root\n");
-        free(req);
-        return;
-    }
-    free(req);
+    init_done = 1;
 }
 
-inode_t minifile_get_root() {
-    return disk_root;
+int minifile_get_root_num() {
+    return unpack_unsigned_int(disk_superblock->data.root_inode);
+}
+
+inode_t minifile_get_inode(int inode_num) {
+    waiting_request_t req;
+    inode_t n;
+
+    n = (inode_t) malloc (sizeof(struct inode));
+
+    req = read_block(inode_num, (char *) n);
+    if (req->reply != DISK_REPLY_OK) {
+        printf("Failed to load inode: %i\n", inode_num);
+        free(req);
+        free(n);
+        return NULL;
+    }
+
+    free(req);
+    return n;
 }
 
 minifile_t minifile_creat(char *filename) {
