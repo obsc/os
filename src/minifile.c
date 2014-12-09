@@ -1,5 +1,6 @@
 #include "defs.h"
 #include "minifile.h"
+#include "minithread.h"
 #include "synch.h"
 #include "queue.h"
 #include "disk.h"
@@ -35,9 +36,29 @@ superblock_t disk_superblock;
 
 char delim[1] = "/";
 char null_term[1] = "\0";
-inode_t get_inode_block(int inode_num);
 
-inode_t get_inode_indir()
+void* get_block_blocking(int block_num) {
+    waiting_request_t req;
+    char* block;
+
+    block = (char *) malloc (DISK_BLOCK_SIZE);
+
+    req = read_block(block_num, block);
+    semaphore_P(req->wait);
+    if (req->reply != DISK_REPLY_OK) {
+        printf("Failed to load block: %i\n", block_num);
+        free(req);
+        free(block);
+        return NULL;
+    }
+
+    free(req);
+    return block;
+}
+
+inode_t get_inode_indir() {
+    return NULL;
+}
 
 inode_t get_inode_helper(char *path, inode_t inode) {
 	unsigned int blockid;
@@ -45,23 +66,16 @@ inode_t get_inode_helper(char *path, inode_t inode) {
 	int acc;
 	int size;
 	int inode_num;
-	char *data;
 	int num_to_check;
-	cur_block = (dir_data_block_t) malloc (sizeof(struct dir_data_block));
+
+    cur_block = (dir_data_block_t) malloc (sizeof(struct dir_data_block));
 	size = unpack_unsigned_int(inode->data.size);
 
-
-
 	for (acc = 0; acc < DIRECT_BLOCKS; acc++) {
-		blockid = unpack_unsigned_int(current->data.direct_ptrs[acc]);
+		blockid = unpack_unsigned_int(inode->data.direct_ptrs[acc]);
 		if (blockid == 0) return NULL;
-		req = read_block(blockid, (char *) cur_block);
-		semaphore_P(req->wait);
-		if (req->reply != DISK_REPLY_OK) {
-    		free(req);
-    		return NULL;
-		}
-		free(req);
+		cur_block = (dir_data_block_t) get_block_blocking(blockid);
+
 		if (size > ENTRIES_PER_TABLE) {
 			num_to_check = ENTRIES_PER_TABLE;
 			size = size - ENTRIES_PER_TABLE;
@@ -73,19 +87,19 @@ inode_t get_inode_helper(char *path, inode_t inode) {
 			inode_num = unpack_unsigned_int(cur_block->data.inode_ptrs[acc]);
 			if ((strcmp(cur_block->data.dir_entries[acc], path) == 0) 
 				&& inode_num != 0) {
-				return get_inode_block(inode_num);
+				return get_block_blocking(inode_num);
 			}
 		}
 	}
 
 
-
+    return NULL;
 }
 
 inode_t get_inode(char *path) {
-	inode_t current;
-	char *token;
-	inode_t found;
+	//inode_t current;
+    //inode_t found;
+    char *token;
 
 	if (!path) return NULL;
 	if (strlen(path) == 0) return NULL; 
@@ -199,25 +213,6 @@ int minifile_get_root_num() {
     return unpack_unsigned_int(disk_superblock->data.root_inode);
 }
 
-inode_t get_inode_block(int inode_num) {
-    waiting_request_t req;
-    inode_t n;
-
-    n = (inode_t) malloc (sizeof(struct inode));
-
-    req = read_block(inode_num, (char *) n);
-    semaphore_P(req->wait);
-    if (req->reply != DISK_REPLY_OK) {
-        printf("Failed to load inode: %i\n", inode_num);
-        free(req);
-        free(n);
-        return NULL;
-    }
-
-    free(req);
-    return n;
-}
-
 minifile_t minifile_creat(char *filename) {
     return NULL;
 }
@@ -270,7 +265,7 @@ void add_to_path(void *item, void *ptr) {
     dir = (str_and_len_t) item;
     memcpy(*path_ptr, delim, 1);
     memcpy(*path_ptr + 1, dir->data, dir->len);
-    
+
     *path_ptr += dir->len + 1;
     memcpy(*path_ptr, null_term, 1);
  }
