@@ -247,12 +247,12 @@ char* get_free_inode_block(int *block_num) {
     if (*block_num == 0) {
         return NULL;
     } else {
-        freeblock = get_block_blocking(*block_num);
+        freeblock = (free_block_t) get_block_blocking(*block_num);
         nextblock = unpack_unsigned_int(freeblock->next_free_block);
         pack_unsigned_int(disk_superblock->data.first_free_inode, nextblock);
-        write_block_blocking(0, disk_superblock);
+        write_block_blocking(0, (char *) disk_superblock);
     }
-    return freeblock;
+    return (char *) freeblock;
 }
 
 char* get_free_data_block(int *block_num) {
@@ -264,12 +264,12 @@ char* get_free_data_block(int *block_num) {
     if (*block_num == 0) {
         return NULL;
     } else {
-        freeblock = get_block_blocking(*block_num);
+        freeblock = (free_block_t) get_block_blocking(*block_num);
         nextblock = unpack_unsigned_int(freeblock->next_free_block);
         pack_unsigned_int(disk_superblock->data.first_free_data_block, nextblock);
-        write_block_blocking(0, disk_superblock);
+        write_block_blocking(0, (char *) disk_superblock);
     }
-    return freeblock;
+    return (char *) freeblock;
 }
 
 /* Handler for disk operations
@@ -366,9 +366,10 @@ int mkdir_helper(inode_t dir, int inode_num, char *name) {
     dir_data_block_t direct_block;
     int direct_block_num;
     int entry_num;
+    int size;
 
     size = unpack_unsigned_int(dir->data.size);
-    pack_unsigned_int(dir, size + 1);
+    pack_unsigned_int(dir->data.size, size + 1);
     if (size < DIRECT_BLOCKS * ENTRIES_PER_TABLE) { // found in a direct block
         direct_ind = size / ENTRIES_PER_TABLE;
         entry_num = size % ENTRIES_PER_TABLE;
@@ -397,18 +398,17 @@ int minifile_mkdir(char *dirname) {
     char *name;
     inode_t prevdir;
     int prevdir_num;
-    int size;
 
     name = strrchr(dirname, '/') + 1;
     if (!name) { // Current directory
         files = minithread_directory();
         if (!files) return -1;
-        prevdir = get_block_blocking(files->inode_num);
+        prevdir = (inode_t) get_block_blocking(files->inode_num);
         prevdir_num = files->inode_num;
     } else {
         dir = (char *) malloc (name - dirname + 2);
         memcpy(dir, dirname, name - dirname + 1);
-        memcpy(dir + name - dirname + 1, null_term, 1);
+        memcpy(dir + (name - dirname + 1), null_term, 1);
         prevdir = get_inode(dir, &prevdir_num);
         free(dir);
     }
