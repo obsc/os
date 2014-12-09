@@ -37,7 +37,7 @@ superblock_t disk_superblock;
 char delim[1] = "/";
 char null_term[1] = "\0";
 
-void* get_block_blocking(int block_num) {
+char* get_block_blocking(int block_num) {
     waiting_request_t req;
     char* block;
 
@@ -87,7 +87,7 @@ inode_t get_inode_helper(char *path, inode_t inode) {
 			inode_num = unpack_unsigned_int(cur_block->data.inode_ptrs[acc]);
 			if ((strcmp(cur_block->data.dir_entries[acc], path) == 0) 
 				&& inode_num != 0) {
-				return get_block_blocking(inode_num);
+				return (inode_t) get_block_blocking(inode_num);
 			}
 		}
 	}
