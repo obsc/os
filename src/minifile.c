@@ -336,11 +336,52 @@ int minifile_cd(char *path) {
     thread_files_t files;
     inode_t block;
     int inode_num;
+    char *token;
+    int acc;
+    str_and_len_t result;
+    void *data;
+    int temp;
+    char *path_copy;
+
 
     block = get_inode(path, &inode_num);
     if (!block || block->data.inode_type == FILE_INODE) return -1;
     else {
+    	memcpy(path_copy, path, strlen(path)+1);
         files = minithread_directory();
+        if (path[0] == "/") {
+        	files->path_len = 0;
+        	temp = queue_length(files->path);
+        	for (acc = 0; acc < temp; acc++) {
+        		if (queue_dequeue(files->path, &data) == 0) {
+        			result = (str_and_len_t) data;
+        			free(result);
+        		} else {
+        			return -1;
+        		}
+        	}
+        }
+
+        token = strtok(path_copy, "/");
+
+    	while (token != NULL) {
+    		if (strcmp(token, "..") == 0) {
+    			if (queue_dequeue(files->path, &data) == 0) {
+        			result = (str_and_len_t) data;
+        			files->path_len -= result->len + 1;
+        			free(result->data);
+        			free(result);
+        		}
+    		} else if (strcmp(token, ".") != 0) {
+    			result = (str_and_len_t) malloc (sizeof(str_and_len));
+        		memcpy(result->data, token, strlen(token));
+        		result->data = strlen(token);
+        		files->path_len += strlen(token) + 1;
+        		if (queue_prepend(files->path, result) == -1) return -1;
+    		}
+        	token = strtok(NULL, "/");
+    	}
+
         files->inode_num = inode_num;
     }
 
