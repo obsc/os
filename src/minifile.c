@@ -4,9 +4,7 @@
 #include "queue.h"
 #include "disk.h"
 #include "reqmap.h"
-<<<<<<< Updated upstream
 #include "miniheader.h"
-=======
 #include <string.h>
 
 /*
@@ -23,7 +21,6 @@ typedef struct indirect_block {
         char padding[DISK_BLOCK_SIZE];
     };
 }* indirect_block_t;
->>>>>>> Stashed changes
 
 /*
  * System wide-structure represnting a file.
