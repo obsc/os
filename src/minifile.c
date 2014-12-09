@@ -40,6 +40,8 @@ superblock_t disk_superblock;
 
 char delim[1] = "/";
 char null_term[1] = "\0";
+char parent[3] = "..";
+char self[2] = ".";
 
 waiting_request_t createWaiting(int blockid, char* buffer) {
     waiting_request_t req;
@@ -272,6 +274,38 @@ char* get_free_data_block(int *block_num) {
     return (char *) freeblock;
 }
 
+void set_free_inode_block(int block_num, char *block) {
+    free_block_t freeblock;
+    int first_free;
+
+    if (block_num == 0 || block == NULL) {
+        return;
+    }
+    freeblock = (free_block_t) block;
+    first_free = unpack_unsigned_int(disk_superblock->data.first_free_inode);
+    pack_unsigned_int(freeblock->next_free_block, first_free);
+    pack_unsigned_int(disk_superblock->data.first_free_inode, block_num);
+
+    write_block_blocking(block_num, block);
+    write_block_blocking(0, (char *) disk_superblock);
+}
+
+void set_free_data_block(int block_num, char *block) {
+    free_block_t freeblock;
+    int first_free;
+
+    if (block_num == 0 || block == NULL) {
+        return;
+    }
+    freeblock = (free_block_t) block;
+    first_free = unpack_unsigned_int(disk_superblock->data.first_free_data_block);
+    pack_unsigned_int(freeblock->next_free_block, first_free);
+    pack_unsigned_int(disk_superblock->data.first_free_data_block, block_num);
+
+    write_block_blocking(block_num, block);
+    write_block_blocking(0, (char *) disk_superblock);
+}
+
 /* Handler for disk operations
  * Assumes interrupts are disabled within
  */
@@ -361,6 +395,50 @@ int minifile_unlink(char *filename) {
     return 0;
 }
 
+int write_new_dir(int prevdir, dir_data_block_t dir, int dir_num, int entry_num, char *name) {
+    inode_t newdir;
+    dir_data_block_t newdir_data;
+    int newdir_num;
+    int newdir_data_num;
+
+    newdir = get_free_inode_block(&newdir_num);
+    newdir_data = get_free_data_block(&newdir_data_num);
+
+    if (!newdir || !newdir_data) {
+        set_free_inode_block(newdir_num, newdir);
+        set_free_data_block(newdir_data_num, newdir_data);
+        free(newdir);
+        free(newdir_data);
+        return -1;
+    }
+
+    pack_unsigned_int(newdir_data->data.inode_ptrs[0], prevdir);
+    memcpy(newdir_data->data.dir_entries[0], parent, 3);
+    pack_unsigned_int(newdir_data->data.inode_ptrs[1], newdir_num);
+    memcpy(newdir_data->data.dir_entries[1], self, 2);
+    for (i = 2; i < ENTRIES_PER_TABLE; i++) {
+        pack_unsigned_int(newdir_data->data.inode_ptrs[i], 0);
+    }
+
+    newdir->inode_type = DIR_INODE;
+    pack_unsigned_int(newdir->data.size, 2);
+    pack_unsigned_int(newdir->data.direct_ptrs[0], newdir_data_num);
+    for (i = 1; i < DIRECT_BLOCKS; i++) {
+        pack_unsigned_int(newdir->data.direct_ptrs[i], 0);
+    }
+    pack_unsigned_int(newdir->data.indirect_ptr, 0);
+
+    strcpy(dir->dir_entries[entry_num], name);
+    pack_unsigned_int(dir->inode_ptrs[entry_num], newdir_num);
+
+    write_block_blocking(newdir_data_num, (char *) newdir_data);
+    write_block_blocking(newdir_num, (char *) newdir);
+    write_block_blocking(dir_num, (char *) dir);
+
+    free(newdir);
+    free(newdir_data);
+}
+
 int mkdir_helper(inode_t dir, int inode_num, char *name) {
     int direct_ind;
     dir_data_block_t direct_block;
@@ -387,9 +465,20 @@ int mkdir_helper(inode_t dir, int inode_num, char *name) {
         } else {
             direct_block = (dir_data_block_t) get_block_blocking(direct_block_num);
         }
-
+        if (write_new_dir(inode_num) == -1) {
+            if (entry_num == 0) {
+                set_free_data_block(direct_block_num, direct_block);
+            }
+            free(direct_block);
+            free(dir);
+            return -1;
+        }
+        write_block_blocking(inode_num, dir);
+        free(dir);
+        return 0;
     }
-    return 0;
+    // Logic to handle indirect blocks
+    return -1;
 }
 
 int minifile_mkdir(char *dirname) {
@@ -400,6 +489,7 @@ int minifile_mkdir(char *dirname) {
     int prevdir_num;
 
     name = strrchr(dirname, '/') + 1;
+    if (strlen(name) == 0 || strlen(name) > 256) return -1;
     if (!name) { // Current directory
         files = minithread_directory();
         if (!files) return -1;
