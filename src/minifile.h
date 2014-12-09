@@ -60,7 +60,7 @@ typedef struct inode {
 typedef struct dir_data_block {
     union {
         struct {
-            char dir_entries[ENTRIES_PER_TABLE][256];
+            char dir_entries[ENTRIES_PER_TABLE][257];
             char inode_ptrs[ENTRIES_PER_TABLE][4];
         } data;
 
@@ -94,13 +94,18 @@ typedef struct indirect_block {
     };
 }* indirect_block_t;
 
+typedef struct str_and_len {
+    char* data;
+    int len;
+}* str_and_len_t;
+
 /*
  * Struct representing a the filedata a thread has
  */
 typedef struct thread_files {
     queue_t path;
+    int path_len;
     int inode_num;
-    inode_t curdir;
     // Other stuff here pls
 }* thread_files_t;
 
@@ -139,9 +144,6 @@ void minifile_initialize_blocks();
 
 /* Returns an inode of the root directory */
 int minifile_get_root_num();
-
-/* Returns an inode given an inode number */
-inode_t minifile_get_inode(int inode_num);
 
 /* 
  * General requiremens:

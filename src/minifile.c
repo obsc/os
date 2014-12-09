@@ -33,6 +33,9 @@ file_data_t *file_tbl;
 
 superblock_t disk_superblock;
 
+char delim[1] = "/";
+char null_term[1] = "\0";
+
 inode_t get_inode(char *path) {
 	//inode_t current;
 	char *token;
@@ -144,7 +147,7 @@ int minifile_get_root_num() {
     return unpack_unsigned_int(disk_superblock->data.root_inode);
 }
 
-inode_t minifile_get_inode(int inode_num) {
+inode_t get_inode_block(int inode_num) {
     waiting_request_t req;
     inode_t n;
 
@@ -207,6 +210,33 @@ char **minifile_ls(char *path) {
     return NULL;
 }
 
+void add_to_path(void *item, void *ptr) {
+    char** path_ptr;
+    str_and_len_t dir;
+
+    path_ptr = (char **) ptr;
+    dir = (str_and_len_t) item;
+    memcpy(*path_ptr, delim, 1);
+    memcpy(*path_ptr + 1, dir->data, dir->len);
+    
+    *path_ptr += dir->len + 1;
+    memcpy(*path_ptr, null_term, 1);
+ }
+
 char* minifile_pwd(void) {
-    return NULL;
+    thread_files_t files;
+    char* path;
+    char* ptr;
+
+    files = minithread_directory();
+    if (!files) return NULL;
+
+    path = (char *) malloc (files->path_len);
+    memcpy(path, delim, 1);
+    memcpy(path + 1, null_term, 1);
+    ptr = path;
+
+    queue_iterate(files->path, add_to_path, &ptr);
+
+    return path;
 }

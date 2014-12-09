@@ -193,11 +193,12 @@ minithread_t minithread_create(proc_t proc, arg_t arg) {
         t->files->path = queue_new();
         if (cur_thread->files) {
             queue_iterate(cur_thread->files->path, copy_queue, t->files->path);
+            t->files->path_len = cur_thread->files->path_len;
             t->files->inode_num = cur_thread->files->inode_num;
         } else {
             t->files->inode_num = minifile_get_root_num();
+            t->files->path_len = 2; // Root and null terminator
         }
-        t->files->curdir = minifile_get_inode(t->files->inode_num);
     }
 
     minithread_allocate_stack(&(t->base), &(t->top));

@@ -42,8 +42,8 @@ int initialize_free_blocks(int start, int end) {
 int initialize_root_dir(int max_inode_index) {
     inode_t root_inode;
     dir_data_block_t root_dir;
-    char parent[2] = "..";
-    char self[1] = ".";
+    char parent[3] = "..";
+    char self[2] = ".";
     int i;
     waiting_request_t req;
 
