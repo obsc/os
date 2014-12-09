@@ -4,26 +4,8 @@
 #include "queue.h"
 #include "disk.h"
 #include "reqmap.h"
-<<<<<<< Updated upstream
 #include "miniheader.h"
-=======
 #include <string.h>
-
-/*
- * Structure representing an indirect block.
- * A list of direct pointers with a single indirect pointer.
- */
-typedef struct indirect_block {
-    union {
-        struct {
-            char direct_ptrs[DIRECT_PER_TABLE][4];
-            char indirect_ptr[4];
-        } data;
-
-        char padding[DISK_BLOCK_SIZE];
-    };
-}* indirect_block_t;
->>>>>>> Stashed changes
 
 /*
  * System wide-structure represnting a file.
@@ -53,7 +35,7 @@ superblock_t disk_superblock;
 inode_t disk_root;
 
 inode_t get_inode(char *path) {
-	inode_t current;
+	//inode_t current;
 	char *token;
 
 	if (!path) return NULL;
@@ -66,20 +48,8 @@ inode_t get_inode(char *path) {
 	}
 
 	token = strtok(path, "/");
-	while 
+    return NULL;
 }
-
-// typedef struct {
-//   disk_t* disk;
-//   disk_request_t request;
-//   disk_reply_t reply;
-// } disk_interrupt_arg_t;
-
-// typedef struct {
-//   int blocknum;
-//   char* buffer; /* pointer to the memory buffer */
-//   disk_request_type_t type; /* type of disk request */
-// } disk_request_t;
 
 /* Handler for disk operations
  * Assumes interrupts are disabled within
@@ -148,6 +118,7 @@ void minifile_initialize() {
     requests = reqmap_new(MAX_PENDING_DISK_REQUESTS);
     if (!requests) {
         free(file_tbl);
+        return;
     }
 
     req = read_block(0, (char *) disk_superblock);
@@ -155,14 +126,14 @@ void minifile_initialize() {
     if (req->reply != DISK_REPLY_OK) {
         printf("Failed to load superblock\n");
         free(req);
-        return -1;
+        return;
     }
     free(req);
 
     magic_num = unpack_unsigned_int(disk_superblock->data.magic_number);
     if (magic_num != MAGIC) {
         printf("Invalid magic number\n");
-        return -1;
+        return;
     }
     root_num = unpack_unsigned_int(disk_superblock->data.root_inode);
 
@@ -171,9 +142,13 @@ void minifile_initialize() {
     if (req->reply != DISK_REPLY_OK) {
         printf("Failed to load root\n");
         free(req);
-        return -1;
+        return;
     }
     free(req);
+}
+
+inode_t minifile_get_root() {
+    return disk_root;
 }
 
 minifile_t minifile_creat(char *filename) {

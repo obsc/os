@@ -4,6 +4,7 @@
 #include "defs.h"
 #include "disk.h"
 #include "synch.h"
+#include "queue.h"
 
 #define RATIO_INODE 0.1
 #define MAGIC 4411
@@ -131,6 +132,9 @@ waiting_request_t write_block(int blockid, char* buffer);
 
 /* Initialize minifile */
 void minifile_initialize();
+
+/* Returns an inode of the root directory */
+inode_t minifile_get_root();
 
 /* 
  * General requiremens:

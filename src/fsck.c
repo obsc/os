@@ -162,8 +162,6 @@ int fsck(int *arg) {
     printf("Validating free data blocks\n");
     if (validate_free_blocks(1) == -1) return -1;
 
-    printf("Validating ")
-
     printf("File system validated\n");
 
     free(sprblk);
