@@ -110,7 +110,7 @@ int dir_iterate_indir(indirect_block_t indir, dir_func_t f, void* arg, void* res
     dir_data_block_t cur_block;
     int acc;
     int size;
-    int inode_num;
+    //int inode_num;
     int num_to_check;
     indirect_block_t indirect;
 
@@ -137,8 +137,8 @@ int dir_iterate_indir(indirect_block_t indir, dir_func_t f, void* arg, void* res
             size = 0;
         }
         for (acc = 0; acc < num_to_check; acc++) {
-            inode_num = unpack_unsigned_int(cur_block->data.inode_ptrs[acc]);
-            if (f(cur_block->data.dir_entries[acc], inode_num, arg, result) == 0) {
+            //inode_num = unpack_unsigned_int(cur_block->data.inode_ptrs[acc]);
+            if (f(cur_block->data.dir_entries[acc], cur_block->data.inode_ptrs[acc], arg, result) == 0) {
                 free(cur_block);
                 free(indir);
                 return 0;
@@ -157,7 +157,7 @@ int dir_iterate(inode_t dir, dir_func_t f, void* arg, void* result) {
     dir_data_block_t cur_block;
     int acc;
     int size;
-    int inode_num;
+    //int inode_num;
     int num_to_check;
     indirect_block_t indir;
 
@@ -179,8 +179,8 @@ int dir_iterate(inode_t dir, dir_func_t f, void* arg, void* result) {
             size = 0;
         }
         for (acc = 0; acc < num_to_check; acc++) {
-            inode_num = unpack_unsigned_int(cur_block->data.inode_ptrs[acc]);
-            if (f(cur_block->data.dir_entries[acc], inode_num, arg, result) == 0) {
+            //inode_num = unpack_unsigned_int(cur_block->data.inode_ptrs[acc]);
+            if (f(cur_block->data.dir_entries[acc], cur_block->data.inode_ptrs[acc], arg, result) == 0) {
                 free(cur_block);
                 return 0;
             }
@@ -192,12 +192,15 @@ int dir_iterate(inode_t dir, dir_func_t f, void* arg, void* result) {
     return dir_iterate_indir(indir, f, arg, result, size);
 }
 
-int get_inode_helper(char *item, int inode_num, void *arg, void *result) {
+int get_inode_helper(char *item, char *inode_num, void *arg, void *result) {
     int *res;
+    int actual_num;
 
-    if ((strcmp(item, (char *) arg) == 0) && inode_num != 0) {
+    actual_num = unpack_unsigned_int(inode_num);
+
+    if ((strcmp(item, (char *) arg) == 0) && actual_num != 0) {
         res = (int *) result;
-        *res = inode_num;
+        *res = actual_num;
         return 0;
     }
     return -1;
@@ -535,8 +538,197 @@ int minifile_mkdir(char *dirname) {
     return mkdir_helper(prevdir, prevdir_num, name);
 }
 
-int minifile_rmdir(char *dirname) {
+
+int rm_last(inode_t dir, int dir_num, char **result_num, char **result) {
+    unsigned int blockid;
+    dir_data_block_t cur_block;
+    int acc;
+    int size;
+    int inode_num;
+    int num_to_check;
+    indirect_block_t indir;
+    int indir_num;
+    indirect_block_t temp;
+    int temp_num;
+
+    size = unpack_unsigned_int(dir->data.size);
+    if (((size - 1) / ENTRIES_PER_TABLE) < DIRECT_BLOCKS) {
+    	blockid = unpack_unsigned_int(dir->data.direct_ptrs[(size -1) / ENTRIES_PER_TABLE]);
+    	if (blockid == 0) {
+    		return -1;
+    	}
+    	cur_block = (dir_data_block_t) get_block_blocking(blockid);
+    	*result_num = (char *) malloc (1 + strlen(cur_block->data.inode_ptrs[(size -1) % ENTRIES_PER_TABLE]));
+    	if (!(*result_num)) {
+    		free(cur_block);
+    		return -1;
+    	}
+    	memcpy(*result_num, cur_block->data.inode_ptrs[(size -1) % ENTRIES_PER_TABLE], strlen(cur_block->data.inode_ptrs[(size -1) % ENTRIES_PER_TABLE]) + 1);
+    	*result = (char *) malloc (1 + strlen(cur_block->data.dir_entries[(size - 1) % ENTRIES_PER_TABLE]));
+    	if (!(*result)) {
+    		free(*result_num);
+    		free(cur_block);
+    		return -1;
+    	}
+    	memcpy(*result, cur_block->data.dir_entries[(size -1) % ENTRIES_PER_TABLE], 1 + strlen(cur_block->data.dir_entries[(size - 1) % ENTRIES_PER_TABLE]));
+
+    	if (((size - 1) % ENTRIES_PER_TABLE) == 0) {
+    		set_free_data_block(blockid, (char *)cur_block);
+            pack_unsigned_int(dir->data.direct_ptrs[(size -1) / ENTRIES_PER_TABLE], 0)
+            write_block_blocking(dir_num, (char *)dir);
+    	}
+    	free(cur_block);
+    } else {
+    	size = size - (ENTRIES_PER_TABLE * DIRECT_BLOCKS);
+        temp = NULL;
+        temp_num = -1;
+    	indir_num = unpack_unsigned_int(dir->data.indirect_ptr);
+    	indir = (indirect_block_t) get_block_blocking(unpack_unsigned_int(dir->data.indirect_ptr));
+    	while (size > (DIRECT_PER_TABLE * ENTRIES_PER_TABLE)) {
+    		size = size - (DIRECT_PER_TABLE * ENTRIES_PER_TABLE); 
+    		temp = indir;
+            temp_num = indir_num;
+    		indir = (indirect_block_t) get_block_blocking(unpack_unsigned_int(temp->data.indirect_ptr));
+    		indir_num = unpack_unsigned_int(temp->data.indirect_ptr);
+    	}
+
+    	if (((size - 1) / ENTRIES_PER_TABLE) < DIRECT_PER_TABLE) {
+	    	blockid = unpack_unsigned_int(indir->data.direct_ptrs[(size -1) / ENTRIES_PER_TABLE]);
+	    	if (blockid == 0) {
+                free(indir);
+                free(temp);
+	    		return -1;
+	    	}
+	    	cur_block = (dir_data_block_t) get_block_blocking(blockid);
+	    	*result_num = (char *) malloc (1 + strlen(cur_block->data.inode_ptrs[(size -1) % ENTRIES_PER_TABLE]));
+	    	if (!(*result_num)) {
+	    		free(cur_block);
+                free(indir);
+                free(temp);
+	    		return -1;
+	    	}
+	    	memcpy(*result_num, cur_block->data.inode_ptrs[(size -1) % ENTRIES_PER_TABLE], strlen(cur_block->data.inode_ptrs[(size -1) % ENTRIES_PER_TABLE]) + 1);
+	    	*result = (char *) malloc (1 + strlen(cur_block->data.dir_entries[(size - 1) % ENTRIES_PER_TABLE]));
+	    	if (!(*result)) {
+	    		free(*result_num);
+	    		free(cur_block);
+                free(indir);
+                free(temp);
+	    		return -1;
+	    	}
+	    	memcpy(*result, cur_block->data.dir_entries[(size -1) % ENTRIES_PER_TABLE], 1 + strlen(cur_block->data.dir_entries[(size - 1) % ENTRIES_PER_TABLE]));
+
+	    	if (((size - 1) % ENTRIES_PER_TABLE) == 0) {
+	    		set_free_data_block(blockid, (char *)cur_block);
+                pack_unsigned_int(indir->data.direct_ptrs[(size -1) / ENTRIES_PER_TABLE], 0)
+                write_block_blocking(indir_num, (char *)indir);
+	    	}
+	    	free(cur_block);
+
+	    	if (size == 1) {
+    	    	set_free_data_block(indir_num, (char *)indir);
+                if (!temp) {
+                    pack_unsigned_int(dir->indirect_ptr, 0);
+                    write_block_blocking(dir_num, (char *)dir);
+                } else {
+                    pack_unsigned_int(temp->indirect_ptr, 0);
+                    write_block_blocking(temp_num, (char *)temp);
+                }
+	    	}
+	    	free(indir);
+            free(temp);
+    	}
+
+    }
+
+    pack_unsigned_int(dir->data.size, unpack_unsigned_int(dir->data.size)-1);
+    write_block_blocking(dir_num, (char *)dir);
     return 0;
+}
+
+typedef struct num_struct {
+    char *num;
+    char *structure;
+}* num_struct_t
+
+int remove_inode_helper(char *item, char *inode_num, void *arg, void *result) {
+    char *number;
+    int *num;
+    char *name;
+    int actual_num;
+    num_struct_t nstruct;
+
+    nstruct = (num_struct_t) result;
+
+    name = nstruct->structure;
+    number = nstruct->num;
+
+    actual_num = unpack_unsigned_int(inode_num);
+    num = (int *)arg;
+
+    if (*num == actual_num) {
+        memcpy(item, name, strlen(name)+1);
+        memcpy(inode_num, number, strlen(number)+1);
+        return 0;
+    }
+    return -1;
+}
+
+int remove_inode(int dir_num, int item_num) {
+	inode_t dir;
+    char *result_num;
+    char *result;
+    int unpacked_num;
+    num_struct_t nstruct;
+
+	dir = (inode_t) get_block_blocking(dir_num);
+
+    if (rm_last(dir, dir_num, &result_num, result) == 0) {
+        nstruct = (num_struct_t) malloc (sizeof(struct num_struct));
+        nstruct->num = result_num;
+        nstruct->structure = result;
+        if (dir_interate(dir, remove_inode_helper, &item_num, nstruct) == 0) {
+            free(result);
+            free(result_num);
+            free(nstruct);
+            return 0;
+        }
+    } else {
+        return -1;
+    }
+
+}
+
+int minifile_rmdir(char *dirname) {
+    inode_t block;
+    int blockid;
+    int size;
+    int parent_num;
+    dir_data_block freed_data;
+    if ((strcmp(dirname, "..") == 0) || (strcmp(dirname, ".") == 0)) {
+    	return -1;
+    }
+    block = get_inode(dirname, &blockid);
+
+    if (!block) return -1;
+    size = unpack_unsigned_int(block->data.size);
+    if (block->data.inode_type == FILE_INODE || size != 0) {
+    	free(block);
+    	return -1;
+    }
+
+    freed_data = (dir_data_block_t) get_block_blocking(unpack_unsigned_int(block->data.direct_ptrs[0]));
+
+    parent_num = unpack_unsigned_int(freed_data->data.inode_ptrs[0]);
+
+    set_free_data_block(unpack_unsigned_int(block->data.direct_ptrs[0]), (char *)freed_data);
+    set_free_inode_block(blockid, block);
+
+    if (remove_inode(parent_num, blockid) == -1) return -1;
+    return 0;
+
+    // add inode and data to respective lists
+
 }
 
 int minifile_stat(char *path) {
@@ -632,7 +824,7 @@ int minifile_cd(char *path) {
     return 0;
 }
 
-int ls_helper(char *item, int inode_num, void *arg, void *result) {
+int ls_helper(char *item, char *inode_num, void *arg, void *result) {
     char ***file_list_ptr;
     int len;
 
