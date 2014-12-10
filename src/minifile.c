@@ -660,18 +660,17 @@ char **minifile_ls(char *path) {
     return file_list;
 }
 
-void add_to_path(void *item, void *ptr) {
+void rev_add_to_path(void *item, void *ptr) {
     char **path_ptr;
     str_and_len_t dir;
 
     path_ptr = (char **) ptr;
     dir = (str_and_len_t) item;
+
+    *path_ptr -= dir->len + 1;
     memcpy(*path_ptr, delim, 1);
     memcpy(*path_ptr + 1, dir->data, dir->len);
-
-    *path_ptr += dir->len + 1;
-    memcpy(*path_ptr, null_term, 1);
- }
+}
 
 char* minifile_pwd(void) {
     thread_files_t files;
@@ -683,10 +682,10 @@ char* minifile_pwd(void) {
 
     path = (char *) malloc (files->path_len);
     memcpy(path, delim, 1);
-    memcpy(path + 1, null_term, 1);
-    ptr = path;
+    ptr = path + files->path_len - 1;
+    memcpy(ptr, null_term, 1);
 
-    queue_iterate(files->path, add_to_path, &ptr);
+    queue_iterate(files->path, rev_add_to_path, &ptr);
 
     return path;
 }
