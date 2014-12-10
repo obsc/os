@@ -582,7 +582,11 @@ int minifile_cd(char *path) {
     		if (strcmp(token, "..") == 0) {
     			if (queue_dequeue(files->path, &data) == 0) {
         			result = (str_and_len_t) data;
-        			files->path_len -= result->len + 1;
+                    if (queue_length(files->path) == 0) {
+                        files->path_len -= result->len;
+                    } else {
+                        files->path_len -= result->len + 1;
+                    }
                     free(result->data);
         			free(result);
         		}
@@ -591,7 +595,11 @@ int minifile_cd(char *path) {
                 result->data = (char *) malloc (strlen(token));
         		memcpy(result->data, token, strlen(token));
         		result->len = strlen(token);
-        		files->path_len += strlen(token) + 1;
+                if (queue_length(files->path) == 0) {
+        		    files->path_len += strlen(token);
+                } else {
+        		    files->path_len += strlen(token) + 1;
+                }
         		if (queue_prepend(files->path, result) == -1) {
                     free(path_copy);
                     return -1;
