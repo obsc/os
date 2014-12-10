@@ -208,6 +208,7 @@ inode_t get_inode(char *path, int *inode_num) {
     int found;
     char *token;
     thread_files_t cur_thread;
+    char *saveptr;
 
     if (!path) return NULL;
     if (strlen(path) == 0) return NULL;
@@ -223,7 +224,7 @@ inode_t get_inode(char *path, int *inode_num) {
         current = (inode_t) get_block_blocking(cur_thread->inode_num);
     }
 
-    token = strtok(path, "/");
+    token = strtok_r(path, "/", &saveptr);
 
     while (token != NULL) {
         if (dir_iterate(current, get_inode_helper, token, &found) == -1) {
@@ -233,7 +234,7 @@ inode_t get_inode(char *path, int *inode_num) {
         free(current);
 
         current = (inode_t) get_block_blocking(found);
-        token = strtok(NULL, "/");
+        token = strtok_r(NULL, "/", &saveptr);
     }
 
     *inode_num = found;
@@ -490,14 +491,16 @@ int minifile_mkdir(char *dirname) {
     inode_t prevdir;
     int prevdir_num;
 
-    name = strrchr(dirname, '/') + 1;
-    if (strlen(name) == 0 || strlen(name) > 256) return -1;
+    name = strrchr(dirname, '/');
+
     if (!name) { // Current directory
+        name = dirname;
         files = minithread_directory();
         if (!files) return -1;
         prevdir = (inode_t) get_block_blocking(files->inode_num);
         prevdir_num = files->inode_num;
     } else {
+        name++;
         dir = (char *) malloc (name - dirname + 2);
         memcpy(dir, dirname, name - dirname + 1);
         memcpy(dir + (name - dirname + 1), null_term, 1);
@@ -505,6 +508,7 @@ int minifile_mkdir(char *dirname) {
         free(dir);
     }
 
+    if (strlen(name) == 0 || strlen(name) > 256) return -1;
     if (!prevdir || prevdir->data.inode_type == FILE_INODE) {
         free(prevdir);
         return -1;
@@ -545,7 +549,11 @@ int minifile_cd(char *path) {
     int temp;
     char *path_copy;
     int path_len;
+    char *saveptr;
 
+    path_len = strlen(path);
+    path_copy = (char *) malloc (path_len+1);
+    memcpy(path_copy, path, path_len+1);
     block = get_inode(path, &inode_num);
     if (!block || block->data.inode_type == FILE_INODE) {
         free(block);
@@ -553,12 +561,9 @@ int minifile_cd(char *path) {
     }
     else {
         free(block);
-        path_len = strlen(path);
-        path_copy = (char *) malloc (path_len+1);
-    	memcpy(path_copy, path, path_len+1);
         files = minithread_directory();
         if (path_copy[0] == '/') {
-        	files->path_len = 0;
+        	files->path_len = 2;
         	temp = queue_length(files->path);
         	for (acc = 0; acc < temp; acc++) {
         		if (queue_dequeue(files->path, &data) == 0) {
@@ -571,18 +576,19 @@ int minifile_cd(char *path) {
         	}
         }
 
-        token = strtok(path_copy, "/");
+        token = strtok_r(path_copy, "/", &saveptr);
 
     	while (token != NULL) {
     		if (strcmp(token, "..") == 0) {
     			if (queue_dequeue(files->path, &data) == 0) {
         			result = (str_and_len_t) data;
         			files->path_len -= result->len + 1;
-        			free(result->data);
+                    free(result->data);
         			free(result);
         		}
     		} else if (strcmp(token, ".") != 0) {
-    			result = (str_and_len_t) malloc (sizeof(struct str_and_len));
+                result = (str_and_len_t) malloc (sizeof(struct str_and_len));
+                result->data = (char *) malloc (strlen(token));
         		memcpy(result->data, token, strlen(token));
         		result->len = strlen(token);
         		files->path_len += strlen(token) + 1;
@@ -591,12 +597,11 @@ int minifile_cd(char *path) {
                     return -1;
                 }
     		}
-        	token = strtok(NULL, "/");
+        	token = strtok_r(NULL, "/", &saveptr);
     	}
 
         files->inode_num = inode_num;
     }
-
     free(path_copy);
     return 0;
 }
