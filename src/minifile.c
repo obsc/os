@@ -451,6 +451,10 @@ int mkdir_helper(inode_t dir, int inode_num, char *name) {
     int direct_block_num;
     int entry_num;
     int size;
+    indirect_block_t indir_block;
+    int indir_block_num;
+    indirect_block_t next_indir_block;
+    int next_indir_block_num;
 
     size = unpack_unsigned_int(dir->data.size);
     pack_unsigned_int(dir->data.size, size + 1);
@@ -483,8 +487,81 @@ int mkdir_helper(inode_t dir, int inode_num, char *name) {
         free(dir);
         return 0;
     }
-    // Logic to handle indirect blocks
-    return -1;
+
+    size -= DIRECT_BLOCKS * ENTRIES_PER_TABLE; // Remaining size
+    if (size == 0) { // first entry in indirect
+        indir_block = (indirect_block_t) get_free_data_block(&indir_block_num);
+        if (!indir_block) {
+            free(dir);
+            return -1;
+        }
+        pack_unsigned_int(dir->data.indirect_ptr, indir_block_num);
+    } else {
+        indir_block_num = unpack_unsigned_int(dir->data.indirect_ptr);
+        indir_block = (indirect_block_t) get_block_blocking(indir_block_num);
+    }
+
+    while (size >= DIRECT_PER_TABLE * ENTRIES_PER_TABLE) {
+        size -= DIRECT_PER_TABLE * ENTRIES_PER_TABLE;
+        if (size == 0) { // first entry in indirect
+            next_indir_block = (indirect_block_t) get_free_data_block(&next_indir_block_num);
+            if (!next_indir_block) {
+                free(dir);
+                return -1;
+            }
+            pack_unsigned_int(indir_block->data.indirect_ptr, next_indir_block_num);
+            write_block_blocking(indir_block_num, (char *) indir_block);
+        } else {
+            next_indir_block_num = unpack_unsigned_int(indir_block->data.indirect_ptr);
+            next_indir_block = (indirect_block_t) get_block_blocking(next_indir_block_num);
+        }
+
+        free(indir_block);
+        indir_block = next_indir_block;
+        indir_block_num = next_indir_block_num;
+    }
+
+    direct_ind = size / ENTRIES_PER_TABLE;
+    entry_num = size % ENTRIES_PER_TABLE;
+    direct_block_num = unpack_unsigned_int(indir_block->data.direct_ptrs[direct_ind]);
+
+    if (entry_num == 0) { // New direct block
+        direct_block = (dir_data_block_t) get_free_data_block(&direct_block_num);
+        if (!direct_block) {
+            if (size == 0) {
+                set_free_data_block(indir_block_num, (char *) indir_block);
+            }
+            free(indir_block);
+            free(dir);
+            return -1;
+        }
+        pack_unsigned_int(indir_block->data.direct_ptrs[direct_ind], direct_block_num);
+    } else if (direct_block_num == 0) {
+        if (size == 0) {
+            set_free_data_block(indir_block_num, (char *) indir_block);
+        }
+        free(indir_block);
+        free(dir);
+        return -1;
+    } else {
+        direct_block = (dir_data_block_t) get_block_blocking(direct_block_num);
+    }
+    if (write_new_dir(inode_num, direct_block, direct_block_num, entry_num, name) == -1) {
+        if (entry_num == 0) {
+            set_free_data_block(direct_block_num, (char *) direct_block);
+        }
+        if (size == 0) {
+            set_free_data_block(indir_block_num, (char *) indir_block);
+        }
+        free(direct_block);
+        free(dir);
+        return -1;
+    }
+
+    write_block_blocking(indir_block_num, (char *) indir_block);
+    write_block_blocking(inode_num, (char *) dir);
+    free(dir);
+    return 0;
 }
 
 int minifile_mkdir(char *dirname) {
