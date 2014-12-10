@@ -602,17 +602,13 @@ int minifile_mkdir(char *dirname) {
         dir = (char *) malloc (name - dirname + 1);
         memcpy(dir, dirname, name - dirname);
         memcpy(dir + (name - dirname), null_term, 1);
-	printf("%s\n", dir);
         prevdir = get_inode(dir, &prevdir_num);
         free(dir);
     }
 
-    printf("hello\n");
     if (strlen(name) == 0 || strlen(name) > 256) return -1;
-    printf("bye\n");
     if (!prevdir || prevdir->data.inode_type == FILE_INODE) {
-        printf("wat\n");
-	free(prevdir);
+        free(prevdir);
         return -1;
     }
 
