@@ -490,6 +490,24 @@ int minifile_mkdir(char *dirname) {
     char *name;
     inode_t prevdir;
     int prevdir_num;
+    int dirlen;
+    char *dircopy;
+    int test_num;
+    inode_t test_inode;
+
+    dirlen = strlen(dirname);
+    dircopy = (char *) malloc (dirlen+1);
+    memcpy(dircopy, dirname, dirlen+1);
+
+    test_inode = get_inode(dircopy, &test_num);
+    if (test_inode) { // Directory already exists
+        free(test_inode);
+        free(dircopy);
+        return -1;
+    }
+
+    free(test_inode);
+    free(dircopy);
 
     name = strrchr(dirname, '/');
 
@@ -563,50 +581,50 @@ int minifile_cd(char *path) {
         free(block);
         files = minithread_directory();
         if (path_copy[0] == '/') {
-        	files->path_len = 2;
-        	temp = queue_length(files->path);
-        	for (acc = 0; acc < temp; acc++) {
-        		if (queue_dequeue(files->path, &data) == 0) {
-        			result = (str_and_len_t) data;
-        			free(result);
-        		} else {
+            files->path_len = 2;
+            temp = queue_length(files->path);
+            for (acc = 0; acc < temp; acc++) {
+                if (queue_dequeue(files->path, &data) == 0) {
+                    result = (str_and_len_t) data;
+                    free(result);
+                } else {
                     free(path_copy);
-        			return -1;
-        		}
-        	}
+                    return -1;
+                }
+            }
         }
 
         token = strtok_r(path_copy, "/", &saveptr);
 
-    	while (token != NULL) {
-    		if (strcmp(token, "..") == 0) {
-    			if (queue_dequeue(files->path, &data) == 0) {
-        			result = (str_and_len_t) data;
+        while (token != NULL) {
+            if (strcmp(token, "..") == 0) {
+                if (queue_dequeue(files->path, &data) == 0) {
+                    result = (str_and_len_t) data;
                     if (queue_length(files->path) == 0) {
                         files->path_len -= result->len;
                     } else {
                         files->path_len -= result->len + 1;
                     }
                     free(result->data);
-        			free(result);
-        		}
-    		} else if (strcmp(token, ".") != 0) {
+                    free(result);
+                }
+            } else if (strcmp(token, ".") != 0) {
                 result = (str_and_len_t) malloc (sizeof(struct str_and_len));
                 result->data = (char *) malloc (strlen(token));
-        		memcpy(result->data, token, strlen(token));
-        		result->len = strlen(token);
+                memcpy(result->data, token, strlen(token));
+                result->len = strlen(token);
                 if (queue_length(files->path) == 0) {
-        		    files->path_len += strlen(token);
+                    files->path_len += strlen(token);
                 } else {
-        		    files->path_len += strlen(token) + 1;
+                    files->path_len += strlen(token) + 1;
                 }
-        		if (queue_prepend(files->path, result) == -1) {
+                if (queue_prepend(files->path, result) == -1) {
                     free(path_copy);
                     return -1;
                 }
-    		}
-        	token = strtok_r(NULL, "/", &saveptr);
-    	}
+            }
+            token = strtok_r(NULL, "/", &saveptr);
+        }
 
         files->inode_num = inode_num;
     }
