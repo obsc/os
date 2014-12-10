@@ -29,7 +29,7 @@ struct minifile {
 };
 
 // iterator function for directories
-typedef int (*dir_func_t) (char*, int, void*, void*);
+typedef int (*dir_func_t) (char*, char*, void*, void*);
 
 disk_t *disk;
 reqmap_t requests;
@@ -542,10 +542,7 @@ int minifile_mkdir(char *dirname) {
 int rm_last(inode_t dir, int dir_num, char **result_num, char **result) {
     unsigned int blockid;
     dir_data_block_t cur_block;
-    int acc;
     int size;
-    int inode_num;
-    int num_to_check;
     indirect_block_t indir;
     int indir_num;
     indirect_block_t temp;
@@ -574,7 +571,7 @@ int rm_last(inode_t dir, int dir_num, char **result_num, char **result) {
 
     	if (((size - 1) % ENTRIES_PER_TABLE) == 0) {
     		set_free_data_block(blockid, (char *)cur_block);
-            pack_unsigned_int(dir->data.direct_ptrs[(size -1) / ENTRIES_PER_TABLE], 0)
+            pack_unsigned_int(dir->data.direct_ptrs[(size -1) / ENTRIES_PER_TABLE], 0);
             write_block_blocking(dir_num, (char *)dir);
     	}
     	free(cur_block);
@@ -620,7 +617,7 @@ int rm_last(inode_t dir, int dir_num, char **result_num, char **result) {
 
 	    	if (((size - 1) % ENTRIES_PER_TABLE) == 0) {
 	    		set_free_data_block(blockid, (char *)cur_block);
-                pack_unsigned_int(indir->data.direct_ptrs[(size -1) / ENTRIES_PER_TABLE], 0)
+                pack_unsigned_int(indir->data.direct_ptrs[(size -1) / ENTRIES_PER_TABLE], 0);
                 write_block_blocking(indir_num, (char *)indir);
 	    	}
 	    	free(cur_block);
@@ -628,10 +625,10 @@ int rm_last(inode_t dir, int dir_num, char **result_num, char **result) {
 	    	if (size == 1) {
     	    	set_free_data_block(indir_num, (char *)indir);
                 if (!temp) {
-                    pack_unsigned_int(dir->indirect_ptr, 0);
+                    pack_unsigned_int(dir->data.indirect_ptr, 0);
                     write_block_blocking(dir_num, (char *)dir);
                 } else {
-                    pack_unsigned_int(temp->indirect_ptr, 0);
+                    pack_unsigned_int(temp->data.indirect_ptr, 0);
                     write_block_blocking(temp_num, (char *)temp);
                 }
 	    	}
@@ -649,7 +646,7 @@ int rm_last(inode_t dir, int dir_num, char **result_num, char **result) {
 typedef struct num_struct {
     char *num;
     char *structure;
-}* num_struct_t
+}* num_struct_t;
 
 int remove_inode_helper(char *item, char *inode_num, void *arg, void *result) {
     char *number;
@@ -675,19 +672,18 @@ int remove_inode_helper(char *item, char *inode_num, void *arg, void *result) {
 }
 
 int remove_inode(int dir_num, int item_num) {
-	inode_t dir;
+    inode_t dir;
     char *result_num;
     char *result;
-    int unpacked_num;
     num_struct_t nstruct;
 
-	dir = (inode_t) get_block_blocking(dir_num);
+    dir = (inode_t) get_block_blocking(dir_num);
 
-    if (rm_last(dir, dir_num, &result_num, result) == 0) {
+    if (rm_last(dir, dir_num, &result_num, &result) == 0) {
         nstruct = (num_struct_t) malloc (sizeof(struct num_struct));
         nstruct->num = result_num;
         nstruct->structure = result;
-        if (dir_interate(dir, remove_inode_helper, &item_num, nstruct) == 0) {
+        if (dir_iterate(dir, remove_inode_helper, &item_num, nstruct) == 0) {
             free(result);
             free(result_num);
             free(nstruct);
@@ -696,7 +692,7 @@ int remove_inode(int dir_num, int item_num) {
     } else {
         return -1;
     }
-
+    return -1;
 }
 
 int minifile_rmdir(char *dirname) {
@@ -704,7 +700,7 @@ int minifile_rmdir(char *dirname) {
     int blockid;
     int size;
     int parent_num;
-    dir_data_block freed_data;
+    dir_data_block_t freed_data;
     if ((strcmp(dirname, "..") == 0) || (strcmp(dirname, ".") == 0)) {
     	return -1;
     }
@@ -722,7 +718,7 @@ int minifile_rmdir(char *dirname) {
     parent_num = unpack_unsigned_int(freed_data->data.inode_ptrs[0]);
 
     set_free_data_block(unpack_unsigned_int(block->data.direct_ptrs[0]), (char *)freed_data);
-    set_free_inode_block(blockid, block);
+    set_free_inode_block(blockid, (char *)block);
 
     if (remove_inode(parent_num, blockid) == -1) return -1;
     return 0;
