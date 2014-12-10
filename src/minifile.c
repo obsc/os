@@ -455,7 +455,7 @@ int mkdir_helper(inode_t dir, int inode_num, char *name) {
     size = unpack_unsigned_int(dir->data.size);
     pack_unsigned_int(dir->data.size, size + 1);
     if (size < DIRECT_BLOCKS * ENTRIES_PER_TABLE) { // found in a direct block
-        direct_ind = size / ENTRIES_PER_TABLE;
+	direct_ind = size / ENTRIES_PER_TABLE;
         entry_num = size % ENTRIES_PER_TABLE;
         direct_block_num = unpack_unsigned_int(dir->data.direct_ptrs[direct_ind]);
         if (entry_num == 0) { // New direct block
@@ -515,23 +515,27 @@ int minifile_mkdir(char *dirname) {
     name = strrchr(dirname, '/');
 
     if (!name) { // Current directory
-        name = dirname;
+	name = dirname;
         files = minithread_directory();
         if (!files) return -1;
         prevdir = (inode_t) get_block_blocking(files->inode_num);
         prevdir_num = files->inode_num;
     } else {
-        name++;
-        dir = (char *) malloc (name - dirname + 2);
-        memcpy(dir, dirname, name - dirname + 1);
-        memcpy(dir + (name - dirname + 1), null_term, 1);
+	name++;
+        dir = (char *) malloc (name - dirname + 1);
+        memcpy(dir, dirname, name - dirname);
+        memcpy(dir + (name - dirname), null_term, 1);
+	printf("%s\n", dir);
         prevdir = get_inode(dir, &prevdir_num);
         free(dir);
     }
 
+    printf("hello\n");
     if (strlen(name) == 0 || strlen(name) > 256) return -1;
+    printf("bye\n");
     if (!prevdir || prevdir->data.inode_type == FILE_INODE) {
-        free(prevdir);
+        printf("wat\n");
+	free(prevdir);
         return -1;
     }
 
@@ -568,7 +572,6 @@ int rm_last(inode_t dir, int dir_num, char **result_num, char **result) {
     		return -1;
     	}
     	memcpy(*result, cur_block->data.dir_entries[(size -1) % ENTRIES_PER_TABLE], 1 + strlen(cur_block->data.dir_entries[(size - 1) % ENTRIES_PER_TABLE]));
-
     	if (((size - 1) % ENTRIES_PER_TABLE) == 0) {
     		set_free_data_block(blockid, (char *)cur_block);
             pack_unsigned_int(dir->data.direct_ptrs[(size -1) / ENTRIES_PER_TABLE], 0);
@@ -708,7 +711,7 @@ int minifile_rmdir(char *dirname) {
 
     if (!block) return -1;
     size = unpack_unsigned_int(block->data.size);
-    if (block->data.inode_type == FILE_INODE || size != 0) {
+    if (block->data.inode_type == FILE_INODE || size > 2) {
     	free(block);
     	return -1;
     }
