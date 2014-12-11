@@ -186,6 +186,11 @@ int dir_iterate_indir(indirect_block_t indir, dir_func_t f, void* arg, void* res
 
     size = cur_size;
     for (acc = 0; acc < DIRECT_PER_TABLE; acc++) {
+        if (size == 0) {
+            free(cur_block);
+            free(indir);
+            return -1;
+        }
         blockid = unpack_unsigned_int(indir->data.direct_ptrs[acc]);
         if (blockid == 0) {
             free(cur_block);
@@ -229,6 +234,10 @@ int dir_iterate(inode_t dir, dir_func_t f, void* arg, void* result) {
     size = unpack_unsigned_int(dir->data.size);
 
     for (acc = 0; acc < DIRECT_BLOCKS; acc++) {
+        if (size == 0) {
+            free(cur_block);
+            return -1;
+        }
         blockid = unpack_unsigned_int(dir->data.direct_ptrs[acc]);
         if (blockid == 0) {
             free(cur_block);
@@ -774,6 +783,7 @@ int rm_last(inode_t dir, int dir_num, char **result_num, char **result) {
     int indir_num;
     indirect_block_t temp;
     int temp_num;
+    int transfer;
 
     size = unpack_unsigned_int(dir->data.size);
     if (((size - 1) / ENTRIES_PER_TABLE) < DIRECT_BLOCKS) {
@@ -782,13 +792,14 @@ int rm_last(inode_t dir, int dir_num, char **result_num, char **result) {
             return -1;
         }
         cur_block = (dir_data_block_t) get_block_blocking(blockid);
-        *result_num = (char *) malloc (1 + strlen(cur_block->data.inode_ptrs[(size -1) % ENTRIES_PER_TABLE]));
+        *result_num = (char *) malloc (4);
         if (!(*result_num)) {
             free(cur_block);
             return -1;
         }
-        memcpy(*result_num, cur_block->data.inode_ptrs[(size -1) % ENTRIES_PER_TABLE], strlen(cur_block->data.inode_ptrs[(size -1) % ENTRIES_PER_TABLE]) + 1);
-        *result = (char *) malloc (1 + strlen(cur_block->data.dir_entries[(size - 1) % ENTRIES_PER_TABLE]));
+        transfer = unpack_unsigned_int(cur_block->data.inode_ptrs[(size - 1) % ENTRIES_PER_TABLE]);
+        pack_unsigned_int(*result_num, transfer);
+        *result = (char *) malloc (257);
         if (!(*result)) {
             free(*result_num);
             free(cur_block);
@@ -875,7 +886,7 @@ typedef struct num_struct {
 }* num_struct_t;
 
 int remove_inode_helper(char *item, char *inode_num, void *arg, void *result, int blockid, char *block) {
-    char *number;
+    int number;
     int *num;
     char *name;
     int actual_num;
@@ -884,14 +895,14 @@ int remove_inode_helper(char *item, char *inode_num, void *arg, void *result, in
     nstruct = (num_struct_t) result;
 
     name = nstruct->structure;
-    number = nstruct->num;
+    number = unpack_unsigned_int(nstruct->num);
 
     actual_num = unpack_unsigned_int(inode_num);
     num = (int *)arg;
 
     if (*num == actual_num) {
         memcpy(item, name, strlen(name)+1);
-        memcpy(inode_num, number, strlen(number)+1);
+        pack_unsigned_int(inode_num, number);
         write_block_blocking(blockid, block);
         return 0;
     }
@@ -905,7 +916,6 @@ int remove_inode(int dir_num, int item_num) {
     num_struct_t nstruct;
 
     dir = (inode_t) get_block_blocking(dir_num);
-
     if (rm_last(dir, dir_num, &result_num, &result) == 0) {
         nstruct = (num_struct_t) malloc (sizeof(struct num_struct));
         nstruct->num = result_num;
