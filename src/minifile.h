@@ -131,6 +131,8 @@ disk_t *disk;
 
 typedef struct minifile* minifile_t;
 
+void move_dir(int new_blocknum);
+
 /* Handler for disk operations */
 void minifile_handle(disk_interrupt_arg_t *arg);
 

@@ -7,6 +7,7 @@
 #include "reqmap.h"
 #include "miniheader.h"
 #include <string.h>
+#include "uthash.h"
 
 /*
  * System wide-structure represnting a file.
@@ -28,12 +29,21 @@ struct minifile {
     int cursor;
 };
 
+/* Threads that have the directory at blocknum open */
+typedef struct dir_list {
+    int blocknum; // Key
+    queue_t thread_queue;
+    UT_hash_handle hh;
+}* dir_list_t;
+
 // iterator function for directories
 typedef int (*dir_func_t) (char*, char*, void*, void*);
 
 disk_t *disk;
 reqmap_t requests;
 file_data_t *file_tbl;
+
+dir_list_t open_dir_map;
 
 semaphore_t metadata_lock;
 superblock_t disk_superblock;
@@ -42,6 +52,58 @@ char delim[1] = "/";
 char null_term[1] = "\0";
 char parent[3] = "..";
 char self[2] = ".";
+
+void invalidate_dir(int blocknum) {
+    dir_list_t d;
+    void *f;
+    thread_files_t files;
+
+    HASH_FIND_INT( open_dir_map, &blocknum, d );
+    if (!d) return;
+
+    HASH_DEL( open_dir_map, d );
+
+    while (queue_dequeue(d->thread_queue, &f) == 0) {
+        files = (thread_files_t) f;
+        files->valid = 0;
+    }
+
+    queue_free(d->thread_queue);
+    free(d);
+}
+
+void move_dir(int new_blocknum) {
+    dir_list_t old_dir;
+    dir_list_t new_dir;
+    thread_files_t files;
+    int old_blocknum;
+
+    files = minithread_directory();
+    if (files->valid) { // In a valid directory
+        old_blocknum = files->inode_num;
+        HASH_FIND_INT( open_dir_map, &old_blocknum, old_dir );
+        if (old_dir) {
+            queue_delete(old_dir->thread_queue, files);
+            if (queue_length(old_dir->thread_queue) == 0) { // Remove if last element
+                HASH_DEL( open_dir_map, old_dir );
+                queue_free(old_dir->thread_queue);
+                free(old_dir);
+            }
+        }
+    }
+
+    files->valid = 1;
+    HASH_FIND_INT( open_dir_map, &new_blocknum, new_dir );
+    if (new_dir) { // Someone else already in directory
+        queue_append(new_dir->thread_queue, files);
+    } else { // No one else in directory
+        new_dir = (dir_list_t) malloc (sizeof(struct dir_list));
+        new_dir->blocknuum = new_blocknum;
+        new_dir->thread_queue = queue_new();
+        queue_append(new_dir->thread_queue, files);
+        HASH_ADD_INT( open_dir_map, blocknum, new_dir );
+    }
+}
 
 waiting_request_t createWaiting(int blockid, char* buffer) {
     waiting_request_t req;
@@ -796,10 +858,10 @@ int minifile_rmdir(char *dirname) {
     set_free_inode_block(blockid, (char *)block);
 
     if (remove_inode(parent_num, blockid) == -1) return -1;
+
+    invalidate_dir(blockid);
+
     return 0;
-
-    // add inode and data to respective lists
-
 }
 
 int minifile_stat(char *path) {
@@ -840,57 +902,57 @@ int minifile_cd(char *path) {
         free(block);
         return -1;
     }
-    else {
-        free(block);
-        files = minithread_directory();
-        if (path_copy[0] == '/') {
-            files->path_len = 2;
-            temp = queue_length(files->path);
-            for (acc = 0; acc < temp; acc++) {
-                if (queue_dequeue(files->path, &data) == 0) {
-                    result = (str_and_len_t) data;
-                    free(result);
-                } else {
-                    free(path_copy);
-                    return -1;
-                }
+    free(block);
+    files = minithread_directory();
+    if (path_copy[0] == '/') {
+        files->path_len = 2;
+        temp = queue_length(files->path);
+        for (acc = 0; acc < temp; acc++) {
+            if (queue_dequeue(files->path, &data) == 0) {
+                result = (str_and_len_t) data;
+                free(result);
+            } else {
+                free(path_copy);
+                return -1;
             }
         }
-
-        token = strtok_r(path_copy, "/", &saveptr);
-
-        while (token != NULL) {
-            if (strcmp(token, "..") == 0) {
-                if (queue_dequeue(files->path, &data) == 0) {
-                    result = (str_and_len_t) data;
-                    if (queue_length(files->path) == 0) {
-                        files->path_len -= result->len;
-                    } else {
-                        files->path_len -= result->len + 1;
-                    }
-                    free(result->data);
-                    free(result);
-                }
-            } else if (strcmp(token, ".") != 0) {
-                result = (str_and_len_t) malloc (sizeof(struct str_and_len));
-                result->data = (char *) malloc (strlen(token));
-                memcpy(result->data, token, strlen(token));
-                result->len = strlen(token);
-                if (queue_length(files->path) == 0) {
-                    files->path_len += strlen(token);
-                } else {
-                    files->path_len += strlen(token) + 1;
-                }
-                if (queue_prepend(files->path, result) == -1) {
-                    free(path_copy);
-                    return -1;
-                }
-            }
-            token = strtok_r(NULL, "/", &saveptr);
-        }
-
-        files->inode_num = inode_num;
     }
+
+    token = strtok_r(path_copy, "/", &saveptr);
+
+    while (token != NULL) {
+        if (strcmp(token, "..") == 0) {
+            if (queue_dequeue(files->path, &data) == 0) {
+                result = (str_and_len_t) data;
+                if (queue_length(files->path) == 0) {
+                    files->path_len -= result->len;
+                } else {
+                    files->path_len -= result->len + 1;
+                }
+                free(result->data);
+                free(result);
+            }
+        } else if (strcmp(token, ".") != 0) {
+            result = (str_and_len_t) malloc (sizeof(struct str_and_len));
+            result->data = (char *) malloc (strlen(token));
+            memcpy(result->data, token, strlen(token));
+            result->len = strlen(token);
+            if (queue_length(files->path) == 0) {
+                files->path_len += strlen(token);
+            } else {
+                files->path_len += strlen(token) + 1;
+            }
+            if (queue_prepend(files->path, result) == -1) {
+                free(path_copy);
+                return -1;
+            }
+        }
+        token = strtok_r(NULL, "/", &saveptr);
+    }
+
+    move_dir(files->inode_num, inode_num);
+    files->inode_num = inode_num;
+
     free(path_copy);
     return 0;
 }
