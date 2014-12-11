@@ -37,58 +37,58 @@ void counter_initialize(counter_t counter, int cnt) {
     semaphore_initialize(counter->sem, cnt);
 }
 
-void counter_P(counter_t counter) {
-    semaphore_P(counter->lock);
+void counter_P(counter_t counter, int safe) {
+    if (safe) semaphore_P(counter->lock);
     counter->count++;
-    semaphore_V(counter->lock);
+    if (safe) semaphore_V(counter->lock);
 
     semaphore_P(counter->sem);
 }
 
-void counter_P_n(counter_t counter, int num) {
+void counter_P_n(counter_t counter, int num, int safe) {
     int i;
 
-    semaphore_P(counter->lock);
+    if (safe) semaphore_P(counter->lock);
     counter->count += num;
-    semaphore_V(counter->lock);
+    if (safe) semaphore_V(counter->lock);
 
     for (i = 0; i < num; i++) {
         semaphore_P(counter->sem);
     }
 }
 
-void counter_V(counter_t counter) {
-    semaphore_P(counter->lock);
+void counter_V(counter_t counter, int safe) {
+    if (safe) semaphore_P(counter->lock);
     counter->count--;
-    semaphore_V(counter->lock);
+    if (safe) semaphore_V(counter->lock);
 
     semaphore_V(counter->sem);
 }
 
-void counter_V_n(counter_t counter, int num) {
+void counter_V_n(counter_t counter, int num, int safe) {
     int i;
 
-    semaphore_P(counter->lock);
+    if (safe) semaphore_P(counter->lock);
     counter->count -= num;
-    semaphore_V(counter->lock);
+    if (safe) semaphore_V(counter->lock);
 
     for (i = 0; i < num; i++) {
         semaphore_V(counter->sem);
     }
 }
 
-void counter_V_all(counter_t counter) {
+void counter_V_all(counter_t counter, int safe) {
     int i;
     int num;
 
-    semaphore_P(counter->lock);
+    if (safe) semaphore_P(counter->lock);
     if (counter->count <= 0) {
-        semaphore_V(counter->lock);
+        if (safe) semaphore_V(counter->lock);
         return;
     }
     num = counter->count;
     counter->count = 0;
-    semaphore_V(counter->lock);
+    if (safe) semaphore_V(counter->lock);
 
     for (i = 0; i < num; i++) {
         semaphore_V(counter->sem);
