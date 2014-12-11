@@ -4,10 +4,10 @@
 #include "synch.h"
 #include "queue.h"
 #include "disk.h"
-#include "reqmap.h"
 #include "miniheader.h"
 #include <string.h>
 #include "uthash.h"
+#include "counter.h"
 
 /*
  * System wide-structure represnting a file.
@@ -40,11 +40,12 @@ typedef struct dir_list {
 /*
  * Structure representing a waiting disk request
  */
-/*typedef struct waiting_request {
+typedef struct waiting_request {
     int blocknum; // key
-    disk_reply_t reply;
+    disk_reply_t *reply;
     semaphore_t wait_for_reply;
-}* waiting_request_t;*/
+    counter_t mutex;
+}* waiting_request_t;
 
 // iterator function for directories
 typedef int (*dir_func_t) (char*, char*, void*, void*, int, char*);
@@ -52,9 +53,9 @@ typedef int (*dir_func_t) (char*, char*, void*, void*, int, char*);
 typedef int (*file_func_t) (char*, void*, void*);
 
 disk_t *disk;
-reqmap_t requests;
 file_data_t *file_tbl;
 
+waiting_request_t req_map;
 dir_list_t open_dir_map;
 
 semaphore_t metadata_lock;
@@ -119,66 +120,115 @@ void move_dir(thread_files_t files, int new_blocknum) {
 
 /* -------------------------------Disk Logic--------------------------------- */
 
-waiting_request_t createWaiting(int blockid, char* buffer) {
-    waiting_request_t req;
-
-    req = (waiting_request_t) malloc (sizeof (struct waiting_request));
-    if (!req) return NULL;
-
-    req->wait = semaphore_create();
-    if (!req->wait) {
-        free(req);
-        return NULL;
-    }
-    semaphore_initialize(req->wait, 0);
-
-    reqmap_set(requests, blockid, buffer, req);
-    return req;
-}
-
-waiting_request_t read_block(int blockid, char* buffer) {
-    waiting_request_t req = createWaiting(blockid, buffer);
-    if (!req) return NULL;
-    disk_read_block(disk, blockid, buffer);
-    return req;
-}
-
-waiting_request_t write_block(int blockid, char* buffer) {
-    waiting_request_t req = createWaiting(blockid, buffer);
-    if (!req) return NULL;
-    disk_write_block(disk, blockid, buffer);
-    return req;
-}
-
-void write_block_blocking(int block_num, char* block) {
-    waiting_request_t req;
-
-    req = write_block(block_num, block);
-    semaphore_P(req->wait);
-    if (req->reply != DISK_REPLY_OK) {
-        free(req);
-        return;
-    }
+void destroyWaiting(waiting_request_t req) {
+    counter_destroy(req->mutex);
     free(req);
 }
 
-char* get_block_blocking(int block_num) {
+/* Handler for disk operations
+ * Assumes interrupts are disabled within
+ */
+void minifile_handle(disk_interrupt_arg_t *arg) {
+    int blockid;
+    char* buffer;
     waiting_request_t req;
+    void* req_addr;
+
+    blockid = arg->request.blocknum;
+    buffer = arg->request.buffer;
+    HASH_FIND_INT( req_map, &blockid, req );
+
+    *req->reply = arg->reply;
+    semaphore_V(req->wait_for_reply);
+
+    if (counter_get_count(req->mutex) <= 0) {
+        HASH_DEL( req_map, req );        
+        destroyWaiting(req);
+    } else { // Someone else waiting
+        counter_V(req->mutex, 0); // unsafe v
+    }
+
+    free(arg);
+}
+
+waiting_request_t createWaiting(int blockid, disk_reply_t* reply) {
+    waiting_request_t req;
+    semaphore_t wait;
+
+    wait = semaphore_create();
+    if (!wait) return NULL;
+    semaphore_initialize(wait, 0);
+
+    HASH_FIND_INT( req_map, &blockid, req );
+    if (!req) {
+        req = (waiting_request_t) malloc (sizeof (struct waiting_request));
+        if (!req) {
+            free(wait);
+            return NULL;
+        }
+
+        req->mutex = counter_new();
+        if (!req->mutex) {
+            free(wait);
+            destroyWaiting(req);
+            return NULL;
+        }
+        counter_initialize(req->mutex, 1);
+
+        req->blocknum = blockid;
+        HASH_ADD_INT( req_map, blocknum, req );
+    }
+    counter_P(req->mutex, 1);
+    req->reply = reply;
+    req->wait_for_reply = wait;
+
+    return req;
+}
+
+semaphore_t read_block(int blockid, disk_reply_t* reply, char* buffer) {
+    waiting_request_t req = createWaiting(blockid, reply);
+    if (!req) return NULL;
+    disk_read_block(disk, blockid, buffer);
+    return req->wait_for_reply;
+}
+
+semaphore_t write_block(int blockid, disk_reply_t* reply, char* buffer) {
+    waiting_request_t req = createWaiting(blockid, reply);
+    if (!req) return NULL;
+    disk_read_block(disk, blockid, buffer);
+    return req->wait_for_reply;
+}
+
+char* get_block_blocking(int block_num) {
+    semaphore_t wait;
+    disk_reply_t reply;
     char* block;
 
     block = (char *) malloc (DISK_BLOCK_SIZE);
 
-    req = read_block(block_num, block);
-    semaphore_P(req->wait);
-    if (req->reply != DISK_REPLY_OK) {
-        printf("Failed to load block: %i\n", block_num);
-        free(req);
+    wait = read_block(block_num, &reply, block);
+    semaphore_P(wait);
+    if (reply != DISK_REPLY_OK) {
+        free(wait);
         free(block);
         return NULL;
     }
 
-    free(req);
+    free(wait);
     return block;
+}
+
+void write_block_blocking(int block_num, char* block) {
+    semaphore_t wait;
+    disk_reply_t reply;
+
+    wait = write_block(block_num, &reply, block);
+    semaphore_P(wait);
+    if (reply != DISK_REPLY_OK) {
+        free(wait);
+        return;
+    }
+    free(wait);
 }
 
 /* ----------------------------Free Blocks----------------------------------- */
@@ -467,39 +517,14 @@ inode_t get_inode(char *path, int *inode_num) {
     return current;
 }
 
-/* Handler for disk operations
- * Assumes interrupts are disabled within
- */
-void minifile_handle(disk_interrupt_arg_t *arg) {
-    int blockid;
-    char* buffer;
-    waiting_request_t req;
-    void* req_addr;
-
-    blockid = arg->request.blocknum;
-    buffer = arg->request.buffer;
-    reqmap_get(requests, blockid, buffer, &req_addr);
-    req = (waiting_request_t) req_addr;
-
-    req->reply = arg->reply;
-    semaphore_V(req->wait);
-
-    reqmap_delete(requests, blockid, buffer);
-
-    free(arg);
-}
-
 /* Initialize minifile globals */
 void minifile_initialize() {
     file_tbl = (file_data_t *) calloc (disk_size, sizeof(file_data_t));
 
     if (!file_tbl) return;
 
-    requests = reqmap_new(MAX_PENDING_DISK_REQUESTS);
-    if (!requests) {
-        free(file_tbl);
-        return;
-    }
+    req_map = NULL;
+    open_dir_map = NULL;
 
     metadata_lock = semaphore_create();
     semaphore_initialize(metadata_lock, 1);

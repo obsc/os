@@ -110,14 +110,6 @@ typedef struct thread_files {
     // Other stuff here pls
 }* thread_files_t;
 
-/*
- * Structure representing a waiting disk request
- */
-typedef struct waiting_request {
-    disk_reply_t reply;
-    semaphore_t wait;
-}* waiting_request_t;
-
 disk_t *disk;
 
 /*
@@ -133,11 +125,11 @@ typedef struct minifile* minifile_t;
 
 void move_dir(thread_files_t files, int new_blocknum);
 
+char* get_block_blocking(int blockid);
+void write_block_blocking(int blockid, char* buffer);
+
 /* Handler for disk operations */
 void minifile_handle(disk_interrupt_arg_t *arg);
-
-waiting_request_t read_block(int blockid, char* buffer);
-waiting_request_t write_block(int blockid, char* buffer);
 
 /* Initialize minifile */
 void minifile_initialize();
