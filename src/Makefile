@@ -10,7 +10,7 @@ default: all
 #    necessary PortOS code.
 #
 # this would be a good place to add your tests
-all: queue_test queue_test pqueue_test messenger cache_test shell mkfs fsck
+all: queue_test pqueue_test messenger cache_test shell mkfs fsck
 
 # running "make clean" will remove all files ignored by git.  To ignore more
 # files, you should add them to the file .gitignore
@@ -32,6 +32,7 @@ OBJ =                              \
     machineprimitives_x86_64.o     \
     machineprimitives_x86_64_asm.o \
     random.o                       \
+    counter.o                      \
     alarm.o                        \
     queue.o                        \
     pqueue.o                       \
