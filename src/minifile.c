@@ -322,7 +322,7 @@ void relink_file(int blocknum) {
     if (!file_inode) return;
 
     truncate_file(file_inode, blocknum);
-    set_free_inode_block(blocknum, file_inode);
+    set_free_inode_block(blocknum, (char *) file_inode);
     free(file_inode);
 }
 
