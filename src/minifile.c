@@ -121,7 +121,7 @@ void move_dir(thread_files_t files, int new_blocknum) {
 
 /* -------------------------------Disk Logic--------------------------------- */
 
-void destroyWaiting(waiting_request_t req) {
+void destroy_waiting(waiting_request_t req) {
     counter_destroy(req->mutex);
     free(req);
 }
@@ -143,7 +143,7 @@ void minifile_handle(disk_interrupt_arg_t *arg) {
 
     if (counter_get_count(req->mutex) <= 0) {
         HASH_DEL( req_map, req );
-        destroyWaiting(req);
+        destroy_waiting(req);
     } else { // Someone else waiting
         counter_V(req->mutex, 0); // unsafe v
     }
@@ -151,7 +151,7 @@ void minifile_handle(disk_interrupt_arg_t *arg) {
     free(arg);
 }
 
-waiting_request_t createWaiting(int blockid, disk_reply_t* reply) {
+waiting_request_t create_waiting(int blockid, disk_reply_t* reply) {
     waiting_request_t req;
     semaphore_t wait;
 
@@ -170,7 +170,7 @@ waiting_request_t createWaiting(int blockid, disk_reply_t* reply) {
         req->mutex = counter_new();
         if (!req->mutex) {
             free(wait);
-            destroyWaiting(req);
+            destroy_waiting(req);
             return NULL;
         }
         counter_initialize(req->mutex, 1);
@@ -186,27 +186,27 @@ waiting_request_t createWaiting(int blockid, disk_reply_t* reply) {
 }
 
 semaphore_t read_block(int blockid, disk_reply_t* reply, char* buffer) {
-    waiting_request_t req = createWaiting(blockid, reply);
+    waiting_request_t req = create_waiting(blockid, reply);
     if (!req) return NULL;
     disk_read_block(disk, blockid, buffer);
     return req->wait_for_reply;
 }
 
 semaphore_t write_block(int blockid, disk_reply_t* reply, char* buffer) {
-    waiting_request_t req = createWaiting(blockid, reply);
+    waiting_request_t req = create_waiting(blockid, reply);
     if (!req) return NULL;
     disk_write_block(disk, blockid, buffer);
     return req->wait_for_reply;
 }
 
-char* get_block_blocking(int block_num) {
+char* get_block_blocking(int blocknum) {
     semaphore_t wait;
     disk_reply_t reply;
     char* block;
 
     block = (char *) malloc (DISK_BLOCK_SIZE);
 
-    wait = read_block(block_num, &reply, block);
+    wait = read_block(blocknum, &reply, block);
     semaphore_P(wait);
     if (reply != DISK_REPLY_OK) {
         free(wait);
@@ -218,11 +218,11 @@ char* get_block_blocking(int block_num) {
     return block;
 }
 
-int write_block_blocking(int block_num, char* block) {
+int write_block_blocking(int blocknum, char* block) {
     semaphore_t wait;
     disk_reply_t reply;
 
-    wait = write_block(block_num, &reply, block);
+    wait = write_block(blocknum, &reply, block);
     semaphore_P(wait);
     if (reply != DISK_REPLY_OK) {
         free(wait);
@@ -235,13 +235,13 @@ int write_block_blocking(int block_num, char* block) {
 
 /* ----------------------------Free Blocks----------------------------------- */
 
-char* get_free_inode_block(int *block_num) {
+char* get_free_inode_block(int *blocknum) {
     free_block_t freeblock;
     int nextblock;
 
-    *block_num = unpack_unsigned_int(disk_superblock->data.first_free_inode);
+    *blocknum = unpack_unsigned_int(disk_superblock->data.first_free_inode);
 
-    if (*block_num == 0) {
+    if (*blocknum == 0) {
         return NULL;
     } else {
         freeblock = (free_block_t) get_block_blocking(*block_num);
@@ -467,22 +467,6 @@ int get_inode_helper(char *item, char *inode_num, void *arg, void *result, int d
     return -1;
 }
 
-int truncate_helper(char *item, void *arg, void *result) {
-    char *data;
-    int num;
-
-    num = unpack_unsigned_int(item);
-    data = get_block_blocking(num);
-    set_free_data_block(num, data);
-    pack_unsigned_int(item, 0);
-    return -1;
-}
-
-void truncate_file(inode_t file) {
-    file_iterate(file, truncate_helper, NULL, NULL);
-    pack_unsigned_int(file->data.size, 0);
-}
-
 inode_t get_inode(char *path, int *inode_num) {
     inode_t current;
     int found;
@@ -519,6 +503,52 @@ inode_t get_inode(char *path, int *inode_num) {
     return current;
 }
 
+int write_new_file(dir_data_block_t dir, int dir_num, int entry_num, char *name) {
+    inode_t newfile;
+    int newfile_num;
+    int i;
+
+    newfile = (inode_t) get_free_inode_block(&newdir_num);
+
+    if (!newfile) {
+        set_free_inode_block(newfile_num, (char *) newfile);
+        free(newfile);
+        return -1;
+    }
+
+    newfile->data.inode_type = FILE_INODE;
+    pack_unsigned_int(newfile->data.size, 0);
+    for (i = 0; i < DIRECT_BLOCKS; i++) {
+        pack_unsigned_int(newfile->data.direct_ptrs[i], 0);
+    }
+    pack_unsigned_int(newfile->data.indirect_ptr, 0);
+
+    strcpy(dir->data.dir_entries[entry_num], name);
+    pack_unsigned_int(dir->data.inode_ptrs[entry_num], newfile_num);
+
+    write_block_blocking(newfile_num, (char *) newfile);
+    write_block_blocking(dir_num, (char *) dir);
+
+    free(newfile);
+    return 0;
+}
+
+int truncate_helper(char *item, void *arg, void *result) {
+    char *data;
+    int num;
+
+    num = unpack_unsigned_int(item);
+    data = get_block_blocking(num);
+    set_free_data_block(num, data);
+    pack_unsigned_int(item, 0);
+    return -1;
+}
+
+void truncate_file(inode_t file, int blocknum) {
+    file_iterate(file, truncate_helper, NULL, NULL);
+    pack_unsigned_int(file->data.size, 0);
+    write_block_blocking(blocknum, (char *) file);
+}
 
 // int file_iterate_indir(indirect_block_t file, file_func_t f, void* arg, void* result, int cur_size) {
 //     int acc;
@@ -607,28 +637,6 @@ int file_read(inode_t file, int start, int maxlen, char *data, int *new_cursor) 
     // return file_iterate_indir(indir, f, arg, result, size);
 }
 
-/* Handler for disk operations
- * Assumes interrupts are disabled within
- */
-void minifile_handle(disk_interrupt_arg_t *arg) {
-    int blockid;
-    char* buffer;
-    waiting_request_t req;
-    void* req_addr;
-
-    blockid = arg->request.blocknum;
-    buffer = arg->request.buffer;
-    reqmap_get(requests, blockid, buffer, &req_addr);
-    req = (waiting_request_t) req_addr;
-
-    req->reply = arg->reply;
-    semaphore_V(req->wait);
-
-    reqmap_delete(requests, blockid, buffer);
-
-    free(arg);
-}
-
 /* Initialize minifile globals */
 void minifile_initialize() {
     file_tbl = (file_data_t *) calloc (disk_size, sizeof(file_data_t));
@@ -663,7 +671,8 @@ int minifile_get_root_num() {
 }
 
 minifile_t minifile_creat(char *filename) {
-    return NULL;
+    char mode[2] = "w";
+    return minifile_open(filename, mode);
 }
 
 minifile_t minifile_open(char *filename, char *mode) {
