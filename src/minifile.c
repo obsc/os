@@ -254,7 +254,8 @@ void set_free_data_block(int block_num, char *block) {
 int dir_iterate_indir(indirect_block_t indir, dir_func_t f, void* arg, void* result, int cur_size) {
     unsigned int blockid;
     dir_data_block_t cur_block;
-    int acc;
+    int acc1;
+    int acc2;
     int size;
     //int inode_num;
     int num_to_check;
@@ -266,13 +267,13 @@ int dir_iterate_indir(indirect_block_t indir, dir_func_t f, void* arg, void* res
     }
 
     size = cur_size;
-    for (acc = 0; acc < DIRECT_PER_TABLE; acc++) {
+    for (acc1 = 0; acc1 < DIRECT_PER_TABLE; acc1++) {
         if (size == 0) {
             free(cur_block);
             free(indir);
             return -1;
         }
-        blockid = unpack_unsigned_int(indir->data.direct_ptrs[acc]);
+        blockid = unpack_unsigned_int(indir->data.direct_ptrs[acc1]);
         if (blockid == 0) {
             free(cur_block);
             free(indir);
@@ -287,9 +288,9 @@ int dir_iterate_indir(indirect_block_t indir, dir_func_t f, void* arg, void* res
             num_to_check = size;
             size = 0;
         }
-        for (acc = 0; acc < num_to_check; acc++) {
-            //inode_num = unpack_unsigned_int(cur_block->data.inode_ptrs[acc]);
-            if (f(cur_block->data.dir_entries[acc], cur_block->data.inode_ptrs[acc], arg, result, blockid, (char *)cur_block) == 0) {
+        for (acc2 = 0; acc2 < num_to_check; acc2++) {
+            //inode_num = unpack_unsigned_int(cur_block->data.inode_ptrs[acc2]);
+            if (f(cur_block->data.dir_entries[acc2], cur_block->data.inode_ptrs[acc2], arg, result, blockid, (char *)cur_block) == 0) {
                 free(cur_block);
                 free(indir);
                 return 0;
@@ -306,7 +307,8 @@ int dir_iterate_indir(indirect_block_t indir, dir_func_t f, void* arg, void* res
 int dir_iterate(inode_t dir, dir_func_t f, void* arg, void* result) {
     unsigned int blockid;
     dir_data_block_t cur_block;
-    int acc;
+    int acc1;
+    int acc2;
     int size;
     //int inode_num;
     int num_to_check;
@@ -314,12 +316,12 @@ int dir_iterate(inode_t dir, dir_func_t f, void* arg, void* result) {
 
     size = unpack_unsigned_int(dir->data.size);
 
-    for (acc = 0; acc < DIRECT_BLOCKS; acc++) {
+    for (acc1 = 0; acc1 < DIRECT_BLOCKS; acc1++) {
         if (size == 0) {
             free(cur_block);
             return -1;
         }
-        blockid = unpack_unsigned_int(dir->data.direct_ptrs[acc]);
+        blockid = unpack_unsigned_int(dir->data.direct_ptrs[acc1]);
         if (blockid == 0) {
             free(cur_block);
             return -1;
@@ -333,9 +335,9 @@ int dir_iterate(inode_t dir, dir_func_t f, void* arg, void* result) {
             num_to_check = size;
             size = 0;
         }
-        for (acc = 0; acc < num_to_check; acc++) {
+        for (acc2 = 0; acc2 < num_to_check; acc2++) {
             //inode_num = unpack_unsigned_int(cur_block->data.inode_ptrs[acc]);
-            if (f(cur_block->data.dir_entries[acc], cur_block->data.inode_ptrs[acc], arg, result, blockid, (char *)cur_block) == 0) {
+            if (f(cur_block->data.dir_entries[acc2], cur_block->data.inode_ptrs[acc2], arg, result, blockid, (char *)cur_block) == 0) {
                 free(cur_block);
                 return 0;
             }
@@ -631,7 +633,7 @@ int mkdir_helper(inode_t dir, int inode_num, char *name) {
     size = unpack_unsigned_int(dir->data.size);
     pack_unsigned_int(dir->data.size, size + 1);
     if (size < DIRECT_BLOCKS * ENTRIES_PER_TABLE) { // found in a direct block
-    direct_ind = size / ENTRIES_PER_TABLE;
+        direct_ind = size / ENTRIES_PER_TABLE;
         entry_num = size % ENTRIES_PER_TABLE;
         direct_block_num = unpack_unsigned_int(dir->data.direct_ptrs[direct_ind]);
         if (entry_num == 0) { // New direct block
@@ -729,7 +731,6 @@ int mkdir_helper(inode_t dir, int inode_num, char *name) {
         free(dir);
         return -1;
     }
-
     write_block_blocking(indir_block_num, (char *) indir_block);
     write_block_blocking(inode_num, (char *) dir);
     free(dir);
