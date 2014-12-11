@@ -121,7 +121,7 @@ void move_dir(thread_files_t files, int new_blocknum) {
 
 /* -------------------------------Disk Logic--------------------------------- */
 
-void destroy_waiting(waiting_request_t req) {
+void destroy_waiting_disk(waiting_request_t req) {
     counter_destroy(req->mutex);
     free(req);
 }
@@ -143,7 +143,7 @@ void minifile_handle(disk_interrupt_arg_t *arg) {
 
     if (counter_get_count(req->mutex) <= 0) {
         HASH_DEL( req_map, req );
-        destroy_waiting(req);
+        destroy_waiting_disk(req);
     } else { // Someone else waiting
         counter_V(req->mutex, 0); // unsafe v
     }
@@ -151,7 +151,7 @@ void minifile_handle(disk_interrupt_arg_t *arg) {
     free(arg);
 }
 
-waiting_request_t create_waiting(int blockid, disk_reply_t* reply) {
+waiting_request_t create_waiting_disk(int blockid, disk_reply_t* reply) {
     waiting_request_t req;
     semaphore_t wait;
 
@@ -170,7 +170,7 @@ waiting_request_t create_waiting(int blockid, disk_reply_t* reply) {
         req->mutex = counter_new();
         if (!req->mutex) {
             free(wait);
-            destroy_waiting(req);
+            destroy_waiting_disk(req);
             return NULL;
         }
         counter_initialize(req->mutex, 1);
@@ -186,14 +186,14 @@ waiting_request_t create_waiting(int blockid, disk_reply_t* reply) {
 }
 
 semaphore_t read_block(int blockid, disk_reply_t* reply, char* buffer) {
-    waiting_request_t req = create_waiting(blockid, reply);
+    waiting_request_t req = create_waiting_disk(blockid, reply);
     if (!req) return NULL;
     disk_read_block(disk, blockid, buffer);
     return req->wait_for_reply;
 }
 
 semaphore_t write_block(int blockid, disk_reply_t* reply, char* buffer) {
-    waiting_request_t req = create_waiting(blockid, reply);
+    waiting_request_t req = create_waiting_disk(blockid, reply);
     if (!req) return NULL;
     disk_write_block(disk, blockid, buffer);
     return req->wait_for_reply;
@@ -244,7 +244,7 @@ char* get_free_inode_block(int *blocknum) {
     if (*blocknum == 0) {
         return NULL;
     } else {
-        freeblock = (free_block_t) get_block_blocking(*block_num);
+        freeblock = (free_block_t) get_block_blocking(*blocknum);
         nextblock = unpack_unsigned_int(freeblock->next_free_block);
         pack_unsigned_int(disk_superblock->data.first_free_inode, nextblock);
         write_block_blocking(0, (char *) disk_superblock);
@@ -508,7 +508,7 @@ int write_new_file(dir_data_block_t dir, int dir_num, int entry_num, char *name)
     int newfile_num;
     int i;
 
-    newfile = (inode_t) get_free_inode_block(&newdir_num);
+    newfile = (inode_t) get_free_inode_block(&newfile_num);
 
     if (!newfile) {
         set_free_inode_block(newfile_num, (char *) newfile);
