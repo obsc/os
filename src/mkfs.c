@@ -13,7 +13,6 @@ int initialize_free_blocks(int start, int end) {
     int i;
     int prev_ind;
     free_block_t freeblock;
-    waiting_request_t req;
 
     freeblock = (free_block_t) malloc (sizeof (struct free_block));
 
@@ -22,15 +21,11 @@ int initialize_free_blocks(int start, int end) {
         pack_unsigned_int(freeblock->next_free_block, prev_ind);
         prev_ind = i;
 
-        req = write_block(i, (char *) freeblock);
-        semaphore_P(req->wait);
-        if (req->reply != DISK_REPLY_OK) {
+        if (write_block_blocking(i, (char *) freeblock) == -1) {
             printf("Failed to write free block: %i\n", i);
             free(freeblock);
-            free(req);
             return -1;
         }
-        free(req);
     }
 
     free(freeblock);
@@ -45,7 +40,6 @@ int initialize_root_dir(int max_inode_index) {
     char parent[3] = "..";
     char self[2] = ".";
     int i;
-    waiting_request_t req;
 
     root_dir = (dir_data_block_t) malloc (sizeof (struct dir_data_block));
 
@@ -58,16 +52,12 @@ int initialize_root_dir(int max_inode_index) {
         pack_unsigned_int(root_dir->data.inode_ptrs[i], 0);
     }
 
-    req = write_block(max_inode_index + 1, (char *) root_dir);
-    semaphore_P(req->wait);
-    if (req->reply != DISK_REPLY_OK) {
+    if (write_block_blocking(max_inode_index + 1, (char *) root_dir) == -1) {
         printf("Failed to write root directory\n");
         free(root_dir);
-        free(req);
         return -1;
     }
     free(root_dir);
-    free(req);
 
     root_inode = (inode_t) malloc (sizeof (struct inode));
 
@@ -80,16 +70,12 @@ int initialize_root_dir(int max_inode_index) {
     }
     pack_unsigned_int(root_inode->data.indirect_ptr, 0);
 
-    req = write_block(1, (char *) root_inode);
-    semaphore_P(req->wait);
-    if (req->reply != DISK_REPLY_OK) {
+    if (write_block_blocking(1, (char *) root_inode) == -1) {
         printf("Failed to write root directory\n");
         free(root_inode);
-        free(req);
         return -1;
     }
     free(root_inode);
-    free(req);
 
     return 0;
 }
@@ -99,7 +85,6 @@ int mkfs(int *arg) {
     int size;
     int max_inode_index;
     superblock_t sprblk;
-    waiting_request_t req;
 
     size = disk->layout.size;
     max_inode_index = RATIO_INODE * size;
@@ -134,16 +119,12 @@ int mkfs(int *arg) {
     printf("Successfully written root directory\n");
 
     printf("Writing superblock\n");
-    req = write_block(0, (char *) sprblk);
-    semaphore_P(req->wait);
-    if (req->reply != DISK_REPLY_OK) {
+    if (write_block_blocking(0, (char *) sprblk) == -1) {
         printf("Failed to write superblock\n");
         free(sprblk);
-        free(req);
         return -1;
     }
     free(sprblk);
-    free(req);
     printf("Successfully written superblock\n");
 
     printf("File system created\n");

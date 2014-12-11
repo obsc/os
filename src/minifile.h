@@ -126,7 +126,7 @@ typedef struct minifile* minifile_t;
 void move_dir(thread_files_t files, int new_blocknum);
 
 char* get_block_blocking(int blockid);
-void write_block_blocking(int blockid, char* buffer);
+int write_block_blocking(int blockid, char* buffer);
 
 /* Handler for disk operations */
 void minifile_handle(disk_interrupt_arg_t *arg);

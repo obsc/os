@@ -45,6 +45,7 @@ typedef struct waiting_request {
     disk_reply_t *reply;
     semaphore_t wait_for_reply;
     counter_t mutex;
+    UT_hash_handle hh;
 }* waiting_request_t;
 
 // iterator function for directories
@@ -132,17 +133,16 @@ void minifile_handle(disk_interrupt_arg_t *arg) {
     int blockid;
     char* buffer;
     waiting_request_t req;
-    void* req_addr;
 
     blockid = arg->request.blocknum;
     buffer = arg->request.buffer;
     HASH_FIND_INT( req_map, &blockid, req );
 
-    *req->reply = arg->reply;
+    *(req->reply) = arg->reply;
     semaphore_V(req->wait_for_reply);
 
     if (counter_get_count(req->mutex) <= 0) {
-        HASH_DEL( req_map, req );        
+        HASH_DEL( req_map, req );
         destroyWaiting(req);
     } else { // Someone else waiting
         counter_V(req->mutex, 0); // unsafe v
@@ -195,7 +195,7 @@ semaphore_t read_block(int blockid, disk_reply_t* reply, char* buffer) {
 semaphore_t write_block(int blockid, disk_reply_t* reply, char* buffer) {
     waiting_request_t req = createWaiting(blockid, reply);
     if (!req) return NULL;
-    disk_read_block(disk, blockid, buffer);
+    disk_write_block(disk, blockid, buffer);
     return req->wait_for_reply;
 }
 
@@ -218,7 +218,7 @@ char* get_block_blocking(int block_num) {
     return block;
 }
 
-void write_block_blocking(int block_num, char* block) {
+int write_block_blocking(int block_num, char* block) {
     semaphore_t wait;
     disk_reply_t reply;
 
@@ -226,9 +226,11 @@ void write_block_blocking(int block_num, char* block) {
     semaphore_P(wait);
     if (reply != DISK_REPLY_OK) {
         free(wait);
-        return;
+        return -1;
     }
+
     free(wait);
+    return 0;
 }
 
 /* ----------------------------Free Blocks----------------------------------- */
@@ -533,18 +535,10 @@ void minifile_initialize() {
 
 /* Initialize minifile global blocks */
 void minifile_initialize_blocks() {
-    waiting_request_t req;
     int magic_num;
 
     if (!use_existing_disk) return;
-    req = read_block(0, (char *) disk_superblock);
-    semaphore_P(req->wait);
-    if (req->reply != DISK_REPLY_OK) {
-        printf("Failed to load superblock\n");
-        free(req);
-        return;
-    }
-    free(req);
+    disk_superblock = (superblock_t) get_block_blocking(0);
 
     magic_num = unpack_unsigned_int(disk_superblock->data.magic_number);
     if (magic_num != MAGIC) {
