@@ -125,6 +125,9 @@ typedef struct minifile* minifile_t;
 
 void move_dir(thread_files_t files, int new_blocknum);
 
+semaphore_t read_block(int blockid, disk_reply_t* reply, char* buffer);
+semaphore_t write_block(int blockid, disk_reply_t* reply, char* buffer);
+
 char* get_block_blocking(int blockid);
 int write_block_blocking(int blockid, char* buffer);
 

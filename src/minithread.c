@@ -386,7 +386,10 @@ void minithread_system_initialize(proc_t mainproc, arg_t mainarg) {
     interrupt_level_t old_level;
     //initialize disk
     disk = (disk_t *) malloc (sizeof(disk_t));
-    disk_initialize(disk);
+    if (disk_initialize(disk) == -1) {
+        printf("Disk initialize failed\n");
+        exit(0);
+    }
     install_disk_handler(disk_handler);
     minifile_initialize();
     // Use time to seed the random function

@@ -543,6 +543,7 @@ void minifile_initialize_blocks() {
     magic_num = unpack_unsigned_int(disk_superblock->data.magic_number);
     if (magic_num != MAGIC) {
         printf("Invalid magic number\n");
+        exit(0);
         return;
     }
 }
