@@ -848,15 +848,16 @@ int rm_last(inode_t dir, int dir_num, char **result_num, char **result) {
                 return -1;
             }
             cur_block = (dir_data_block_t) get_block_blocking(blockid);
-            *result_num = (char *) malloc (1 + strlen(cur_block->data.inode_ptrs[(size -1) % ENTRIES_PER_TABLE]));
+            *result_num = (char *) malloc (4);
             if (!(*result_num)) {
                 free(cur_block);
                 free(indir);
                 free(temp);
                 return -1;
             }
-            memcpy(*result_num, cur_block->data.inode_ptrs[(size -1) % ENTRIES_PER_TABLE], strlen(cur_block->data.inode_ptrs[(size -1) % ENTRIES_PER_TABLE]) + 1);
-            *result = (char *) malloc (1 + strlen(cur_block->data.dir_entries[(size - 1) % ENTRIES_PER_TABLE]));
+            transfer = unpack_unsigned_int(cur_block->data.inode_ptrs[(size - 1) % ENTRIES_PER_TABLE]);
+            pack_unsigned_int(*result_num, transfer);
+            *result = (char *) malloc (257);
             if (!(*result)) {
                 free(*result_num);
                 free(cur_block);
