@@ -103,6 +103,7 @@ typedef struct str_and_len {
  * Struct representing a the filedata a thread has
  */
 typedef struct thread_files {
+    char valid;
     queue_t path;
     int path_len;
     int inode_num;

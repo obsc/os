@@ -199,6 +199,7 @@ minithread_t minithread_create(proc_t proc, arg_t arg) {
             t->files->inode_num = minifile_get_root_num();
             t->files->path_len = 2; // Root and null terminator
         }
+        t->files->valid = 1;
     }
 
     minithread_allocate_stack(&(t->base), &(t->top));

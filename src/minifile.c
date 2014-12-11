@@ -221,9 +221,7 @@ inode_t get_inode(char *path, int *inode_num) {
         found = 1;
     } else {
         cur_thread = minithread_directory();
-        if (!cur_thread) {
-            return NULL;
-        }
+        if (!cur_thread || cur_thread->valid == 0) return NULL;
         current = (inode_t) get_block_blocking(cur_thread->inode_num);
     }
 
@@ -777,6 +775,7 @@ int minifile_rmdir(char *dirname) {
     int size;
     int parent_num;
     dir_data_block_t freed_data;
+
     if ((strcmp(dirname, "..") == 0) || (strcmp(dirname, ".") == 0)) {
         return -1;
     }
@@ -920,7 +919,7 @@ char **minifile_ls(char *path) {
 
     if (!path || strlen(path) == 0) {
         files = minithread_directory();
-        if (!files) return NULL;
+        if (!files || files->valid == 0) return NULL;
         block = (inode_t) get_block_blocking(files->inode_num);
     } else {
         block = get_inode(path, &dummy);
