@@ -48,7 +48,6 @@ OBJ =                              \
     minisocket.o                   \
     miniroute.o                    \
     disk.o                         \
-    reqmap.o                       \
     minifile.o                     \
     network.o
 
