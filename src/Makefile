@@ -31,7 +31,6 @@ OBJ =                              \
     machineprimitives.o            \
     machineprimitives_x86_64.o     \
     machineprimitives_x86_64_asm.o \
-    uthash.o                       \
     random.o                       \
     alarm.o                        \
     queue.o                        \

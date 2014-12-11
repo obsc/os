@@ -98,7 +98,7 @@ void move_dir(int new_blocknum) {
         queue_append(new_dir->thread_queue, files);
     } else { // No one else in directory
         new_dir = (dir_list_t) malloc (sizeof(struct dir_list));
-        new_dir->blocknuum = new_blocknum;
+        new_dir->blocknum = new_blocknum;
         new_dir->thread_queue = queue_new();
         queue_append(new_dir->thread_queue, files);
         HASH_ADD_INT( open_dir_map, blocknum, new_dir );
@@ -950,7 +950,7 @@ int minifile_cd(char *path) {
         token = strtok_r(NULL, "/", &saveptr);
     }
 
-    move_dir(files->inode_num, inode_num);
+    move_dir(inode_num);
     files->inode_num = inode_num;
 
     free(path_copy);
