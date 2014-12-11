@@ -56,12 +56,13 @@ char null_term[1] = "\0";
 char parent[3] = "..";
 char self[2] = ".";
 
+void set_free_data_block(int num, char *block);
+
 void invalidate_dir(int blocknum) {
     dir_list_t d;
     void *f;
     thread_files_t files;
 
-    printf("invalidating\n");
     HASH_FIND_INT( open_dir_map, &blocknum, d );
     if (!d) return;
 
@@ -185,11 +186,6 @@ int dir_iterate_indir(indirect_block_t indir, dir_func_t f, void* arg, void* res
 
     size = cur_size;
     for (acc = 0; acc < DIRECT_PER_TABLE; acc++) {
-        if (size == 0) {
-            free(cur_block);
-            free(indir);
-            return -1;
-        }
         blockid = unpack_unsigned_int(indir->data.direct_ptrs[acc]);
         if (blockid == 0) {
             free(cur_block);
@@ -233,10 +229,6 @@ int dir_iterate(inode_t dir, dir_func_t f, void* arg, void* result) {
     size = unpack_unsigned_int(dir->data.size);
 
     for (acc = 0; acc < DIRECT_BLOCKS; acc++) {
-        if (size == 0) {
-            free(cur_block);
-            return 0;
-        }
         blockid = unpack_unsigned_int(dir->data.direct_ptrs[acc]);
         if (blockid == 0) {
             free(cur_block);
@@ -266,14 +258,12 @@ int dir_iterate(inode_t dir, dir_func_t f, void* arg, void* result) {
 }
 
 int file_iterate_indir(indirect_block_t file, file_func_t f, void* arg, void* result, int cur_size) {
-    unsigned int blockid;
     int acc;
     int size;
-    int num_to_check;
     indirect_block_t indirect;
 
     if (cur_size == 0) {
-        free(indir);
+        free(file);
         return -1;
     }
 
@@ -282,14 +272,14 @@ int file_iterate_indir(indirect_block_t file, file_func_t f, void* arg, void* re
         if (size == 0) {
             return -1;
         }
-        if (f(file->data.direct_ptrs[acc], arg, result) = 0) {
+        if (f((file->data.direct_ptrs[acc]), arg, result) == 0) {
             return 0;
         }
         size = size - 1;
     }
 
-    indirect = (indirect_block_t) get_block_blocking(unpack_unsigned_int(indir->data.indirect_ptr));
-    free(indir);
+    indirect = (indirect_block_t) get_block_blocking(unpack_unsigned_int(file->data.indirect_ptr));
+    free(file);
 
     return file_iterate_indir(indirect, f, arg, result, size);
 }
@@ -309,7 +299,7 @@ int file_iterate(inode_t file, file_func_t f, void* arg, void* result) {
         if (size == 0) {
             return -1;
         }
-        if (f(file->data.direct_ptrs[acc], arg, result) = 0) {
+        if (f(file->data.direct_ptrs[acc], arg, result) == 0) {
             return 0;
         }
         size = size - 1;
@@ -1058,7 +1048,7 @@ int minifile_cd(char *path) {
     return 0;
 }
 
-int ls_helper(char *item, char *inode_num, void *arg, void *result, int dummy, char *dummy) {
+int ls_helper(char *item, char *inode_num, void *arg, void *result, int dummy, char *dummy2) {
     char ***file_list_ptr;
     int len;
 
