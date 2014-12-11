@@ -40,11 +40,11 @@ typedef struct dir_list {
 /*
  * Structure representing a waiting disk request
  */
-typedef struct waiting_request {
+/*typedef struct waiting_request {
     int blocknum; // key
     disk_reply_t reply;
     semaphore_t wait_for_reply;
-}* waiting_request_t;
+}* waiting_request_t;*/
 
 // iterator function for directories
 typedef int (*dir_func_t) (char*, char*, void*, void*, int, char*);
