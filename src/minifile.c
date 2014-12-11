@@ -58,6 +58,7 @@ void invalidate_dir(int blocknum) {
     void *f;
     thread_files_t files;
 
+    printf("invalidating\n");
     HASH_FIND_INT( open_dir_map, &blocknum, d );
     if (!d) return;
 
@@ -72,13 +73,11 @@ void invalidate_dir(int blocknum) {
     free(d);
 }
 
-void move_dir(int new_blocknum) {
+void move_dir(thread_files_t files, int new_blocknum) {
     dir_list_t old_dir;
     dir_list_t new_dir;
-    thread_files_t files;
     int old_blocknum;
 
-    files = minithread_directory();
     if (files->valid) { // In a valid directory
         old_blocknum = files->inode_num;
         HASH_FIND_INT( open_dir_map, &old_blocknum, old_dir );
@@ -828,7 +827,7 @@ int remove_inode(int dir_num, int item_num) {
     } else {
         return -1;
     }
-    return -1;
+    return 0;
 }
 
 int minifile_rmdir(char *dirname) {
@@ -950,7 +949,7 @@ int minifile_cd(char *path) {
         token = strtok_r(NULL, "/", &saveptr);
     }
 
-    move_dir(inode_num);
+    move_dir(minithread_directory(), inode_num);
     files->inode_num = inode_num;
 
     free(path_copy);

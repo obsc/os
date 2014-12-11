@@ -200,7 +200,7 @@ minithread_t minithread_create(proc_t proc, arg_t arg) {
             t->files->path_len = 2; // Root and null terminator
         }
         t->files->valid = 0;
-        move_dir(t->files->inode_num);
+        move_dir(t->files, t->files->inode_num);
     }
 
     minithread_allocate_stack(&(t->base), &(t->top));
