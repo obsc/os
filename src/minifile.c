@@ -11,13 +11,13 @@
 
 /*
  * System wide-structure represnting a file.
- * Keeps track of all threads accessing the file.
  */
-typedef struct file_data {
-    inode_t file_inode;
+typedef struct file_access {
+    int blocknum;
+    char unlinked;
     int num;
-    semaphore_t close_wait;
-}* file_data_t;
+    UT_hash_handle hh;
+}* file_access_t;
 
 /*
  * struct minifile:
@@ -54,12 +54,14 @@ typedef int (*dir_func_t) (char*, char*, void*, void*, int, char*);
 typedef int (*file_func_t) (char*, void*, void*);
 
 disk_t *disk;
-file_data_t *file_tbl;
 
 waiting_request_t req_map;
+file_access_t file_map;
 dir_list_t open_dir_map;
 
-semaphore_t metadata_lock;
+semaphore_t file_lock;
+semaphore_t open_dir_lock;
+
 superblock_t disk_superblock;
 
 char delim[1] = "/";
@@ -74,8 +76,12 @@ void invalidate_dir(int blocknum) {
     void *f;
     thread_files_t files;
 
+    semaphore_P(open_dir_lock);
     HASH_FIND_INT( open_dir_map, &blocknum, d );
-    if (!d) return;
+    if (!d) {
+        semaphore_V(open_dir_lock);
+        return;
+    }
 
     HASH_DEL( open_dir_map, d );
 
@@ -86,6 +92,8 @@ void invalidate_dir(int blocknum) {
 
     queue_free(d->thread_queue);
     free(d);
+
+    semaphore_V(open_dir_lock);
 }
 
 void move_dir(thread_files_t files, int new_blocknum) {
@@ -93,6 +101,7 @@ void move_dir(thread_files_t files, int new_blocknum) {
     dir_list_t new_dir;
     int old_blocknum;
 
+    semaphore_P(open_dir_lock);
     if (files->valid) { // In a valid directory
         old_blocknum = files->inode_num;
         HASH_FIND_INT( open_dir_map, &old_blocknum, old_dir );
@@ -117,6 +126,7 @@ void move_dir(thread_files_t files, int new_blocknum) {
         queue_append(new_dir->thread_queue, files);
         HASH_ADD_INT( open_dir_map, blocknum, new_dir );
     }
+    semaphore_V(open_dir_lock);
 }
 
 /* -------------------------------Disk Logic--------------------------------- */
@@ -300,6 +310,77 @@ void set_free_data_block(int block_num, char *block) {
     write_block_blocking(block_num, block);
     write_block_blocking(0, (char *) disk_superblock);
 }
+
+/* -------------------------------File Logic--------------------------------- */
+
+void truncate_file(inode_t file, int blocknum);
+
+void relink_file(int blocknum) {
+    inode_t file_inode;
+
+    file_inode = (inode_t) get_block_blocking(blocknum);
+    if (!file_inode) return;
+
+    truncate_file(file_inode, blocknum);
+    set_free_inode_block(blocknum, file_inode);
+    free(file_inode);
+}
+
+void start_access_file(int blocknum) {
+    file_access_t file;
+
+    semaphore_P(file_lock);
+
+    HASH_FIND_INT( file_map, &blocknum, file );
+    if (!file) {
+        file = (file_access_t) malloc (sizeof (struct file_access));
+        file->blocknum = blocknum;
+        file->unlinked = 0;
+        file->num = 1;
+        HASH_ADD_INT( file_map, blocknum, file );
+    } else {
+        file->num++;
+    }
+
+    semaphore_V(file_lock);
+}
+
+void unlink_access_file(int blocknum) {
+    file_access_t file;
+
+    semaphore_P(file_lock);
+    HASH_FIND_INT( file_map, &blocknum, file );
+    if (!file) {
+        semaphore_V(file_lock);
+        return;
+    }
+    file->unlinked = 1;
+
+    semaphore_V(file_lock);
+}
+
+void end_access_file(int blocknum) {
+    file_access_t file;
+    int unlinked;
+
+    semaphore_P(file_lock);
+    HASH_FIND_INT( file_map, &blocknum, file );
+    if (!file) {
+        semaphore_V(file_lock);
+        return;
+    }
+    file->num--;
+    if (file->num == 0) {
+        unlinked = file->unlinked;
+        HASH_DEL( file_map, file );
+        semaphore_V(file_lock);
+        free(file);
+        if (unlinked) relink_file(blocknum);
+    }
+
+    semaphore_V(file_lock);
+}
+
 
 /* -------------------------------------------------------------------------- */
 
@@ -639,15 +720,15 @@ int file_read(inode_t file, int start, int maxlen, char *data, int *new_cursor) 
 
 /* Initialize minifile globals */
 void minifile_initialize() {
-    file_tbl = (file_data_t *) calloc (disk_size, sizeof(file_data_t));
-
-    if (!file_tbl) return;
-
+    file_map = NULL;
     req_map = NULL;
     open_dir_map = NULL;
 
-    metadata_lock = semaphore_create();
-    semaphore_initialize(metadata_lock, 1);
+    file_lock = semaphore_create();
+    open_dir_lock = semaphore_create();
+    semaphore_initialize(file_lock, 1);
+    semaphore_initialize(open_dir_lock, 1);
+
     disk_superblock = (superblock_t) malloc (sizeof(struct superblock));
 }
 
@@ -690,7 +771,9 @@ minifile_t minifile_open(char *filename, char *mode) {
         file->cursor = 0;
         memcpy(file->mode, mode, strlen(mode)+1);
         return file;
-    } else if (strcmp(mode, "r+") == 0) {
+    } else if ((strcmp(mode, "w") == 0) || (strcmp(mode, "w+") == 0)) {
+        return NULL;
+    } else if ((strcmp(mode, "a") == 0) || (strcmp(mode, "a+") == 0)) {
         return NULL;
     }
     return NULL;
