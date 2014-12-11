@@ -27,6 +27,7 @@ typedef struct file_data {
 struct minifile {
     int inode_num;
     int cursor;
+    char mode[3];
 };
 
 /* Threads that have the directory at blocknum open */
@@ -37,7 +38,9 @@ typedef struct dir_list {
 }* dir_list_t;
 
 // iterator function for directories
-typedef int (*dir_func_t) (char*, char*, void*, void*);
+typedef int (*dir_func_t) (char*, char*, void*, void*, int, char*);
+// iterator function for files
+typedef int (*file_func_t) (char*, void*, void*);
 
 disk_t *disk;
 reqmap_t requests;
@@ -182,6 +185,11 @@ int dir_iterate_indir(indirect_block_t indir, dir_func_t f, void* arg, void* res
 
     size = cur_size;
     for (acc = 0; acc < DIRECT_PER_TABLE; acc++) {
+        if (size == 0) {
+            free(cur_block);
+            free(indir);
+            return -1;
+        }
         blockid = unpack_unsigned_int(indir->data.direct_ptrs[acc]);
         if (blockid == 0) {
             free(cur_block);
@@ -199,7 +207,7 @@ int dir_iterate_indir(indirect_block_t indir, dir_func_t f, void* arg, void* res
         }
         for (acc = 0; acc < num_to_check; acc++) {
             //inode_num = unpack_unsigned_int(cur_block->data.inode_ptrs[acc]);
-            if (f(cur_block->data.dir_entries[acc], cur_block->data.inode_ptrs[acc], arg, result) == 0) {
+            if (f(cur_block->data.dir_entries[acc], cur_block->data.inode_ptrs[acc], arg, result, blockid, (char *)cur_block) == 0) {
                 free(cur_block);
                 free(indir);
                 return 0;
@@ -225,6 +233,10 @@ int dir_iterate(inode_t dir, dir_func_t f, void* arg, void* result) {
     size = unpack_unsigned_int(dir->data.size);
 
     for (acc = 0; acc < DIRECT_BLOCKS; acc++) {
+        if (size == 0) {
+            free(cur_block);
+            return 0;
+        }
         blockid = unpack_unsigned_int(dir->data.direct_ptrs[acc]);
         if (blockid == 0) {
             free(cur_block);
@@ -241,7 +253,7 @@ int dir_iterate(inode_t dir, dir_func_t f, void* arg, void* result) {
         }
         for (acc = 0; acc < num_to_check; acc++) {
             //inode_num = unpack_unsigned_int(cur_block->data.inode_ptrs[acc]);
-            if (f(cur_block->data.dir_entries[acc], cur_block->data.inode_ptrs[acc], arg, result) == 0) {
+            if (f(cur_block->data.dir_entries[acc], cur_block->data.inode_ptrs[acc], arg, result, blockid, (char *)cur_block) == 0) {
                 free(cur_block);
                 return 0;
             }
@@ -253,7 +265,61 @@ int dir_iterate(inode_t dir, dir_func_t f, void* arg, void* result) {
     return dir_iterate_indir(indir, f, arg, result, size);
 }
 
-int get_inode_helper(char *item, char *inode_num, void *arg, void *result) {
+int file_iterate_indir(indirect_block_t file, file_func_t f, void* arg, void* result, int cur_size) {
+    unsigned int blockid;
+    int acc;
+    int size;
+    int num_to_check;
+    indirect_block_t indirect;
+
+    if (cur_size == 0) {
+        free(indir);
+        return -1;
+    }
+
+    size = cur_size;
+    for (acc = 0; acc < DIRECT_PER_TABLE; acc++) {
+        if (size == 0) {
+            return -1;
+        }
+        if (f(file->data.direct_ptrs[acc], arg, result) = 0) {
+            return 0;
+        }
+        size = size - 1;
+    }
+
+    indirect = (indirect_block_t) get_block_blocking(unpack_unsigned_int(indir->data.indirect_ptr));
+    free(indir);
+
+    return file_iterate_indir(indirect, f, arg, result, size);
+}
+
+int file_iterate(inode_t file, file_func_t f, void* arg, void* result) {
+    int acc;
+    int size;
+    indirect_block_t indir;
+
+    size = unpack_unsigned_int(file->data.size) / 4096;
+
+    if (unpack_unsigned_int(file->data.size) % 4096 != 0) {
+        size = size + 1;
+    }
+
+    for (acc = 0; acc < DIRECT_BLOCKS; acc++) {
+        if (size == 0) {
+            return -1;
+        }
+        if (f(file->data.direct_ptrs[acc], arg, result) = 0) {
+            return 0;
+        }
+        size = size - 1;
+    }
+    indir = (indirect_block_t) get_block_blocking(unpack_unsigned_int(file->data.indirect_ptr));
+
+    return file_iterate_indir(indir, f, arg, result, size);
+}
+
+int get_inode_helper(char *item, char *inode_num, void *arg, void *result, int dummy, char *dummy2) {
     int *res;
     int actual_num;
 
@@ -265,6 +331,24 @@ int get_inode_helper(char *item, char *inode_num, void *arg, void *result) {
         return 0;
     }
     return -1;
+}
+
+
+
+int truncate_helper(char *item, void *arg, void *result) {
+    char *data;
+    int num;
+
+    num = unpack_unsigned_int(item);
+    data = get_block_blocking(num);
+    set_free_data_block(num, data);
+    pack_unsigned_int(item, 0);
+    return -1;
+}
+
+void truncate_file(inode_t file) {
+    file_iterate(file, truncate_helper, NULL, NULL);
+    pack_unsigned_int(file->data.size, 0);
 }
 
 inode_t get_inode(char *path, int *inode_num) {
@@ -439,6 +523,23 @@ minifile_t minifile_creat(char *filename) {
 }
 
 minifile_t minifile_open(char *filename, char *mode) {
+    int inode_num;
+    inode_t inode;
+    minifile_t file;
+
+    if (!mode) return NULL;
+    inode = get_inode(filename, &inode_num);
+
+    if ((strcmp(mode, "r") == 0) || (strcmp(mode, "r+") == 0)) {
+        if (!inode) return NULL;
+        file = (minifile_t) malloc (sizeof(struct minifile));
+        file->inode_num = inode_num;
+        file->cursor = 0;
+        memcpy(file->mode, mode, strlen(mode)+1);
+        return file;
+    } else if (strcmp(mode, "r+") == 0) {
+        return NULL;
+    }
     return NULL;
 }
 
@@ -783,7 +884,7 @@ typedef struct num_struct {
     char *structure;
 }* num_struct_t;
 
-int remove_inode_helper(char *item, char *inode_num, void *arg, void *result) {
+int remove_inode_helper(char *item, char *inode_num, void *arg, void *result, int blockid, char *block) {
     char *number;
     int *num;
     char *name;
@@ -801,6 +902,7 @@ int remove_inode_helper(char *item, char *inode_num, void *arg, void *result) {
     if (*num == actual_num) {
         memcpy(item, name, strlen(name)+1);
         memcpy(inode_num, number, strlen(number)+1);
+        write_block_blocking(blockid, block);
         return 0;
     }
     return -1;
@@ -956,7 +1058,7 @@ int minifile_cd(char *path) {
     return 0;
 }
 
-int ls_helper(char *item, char *inode_num, void *arg, void *result) {
+int ls_helper(char *item, char *inode_num, void *arg, void *result, int dummy, char *dummy) {
     char ***file_list_ptr;
     int len;
 
