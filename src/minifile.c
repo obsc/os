@@ -789,6 +789,7 @@ int minifile_write(minifile_t file, char *data, int len) {
 int minifile_close(minifile_t file) {
     end_access_file(file->inode_num);
     free(file);
+    return 0;
 }
 
 int minifile_unlink(char *filename) {
