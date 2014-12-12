@@ -262,16 +262,16 @@ char* get_free_inode_block(int *blocknum) {
     return (char *) freeblock;
 }
 
-char* get_free_data_block(int *block_num) {
+char* get_free_data_block(int *blocknum) {
     free_block_t freeblock;
     int nextblock;
 
-    *block_num = unpack_unsigned_int(disk_superblock->data.first_free_data_block);
+    *blocknum = unpack_unsigned_int(disk_superblock->data.first_free_data_block);
 
-    if (*block_num == 0) {
+    if (*blocknum == 0) {
         return NULL;
     } else {
-        freeblock = (free_block_t) get_block_blocking(*block_num);
+        freeblock = (free_block_t) get_block_blocking(*blocknum);
         nextblock = unpack_unsigned_int(freeblock->next_free_block);
         pack_unsigned_int(disk_superblock->data.first_free_data_block, nextblock);
         write_block_blocking(0, (char *) disk_superblock);
@@ -279,35 +279,35 @@ char* get_free_data_block(int *block_num) {
     return (char *) freeblock;
 }
 
-void set_free_inode_block(int block_num, char *block) {
+void set_free_inode_block(int blocknum, char *block) {
     free_block_t freeblock;
     int first_free;
 
-    if (block_num == 0 || block == NULL) {
+    if (blocknum == 0 || block == NULL) {
         return;
     }
     freeblock = (free_block_t) block;
     first_free = unpack_unsigned_int(disk_superblock->data.first_free_inode);
     pack_unsigned_int(freeblock->next_free_block, first_free);
-    pack_unsigned_int(disk_superblock->data.first_free_inode, block_num);
+    pack_unsigned_int(disk_superblock->data.first_free_inode, blocknum);
 
-    write_block_blocking(block_num, block);
+    write_block_blocking(blocknum, block);
     write_block_blocking(0, (char *) disk_superblock);
 }
 
-void set_free_data_block(int block_num, char *block) {
+void set_free_data_block(int blocknum, char *block) {
     free_block_t freeblock;
     int first_free;
 
-    if (block_num == 0 || block == NULL) {
+    if (blocknum == 0 || block == NULL) {
         return;
     }
     freeblock = (free_block_t) block;
     first_free = unpack_unsigned_int(disk_superblock->data.first_free_data_block);
     pack_unsigned_int(freeblock->next_free_block, first_free);
-    pack_unsigned_int(disk_superblock->data.first_free_data_block, block_num);
+    pack_unsigned_int(disk_superblock->data.first_free_data_block, blocknum);
 
-    write_block_blocking(block_num, block);
+    write_block_blocking(blocknum, block);
     write_block_blocking(0, (char *) disk_superblock);
 }
 
@@ -380,7 +380,6 @@ void end_access_file(int blocknum) {
 
     semaphore_V(file_lock);
 }
-
 
 /* -------------------------------------------------------------------------- */
 
@@ -788,10 +787,17 @@ int minifile_write(minifile_t file, char *data, int len) {
 }
 
 int minifile_close(minifile_t file) {
-    return 0;
+    end_access_file(file->inode_num);
+    free(file);
 }
 
 int minifile_unlink(char *filename) {
+    inode_t file_inode;
+    int blocknum;
+
+    file_inode = get_inode(filename, &blocknum);
+    if (!file_inode || file_inode->data.inode_type == DIR_INODE) return -1;
+
     return 0;
 }
 
@@ -844,36 +850,36 @@ int write_new_dir(int prevdir, dir_data_block_t dir, int dir_num, int entry_num,
 int mkdir_helper(inode_t dir, int inode_num, char *name) {
     int direct_ind;
     dir_data_block_t direct_block;
-    int direct_block_num;
+    int direct_blocknum;
     int entry_num;
     int size;
     indirect_block_t indir_block;
-    int indir_block_num;
+    int indir_blocknum;
     indirect_block_t next_indir_block;
-    int next_indir_block_num;
+    int next_indir_blocknum;
 
     size = unpack_unsigned_int(dir->data.size);
     pack_unsigned_int(dir->data.size, size + 1);
     if (size < DIRECT_BLOCKS * ENTRIES_PER_TABLE) { // found in a direct block
         direct_ind = size / ENTRIES_PER_TABLE;
         entry_num = size % ENTRIES_PER_TABLE;
-        direct_block_num = unpack_unsigned_int(dir->data.direct_ptrs[direct_ind]);
+        direct_blocknum = unpack_unsigned_int(dir->data.direct_ptrs[direct_ind]);
         if (entry_num == 0) { // New direct block
-            direct_block = (dir_data_block_t) get_free_data_block(&direct_block_num);
+            direct_block = (dir_data_block_t) get_free_data_block(&direct_blocknum);
             if (!direct_block) {
                 free(dir);
                 return -1;
             }
-            pack_unsigned_int(dir->data.direct_ptrs[direct_ind], direct_block_num);
-        } else if (direct_block_num == 0) {
+            pack_unsigned_int(dir->data.direct_ptrs[direct_ind], direct_blocknum);
+        } else if (direct_blocknum == 0) {
             free(dir);
             return -1;
         } else {
-            direct_block = (dir_data_block_t) get_block_blocking(direct_block_num);
+            direct_block = (dir_data_block_t) get_block_blocking(direct_blocknum);
         }
-        if (write_new_dir(inode_num, direct_block, direct_block_num, entry_num, name) == -1) {
+        if (write_new_dir(inode_num, direct_block, direct_blocknum, entry_num, name) == -1) {
             if (entry_num == 0) {
-                set_free_data_block(direct_block_num, (char *) direct_block);
+                set_free_data_block(direct_blocknum, (char *) direct_block);
             }
             free(direct_block);
             free(dir);
@@ -886,74 +892,74 @@ int mkdir_helper(inode_t dir, int inode_num, char *name) {
 
     size -= DIRECT_BLOCKS * ENTRIES_PER_TABLE; // Remaining size
     if (size == 0) { // first entry in indirect
-        indir_block = (indirect_block_t) get_free_data_block(&indir_block_num);
+        indir_block = (indirect_block_t) get_free_data_block(&indir_blocknum);
         if (!indir_block) {
             free(dir);
             return -1;
         }
-        pack_unsigned_int(dir->data.indirect_ptr, indir_block_num);
+        pack_unsigned_int(dir->data.indirect_ptr, indir_blocknum);
     } else {
-        indir_block_num = unpack_unsigned_int(dir->data.indirect_ptr);
-        indir_block = (indirect_block_t) get_block_blocking(indir_block_num);
+        indir_blocknum = unpack_unsigned_int(dir->data.indirect_ptr);
+        indir_block = (indirect_block_t) get_block_blocking(indir_blocknum);
     }
 
     while (size >= DIRECT_PER_TABLE * ENTRIES_PER_TABLE) {
         size -= DIRECT_PER_TABLE * ENTRIES_PER_TABLE;
         if (size == 0) { // first entry in indirect
-            next_indir_block = (indirect_block_t) get_free_data_block(&next_indir_block_num);
+            next_indir_block = (indirect_block_t) get_free_data_block(&next_indir_blocknum);
             if (!next_indir_block) {
                 free(dir);
                 return -1;
             }
-            pack_unsigned_int(indir_block->data.indirect_ptr, next_indir_block_num);
-            write_block_blocking(indir_block_num, (char *) indir_block);
+            pack_unsigned_int(indir_block->data.indirect_ptr, next_indir_blocknum);
+            write_block_blocking(indir_blocknum, (char *) indir_block);
         } else {
-            next_indir_block_num = unpack_unsigned_int(indir_block->data.indirect_ptr);
-            next_indir_block = (indirect_block_t) get_block_blocking(next_indir_block_num);
+            next_indir_blocknum = unpack_unsigned_int(indir_block->data.indirect_ptr);
+            next_indir_block = (indirect_block_t) get_block_blocking(next_indir_blocknum);
         }
 
         free(indir_block);
         indir_block = next_indir_block;
-        indir_block_num = next_indir_block_num;
+        indir_blocknum = next_indir_blocknum;
     }
 
     direct_ind = size / ENTRIES_PER_TABLE;
     entry_num = size % ENTRIES_PER_TABLE;
-    direct_block_num = unpack_unsigned_int(indir_block->data.direct_ptrs[direct_ind]);
+    direct_blocknum = unpack_unsigned_int(indir_block->data.direct_ptrs[direct_ind]);
 
     if (entry_num == 0) { // New direct block
-        direct_block = (dir_data_block_t) get_free_data_block(&direct_block_num);
+        direct_block = (dir_data_block_t) get_free_data_block(&direct_blocknum);
         if (!direct_block) {
             if (size == 0) {
-                set_free_data_block(indir_block_num, (char *) indir_block);
+                set_free_data_block(indir_blocknum, (char *) indir_block);
             }
             free(indir_block);
             free(dir);
             return -1;
         }
-        pack_unsigned_int(indir_block->data.direct_ptrs[direct_ind], direct_block_num);
-    } else if (direct_block_num == 0) {
+        pack_unsigned_int(indir_block->data.direct_ptrs[direct_ind], direct_blocknum);
+    } else if (direct_blocknum == 0) {
         if (size == 0) {
-            set_free_data_block(indir_block_num, (char *) indir_block);
+            set_free_data_block(indir_blocknum, (char *) indir_block);
         }
         free(indir_block);
         free(dir);
         return -1;
     } else {
-        direct_block = (dir_data_block_t) get_block_blocking(direct_block_num);
+        direct_block = (dir_data_block_t) get_block_blocking(direct_blocknum);
     }
-    if (write_new_dir(inode_num, direct_block, direct_block_num, entry_num, name) == -1) {
+    if (write_new_dir(inode_num, direct_block, direct_blocknum, entry_num, name) == -1) {
         if (entry_num == 0) {
-            set_free_data_block(direct_block_num, (char *) direct_block);
+            set_free_data_block(direct_blocknum, (char *) direct_block);
         }
         if (size == 0) {
-            set_free_data_block(indir_block_num, (char *) indir_block);
+            set_free_data_block(indir_blocknum, (char *) indir_block);
         }
         free(direct_block);
         free(dir);
         return -1;
     }
-    write_block_blocking(indir_block_num, (char *) indir_block);
+    write_block_blocking(indir_blocknum, (char *) indir_block);
     write_block_blocking(inode_num, (char *) dir);
     free(dir);
     return 0;
