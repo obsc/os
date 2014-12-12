@@ -242,5 +242,6 @@ char **minifile_ls(char *path);
  */
 char* minifile_pwd(void);
 
+void minifile_clearpath(thread_files_t);
 
 #endif /* __MINIFILE_H__ */

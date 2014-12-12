@@ -1598,11 +1598,11 @@ void minifile_clearpath(thread_files_t files) {
 
     HASH_FIND_INT( open_dir_map, &files->inode_num, dir );
     if (dir) {
-        queue_delete(old_dir->thread_queue, files);
-        if (queue_length(old_dir->thread_queue) == 0) { // Remove if last element
-            HASH_DEL( open_dir_map, old_dir );
-            queue_free(old_dir->thread_queue);
-            free(old_dir);
+        queue_delete(dir->thread_queue, files);
+        if (queue_length(dir->thread_queue) == 0) { // Remove if last element
+            HASH_DEL( open_dir_map, dir );
+            queue_free(dir->thread_queue);
+            free(dir);
         }
     }
 
