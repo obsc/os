@@ -11,13 +11,13 @@
 
 /*
  * System wide-structure represnting a file.
- * Keeps track of all threads accessing the file.
  */
-typedef struct file_data {
-    inode_t file_inode;
+typedef struct file_access {
+    int blocknum;
+    char unlinked;
     int num;
-    semaphore_t close_wait;
-}* file_data_t;
+    UT_hash_handle hh;
+}* file_access_t;
 
 /*
  * struct minifile:
@@ -54,12 +54,14 @@ typedef int (*dir_func_t) (char*, char*, void*, void*, int, char*);
 typedef int (*file_func_t) (char*, void*, void*);
 
 disk_t *disk;
-file_data_t *file_tbl;
 
 waiting_request_t req_map;
+file_access_t file_map;
 dir_list_t open_dir_map;
 
-semaphore_t metadata_lock;
+semaphore_t file_lock;
+semaphore_t open_dir_lock;
+
 superblock_t disk_superblock;
 
 char delim[1] = "/";
@@ -74,8 +76,12 @@ void invalidate_dir(int blocknum) {
     void *f;
     thread_files_t files;
 
+    semaphore_P(open_dir_lock);
     HASH_FIND_INT( open_dir_map, &blocknum, d );
-    if (!d) return;
+    if (!d) {
+        semaphore_V(open_dir_lock);
+        return;
+    }
 
     HASH_DEL( open_dir_map, d );
 
@@ -86,6 +92,8 @@ void invalidate_dir(int blocknum) {
 
     queue_free(d->thread_queue);
     free(d);
+
+    semaphore_V(open_dir_lock);
 }
 
 void move_dir(thread_files_t files, int new_blocknum) {
@@ -93,6 +101,7 @@ void move_dir(thread_files_t files, int new_blocknum) {
     dir_list_t new_dir;
     int old_blocknum;
 
+    semaphore_P(open_dir_lock);
     if (files->valid) { // In a valid directory
         old_blocknum = files->inode_num;
         HASH_FIND_INT( open_dir_map, &old_blocknum, old_dir );
@@ -117,11 +126,12 @@ void move_dir(thread_files_t files, int new_blocknum) {
         queue_append(new_dir->thread_queue, files);
         HASH_ADD_INT( open_dir_map, blocknum, new_dir );
     }
+    semaphore_V(open_dir_lock);
 }
 
 /* -------------------------------Disk Logic--------------------------------- */
 
-void destroyWaiting(waiting_request_t req) {
+void destroy_waiting_disk(waiting_request_t req) {
     counter_destroy(req->mutex);
     free(req);
 }
@@ -143,7 +153,7 @@ void minifile_handle(disk_interrupt_arg_t *arg) {
 
     if (counter_get_count(req->mutex) <= 0) {
         HASH_DEL( req_map, req );
-        destroyWaiting(req);
+        destroy_waiting_disk(req);
     } else { // Someone else waiting
         counter_V(req->mutex, 0); // unsafe v
     }
@@ -151,7 +161,7 @@ void minifile_handle(disk_interrupt_arg_t *arg) {
     free(arg);
 }
 
-waiting_request_t createWaiting(int blockid, disk_reply_t* reply) {
+waiting_request_t create_waiting_disk(int blockid, disk_reply_t* reply) {
     waiting_request_t req;
     semaphore_t wait;
 
@@ -170,7 +180,7 @@ waiting_request_t createWaiting(int blockid, disk_reply_t* reply) {
         req->mutex = counter_new();
         if (!req->mutex) {
             free(wait);
-            destroyWaiting(req);
+            destroy_waiting_disk(req);
             return NULL;
         }
         counter_initialize(req->mutex, 1);
@@ -186,27 +196,27 @@ waiting_request_t createWaiting(int blockid, disk_reply_t* reply) {
 }
 
 semaphore_t read_block(int blockid, disk_reply_t* reply, char* buffer) {
-    waiting_request_t req = createWaiting(blockid, reply);
+    waiting_request_t req = create_waiting_disk(blockid, reply);
     if (!req) return NULL;
     disk_read_block(disk, blockid, buffer);
     return req->wait_for_reply;
 }
 
 semaphore_t write_block(int blockid, disk_reply_t* reply, char* buffer) {
-    waiting_request_t req = createWaiting(blockid, reply);
+    waiting_request_t req = create_waiting_disk(blockid, reply);
     if (!req) return NULL;
     disk_write_block(disk, blockid, buffer);
     return req->wait_for_reply;
 }
 
-char* get_block_blocking(int block_num) {
+char* get_block_blocking(int blocknum) {
     semaphore_t wait;
     disk_reply_t reply;
     char* block;
 
     block = (char *) malloc (DISK_BLOCK_SIZE);
 
-    wait = read_block(block_num, &reply, block);
+    wait = read_block(blocknum, &reply, block);
     semaphore_P(wait);
     if (reply != DISK_REPLY_OK) {
         free(wait);
@@ -218,11 +228,11 @@ char* get_block_blocking(int block_num) {
     return block;
 }
 
-int write_block_blocking(int block_num, char* block) {
+int write_block_blocking(int blocknum, char* block) {
     semaphore_t wait;
     disk_reply_t reply;
 
-    wait = write_block(block_num, &reply, block);
+    wait = write_block(blocknum, &reply, block);
     semaphore_P(wait);
     if (reply != DISK_REPLY_OK) {
         free(wait);
@@ -235,16 +245,16 @@ int write_block_blocking(int block_num, char* block) {
 
 /* ----------------------------Free Blocks----------------------------------- */
 
-char* get_free_inode_block(int *block_num) {
+char* get_free_inode_block(int *blocknum) {
     free_block_t freeblock;
     int nextblock;
 
-    *block_num = unpack_unsigned_int(disk_superblock->data.first_free_inode);
+    *blocknum = unpack_unsigned_int(disk_superblock->data.first_free_inode);
 
-    if (*block_num == 0) {
+    if (*blocknum == 0) {
         return NULL;
     } else {
-        freeblock = (free_block_t) get_block_blocking(*block_num);
+        freeblock = (free_block_t) get_block_blocking(*blocknum);
         nextblock = unpack_unsigned_int(freeblock->next_free_block);
         pack_unsigned_int(disk_superblock->data.first_free_inode, nextblock);
         write_block_blocking(0, (char *) disk_superblock);
@@ -252,16 +262,16 @@ char* get_free_inode_block(int *block_num) {
     return (char *) freeblock;
 }
 
-char* get_free_data_block(int *block_num) {
+char* get_free_data_block(int *blocknum) {
     free_block_t freeblock;
     int nextblock;
 
-    *block_num = unpack_unsigned_int(disk_superblock->data.first_free_data_block);
+    *blocknum = unpack_unsigned_int(disk_superblock->data.first_free_data_block);
 
-    if (*block_num == 0) {
+    if (*blocknum == 0) {
         return NULL;
     } else {
-        freeblock = (free_block_t) get_block_blocking(*block_num);
+        freeblock = (free_block_t) get_block_blocking(*blocknum);
         nextblock = unpack_unsigned_int(freeblock->next_free_block);
         pack_unsigned_int(disk_superblock->data.first_free_data_block, nextblock);
         write_block_blocking(0, (char *) disk_superblock);
@@ -269,36 +279,106 @@ char* get_free_data_block(int *block_num) {
     return (char *) freeblock;
 }
 
-void set_free_inode_block(int block_num, char *block) {
+void set_free_inode_block(int blocknum, char *block) {
     free_block_t freeblock;
     int first_free;
 
-    if (block_num == 0 || block == NULL) {
+    if (blocknum == 0 || block == NULL) {
         return;
     }
     freeblock = (free_block_t) block;
     first_free = unpack_unsigned_int(disk_superblock->data.first_free_inode);
     pack_unsigned_int(freeblock->next_free_block, first_free);
-    pack_unsigned_int(disk_superblock->data.first_free_inode, block_num);
+    pack_unsigned_int(disk_superblock->data.first_free_inode, blocknum);
 
-    write_block_blocking(block_num, block);
+    write_block_blocking(blocknum, block);
     write_block_blocking(0, (char *) disk_superblock);
 }
 
-void set_free_data_block(int block_num, char *block) {
+void set_free_data_block(int blocknum, char *block) {
     free_block_t freeblock;
     int first_free;
 
-    if (block_num == 0 || block == NULL) {
+    if (blocknum == 0 || block == NULL) {
         return;
     }
     freeblock = (free_block_t) block;
     first_free = unpack_unsigned_int(disk_superblock->data.first_free_data_block);
     pack_unsigned_int(freeblock->next_free_block, first_free);
-    pack_unsigned_int(disk_superblock->data.first_free_data_block, block_num);
+    pack_unsigned_int(disk_superblock->data.first_free_data_block, blocknum);
 
-    write_block_blocking(block_num, block);
+    write_block_blocking(blocknum, block);
     write_block_blocking(0, (char *) disk_superblock);
+}
+
+/* -------------------------------File Logic--------------------------------- */
+
+void truncate_file(inode_t file, int blocknum);
+
+void relink_file(int blocknum) {
+    inode_t file_inode;
+
+    file_inode = (inode_t) get_block_blocking(blocknum);
+    if (!file_inode) return;
+
+    truncate_file(file_inode, blocknum);
+    set_free_inode_block(blocknum, (char *) file_inode);
+    free(file_inode);
+}
+
+void start_access_file(int blocknum) {
+    file_access_t file;
+
+    semaphore_P(file_lock);
+
+    HASH_FIND_INT( file_map, &blocknum, file );
+    if (!file) {
+        file = (file_access_t) malloc (sizeof (struct file_access));
+        file->blocknum = blocknum;
+        file->unlinked = 0;
+        file->num = 1;
+        HASH_ADD_INT( file_map, blocknum, file );
+    } else {
+        file->num++;
+    }
+
+    semaphore_V(file_lock);
+}
+
+void unlink_access_file(int blocknum) {
+    file_access_t file;
+
+    semaphore_P(file_lock);
+    HASH_FIND_INT( file_map, &blocknum, file );
+    if (!file) {
+        semaphore_V(file_lock);
+        return;
+    }
+    file->unlinked = 1;
+
+    semaphore_V(file_lock);
+}
+
+void end_access_file(int blocknum) {
+    file_access_t file;
+    int unlinked;
+
+    semaphore_P(file_lock);
+    HASH_FIND_INT( file_map, &blocknum, file );
+    if (!file) {
+        semaphore_V(file_lock);
+        return;
+    }
+    file->num--;
+    if (file->num == 0) {
+        unlinked = file->unlinked;
+        HASH_DEL( file_map, file );
+        semaphore_V(file_lock);
+        free(file);
+        if (unlinked) relink_file(blocknum);
+    }
+
+    semaphore_V(file_lock);
 }
 
 /* -------------------------------------------------------------------------- */
@@ -467,22 +547,6 @@ int get_inode_helper(char *item, char *inode_num, void *arg, void *result, int d
     return -1;
 }
 
-int truncate_helper(char *item, void *arg, void *result) {
-    char *data;
-    int num;
-
-    num = unpack_unsigned_int(item);
-    data = get_block_blocking(num);
-    set_free_data_block(num, data);
-    pack_unsigned_int(item, 0);
-    return -1;
-}
-
-void truncate_file(inode_t file) {
-    file_iterate(file, truncate_helper, NULL, NULL);
-    pack_unsigned_int(file->data.size, 0);
-}
-
 inode_t get_inode(char *path, int *inode_num) {
     inode_t current;
     int found;
@@ -519,6 +583,52 @@ inode_t get_inode(char *path, int *inode_num) {
     return current;
 }
 
+int write_new_file(dir_data_block_t dir, int dir_num, int entry_num, char *name) {
+    inode_t newfile;
+    int newfile_num;
+    int i;
+
+    newfile = (inode_t) get_free_inode_block(&newfile_num);
+
+    if (!newfile) {
+        set_free_inode_block(newfile_num, (char *) newfile);
+        free(newfile);
+        return -1;
+    }
+
+    newfile->data.inode_type = FILE_INODE;
+    pack_unsigned_int(newfile->data.size, 0);
+    for (i = 0; i < DIRECT_BLOCKS; i++) {
+        pack_unsigned_int(newfile->data.direct_ptrs[i], 0);
+    }
+    pack_unsigned_int(newfile->data.indirect_ptr, 0);
+
+    strcpy(dir->data.dir_entries[entry_num], name);
+    pack_unsigned_int(dir->data.inode_ptrs[entry_num], newfile_num);
+
+    write_block_blocking(newfile_num, (char *) newfile);
+    write_block_blocking(dir_num, (char *) dir);
+
+    free(newfile);
+    return 0;
+}
+
+int truncate_helper(char *item, void *arg, void *result) {
+    char *data;
+    int num;
+
+    num = unpack_unsigned_int(item);
+    data = get_block_blocking(num);
+    set_free_data_block(num, data);
+    pack_unsigned_int(item, 0);
+    return -1;
+}
+
+void truncate_file(inode_t file, int blocknum) {
+    file_iterate(file, truncate_helper, NULL, NULL);
+    pack_unsigned_int(file->data.size, 0);
+    write_block_blocking(blocknum, (char *) file);
+}
 
 int file_read_indir(indirect_block_t file, int start, int cur_size, int maxlen, char *data, int len) {
     int acc;
@@ -643,39 +753,17 @@ int file_read(inode_t file, int start, int maxlen, char *data) {
     return file_read_indir(indir, block_start, size, req_left, char *data, total_copied);
 }
 
-/* Handler for disk operations
- * Assumes interrupts are disabled within
- */
-void minifile_handle(disk_interrupt_arg_t *arg) {
-    int blockid;
-    char* buffer;
-    waiting_request_t req;
-    void* req_addr;
-
-    blockid = arg->request.blocknum;
-    buffer = arg->request.buffer;
-    reqmap_get(requests, blockid, buffer, &req_addr);
-    req = (waiting_request_t) req_addr;
-
-    req->reply = arg->reply;
-    semaphore_V(req->wait);
-
-    reqmap_delete(requests, blockid, buffer);
-
-    free(arg);
-}
-
 /* Initialize minifile globals */
 void minifile_initialize() {
-    file_tbl = (file_data_t *) calloc (disk_size, sizeof(file_data_t));
-
-    if (!file_tbl) return;
-
+    file_map = NULL;
     req_map = NULL;
     open_dir_map = NULL;
 
-    metadata_lock = semaphore_create();
-    semaphore_initialize(metadata_lock, 1);
+    file_lock = semaphore_create();
+    open_dir_lock = semaphore_create();
+    semaphore_initialize(file_lock, 1);
+    semaphore_initialize(open_dir_lock, 1);
+
     disk_superblock = (superblock_t) malloc (sizeof(struct superblock));
 }
 
@@ -689,6 +777,7 @@ void minifile_initialize_blocks() {
     magic_num = unpack_unsigned_int(disk_superblock->data.magic_number);
     if (magic_num != MAGIC) {
         printf("Invalid magic number\n");
+        exit(0);
         return;
     }
 }
@@ -698,7 +787,8 @@ int minifile_get_root_num() {
 }
 
 minifile_t minifile_creat(char *filename) {
-    return NULL;
+    char mode[2] = "w";
+    return minifile_open(filename, mode);
 }
 
 minifile_t minifile_open(char *filename, char *mode) {
@@ -716,7 +806,9 @@ minifile_t minifile_open(char *filename, char *mode) {
         file->cursor = 0;
         memcpy(file->mode, mode, strlen(mode)+1);
         return file;
-    } else if (strcmp(mode, "r+") == 0) {
+    } else if ((strcmp(mode, "w") == 0) || (strcmp(mode, "w+") == 0)) {
+        return NULL;
+    } else if ((strcmp(mode, "a") == 0) || (strcmp(mode, "a+") == 0)) {
         return NULL;
     }
     return NULL;
@@ -743,10 +835,18 @@ int minifile_write(minifile_t file, char *data, int len) {
 }
 
 int minifile_close(minifile_t file) {
+    end_access_file(file->inode_num);
+    free(file);
     return 0;
 }
 
 int minifile_unlink(char *filename) {
+    inode_t file_inode;
+    int blocknum;
+
+    file_inode = get_inode(filename, &blocknum);
+    if (!file_inode || file_inode->data.inode_type == DIR_INODE) return -1;
+
     return 0;
 }
 
@@ -799,36 +899,36 @@ int write_new_dir(int prevdir, dir_data_block_t dir, int dir_num, int entry_num,
 int mkdir_helper(inode_t dir, int inode_num, char *name) {
     int direct_ind;
     dir_data_block_t direct_block;
-    int direct_block_num;
+    int direct_blocknum;
     int entry_num;
     int size;
     indirect_block_t indir_block;
-    int indir_block_num;
+    int indir_blocknum;
     indirect_block_t next_indir_block;
-    int next_indir_block_num;
+    int next_indir_blocknum;
 
     size = unpack_unsigned_int(dir->data.size);
     pack_unsigned_int(dir->data.size, size + 1);
     if (size < DIRECT_BLOCKS * ENTRIES_PER_TABLE) { // found in a direct block
         direct_ind = size / ENTRIES_PER_TABLE;
         entry_num = size % ENTRIES_PER_TABLE;
-        direct_block_num = unpack_unsigned_int(dir->data.direct_ptrs[direct_ind]);
+        direct_blocknum = unpack_unsigned_int(dir->data.direct_ptrs[direct_ind]);
         if (entry_num == 0) { // New direct block
-            direct_block = (dir_data_block_t) get_free_data_block(&direct_block_num);
+            direct_block = (dir_data_block_t) get_free_data_block(&direct_blocknum);
             if (!direct_block) {
                 free(dir);
                 return -1;
             }
-            pack_unsigned_int(dir->data.direct_ptrs[direct_ind], direct_block_num);
-        } else if (direct_block_num == 0) {
+            pack_unsigned_int(dir->data.direct_ptrs[direct_ind], direct_blocknum);
+        } else if (direct_blocknum == 0) {
             free(dir);
             return -1;
         } else {
-            direct_block = (dir_data_block_t) get_block_blocking(direct_block_num);
+            direct_block = (dir_data_block_t) get_block_blocking(direct_blocknum);
         }
-        if (write_new_dir(inode_num, direct_block, direct_block_num, entry_num, name) == -1) {
+        if (write_new_dir(inode_num, direct_block, direct_blocknum, entry_num, name) == -1) {
             if (entry_num == 0) {
-                set_free_data_block(direct_block_num, (char *) direct_block);
+                set_free_data_block(direct_blocknum, (char *) direct_block);
             }
             free(direct_block);
             free(dir);
@@ -841,74 +941,74 @@ int mkdir_helper(inode_t dir, int inode_num, char *name) {
 
     size -= DIRECT_BLOCKS * ENTRIES_PER_TABLE; // Remaining size
     if (size == 0) { // first entry in indirect
-        indir_block = (indirect_block_t) get_free_data_block(&indir_block_num);
+        indir_block = (indirect_block_t) get_free_data_block(&indir_blocknum);
         if (!indir_block) {
             free(dir);
             return -1;
         }
-        pack_unsigned_int(dir->data.indirect_ptr, indir_block_num);
+        pack_unsigned_int(dir->data.indirect_ptr, indir_blocknum);
     } else {
-        indir_block_num = unpack_unsigned_int(dir->data.indirect_ptr);
-        indir_block = (indirect_block_t) get_block_blocking(indir_block_num);
+        indir_blocknum = unpack_unsigned_int(dir->data.indirect_ptr);
+        indir_block = (indirect_block_t) get_block_blocking(indir_blocknum);
     }
 
     while (size >= DIRECT_PER_TABLE * ENTRIES_PER_TABLE) {
         size -= DIRECT_PER_TABLE * ENTRIES_PER_TABLE;
         if (size == 0) { // first entry in indirect
-            next_indir_block = (indirect_block_t) get_free_data_block(&next_indir_block_num);
+            next_indir_block = (indirect_block_t) get_free_data_block(&next_indir_blocknum);
             if (!next_indir_block) {
                 free(dir);
                 return -1;
             }
-            pack_unsigned_int(indir_block->data.indirect_ptr, next_indir_block_num);
-            write_block_blocking(indir_block_num, (char *) indir_block);
+            pack_unsigned_int(indir_block->data.indirect_ptr, next_indir_blocknum);
+            write_block_blocking(indir_blocknum, (char *) indir_block);
         } else {
-            next_indir_block_num = unpack_unsigned_int(indir_block->data.indirect_ptr);
-            next_indir_block = (indirect_block_t) get_block_blocking(next_indir_block_num);
+            next_indir_blocknum = unpack_unsigned_int(indir_block->data.indirect_ptr);
+            next_indir_block = (indirect_block_t) get_block_blocking(next_indir_blocknum);
         }
 
         free(indir_block);
         indir_block = next_indir_block;
-        indir_block_num = next_indir_block_num;
+        indir_blocknum = next_indir_blocknum;
     }
 
     direct_ind = size / ENTRIES_PER_TABLE;
     entry_num = size % ENTRIES_PER_TABLE;
-    direct_block_num = unpack_unsigned_int(indir_block->data.direct_ptrs[direct_ind]);
+    direct_blocknum = unpack_unsigned_int(indir_block->data.direct_ptrs[direct_ind]);
 
     if (entry_num == 0) { // New direct block
-        direct_block = (dir_data_block_t) get_free_data_block(&direct_block_num);
+        direct_block = (dir_data_block_t) get_free_data_block(&direct_blocknum);
         if (!direct_block) {
             if (size == 0) {
-                set_free_data_block(indir_block_num, (char *) indir_block);
+                set_free_data_block(indir_blocknum, (char *) indir_block);
             }
             free(indir_block);
             free(dir);
             return -1;
         }
-        pack_unsigned_int(indir_block->data.direct_ptrs[direct_ind], direct_block_num);
-    } else if (direct_block_num == 0) {
+        pack_unsigned_int(indir_block->data.direct_ptrs[direct_ind], direct_blocknum);
+    } else if (direct_blocknum == 0) {
         if (size == 0) {
-            set_free_data_block(indir_block_num, (char *) indir_block);
+            set_free_data_block(indir_blocknum, (char *) indir_block);
         }
         free(indir_block);
         free(dir);
         return -1;
     } else {
-        direct_block = (dir_data_block_t) get_block_blocking(direct_block_num);
+        direct_block = (dir_data_block_t) get_block_blocking(direct_blocknum);
     }
-    if (write_new_dir(inode_num, direct_block, direct_block_num, entry_num, name) == -1) {
+    if (write_new_dir(inode_num, direct_block, direct_blocknum, entry_num, name) == -1) {
         if (entry_num == 0) {
-            set_free_data_block(direct_block_num, (char *) direct_block);
+            set_free_data_block(direct_blocknum, (char *) direct_block);
         }
         if (size == 0) {
-            set_free_data_block(indir_block_num, (char *) indir_block);
+            set_free_data_block(indir_blocknum, (char *) indir_block);
         }
         free(direct_block);
         free(dir);
         return -1;
     }
-    write_block_blocking(indir_block_num, (char *) indir_block);
+    write_block_blocking(indir_blocknum, (char *) indir_block);
     write_block_blocking(inode_num, (char *) dir);
     free(dir);
     return 0;
