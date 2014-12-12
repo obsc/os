@@ -890,7 +890,7 @@ int file_write_indir(indirect_block_t file, int file_num, int start, int cur_siz
     }
 
     if (block_size == 0) {
-        indir = get_free_data_block(&indir_num);
+        indir = (indirect_block_t) get_free_data_block(&indir_num);
         if (!indir) return -1;
         pack_unsigned_int(file->data.indirect_ptr, indir_num);
         write_block_blocking(file_num, (char *)file);
@@ -968,7 +968,7 @@ int file_write(inode_t file, int file_num, int start, char *data, int len) {
         block_size -= DIRECT_BLOCKS;
     }
     if (block_size == 0) {
-        indir = get_free_data_block(&indir_num);
+        indir = (indirect_block_t) get_free_data_block(&indir_num);
         if (!indir) return -1;
         pack_unsigned_int(file->data.indirect_ptr, indir_num);
         write_block_blocking(file_num, (char *)file);
@@ -988,7 +988,7 @@ int minifile_write(minifile_t file, char *data, int len) {
     block = (inode_t) get_block_blocking(file->inode_num);
 
     write = file_write(block, file->inode_num, file->cursor, data, len);
-    if (read == -1) {
+    if (write == -1) {
         free(block);
         return -1;
     }
