@@ -149,6 +149,8 @@ thread_files_t minithread_directory() {
 int minithread_exit(int *i) {
     interrupt_level_t old_level;
 
+    minifile_clearpath(cur_thread->files);
+    free(cur_thread->files);
     old_level = set_interrupt_level(DISABLED);
     cur_thread->status = ZOMBIE;
     queue_append(zombie_queue, cur_thread);
@@ -200,6 +202,7 @@ minithread_t minithread_create(proc_t proc, arg_t arg) {
             t->files->path_len = 2; // Root and null terminator
         }
         t->files->valid = 0;
+        t->files->open_files = queue_new();
         move_dir(t->files, t->files->inode_num);
     }
 

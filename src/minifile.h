@@ -107,7 +107,7 @@ typedef struct thread_files {
     queue_t path;
     int path_len;
     int inode_num;
-    // Other stuff here pls
+    queue_t open_files;
 }* thread_files_t;
 
 disk_t *disk;

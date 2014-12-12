@@ -1588,3 +1588,34 @@ char* minifile_pwd(void) {
 
     return path;
 }
+
+void minifile_clearpath(thread_files_t files) {
+    void *str_ptr;
+    str_and_len_t str;
+    void *f;
+    minifile_t file;
+    dir_list_t dir;
+
+    HASH_FIND_INT( open_dir_map, &files->inode_num, dir );
+    if (dir) {
+        queue_delete(old_dir->thread_queue, files);
+        if (queue_length(old_dir->thread_queue) == 0) { // Remove if last element
+            HASH_DEL( open_dir_map, old_dir );
+            queue_free(old_dir->thread_queue);
+            free(old_dir);
+        }
+    }
+
+    while (queue_dequeue(files->path, &str_ptr) == 0) {
+        str = (str_and_len_t) str_ptr;
+        free(str->data);
+        free(str);
+    }
+    while (queue_dequeue(files->open_files, &f) == 0) {
+        file = (minifile_t) f;
+        minifile_close(file);
+    }
+
+    queue_free(files->open_files);
+    queue_free(files->path);
+}
