@@ -830,7 +830,170 @@ int minifile_read(minifile_t file, char *data, int maxlen) {
     return read;
 }
 
+int file_write_indir(indirect_block_t file, int file_num, int start, int cur_size, char *data, int len, int written) {
+    int block_start;
+    int req_left;
+    int total_written;
+    int acc;
+    int amt;
+    int byte_start;
+    int next_start;
+    int blockid;
+    int block_size;
+    char *block;
+    indirect_block_t indir;
+    int indir_num;
+
+    total_written = written;
+    req_left = len;
+
+    block_start = start / 4096;
+    byte_start = start % 4096;
+    block_size = cur_size;
+
+    if (block_start < DIRECT_PER_TABLE) {
+        for (acc = block_start; acc < DIRECT_PER_TABLE; acc++) {
+            if (req_left > (4096 - byte_start)) {
+                amt = (4096 - byte_start);
+                byte_start = 0;
+                req_left -= amt;
+            } else {
+                amt = req_left;
+                req_left = 0;
+            }
+
+            if (block_size == 0) {
+                block = get_free_data_block(&blockid);
+                if (!block) return -1;
+                pack_unsigned_int(file->data.direct_ptrs[acc], blockid);
+                write_block_blocking(file_num, (char *)file);
+            } else {
+                blockid = unpack_unsigned_int(file->data.direct_ptrs[acc]);
+                block = get_block_blocking(blockid);
+                if (!block) return -1;
+                block_size -= 1;
+            }
+
+            memcpy(block+byte_start, data+total_written, amt);
+            byte_start = 0;
+            total_written += amt;
+            free(block);
+
+            if (req_left == 0) {
+                return total_written;
+            }
+        }
+        next_start = 0;
+    } else {
+        next_start = start - (DIRECT_PER_TABLE * 4096);
+        block_size -= DIRECT_PER_TABLE;
+    }
+
+    if (block_size == 0) {
+        indir = get_free_data_block(&indir_num);
+        if (!indir) return -1;
+        pack_unsigned_int(file->data.indirect_ptr, indir_num);
+        write_block_blocking(file_num, (char *)file);
+    } else {
+        indir_num = unpack_unsigned_int(file->data.indirect_ptr);
+        indir = (indirect_block_t) get_block_blocking(indir_num);
+        if (!indir) return -1;
+    }
+    free(file);
+
+    return file_write_indir(indir, indir_num, next_start, block_size, data, req_left, total_written);
+}
+
+int file_write(inode_t file, int file_num, int start, char *data, int len) {
+    int size;
+    int block_start;
+    int req_left;
+    int total_written;
+    int acc;
+    int amt;
+    int byte_start;
+    int next_start;
+    int blockid;
+    int block_size;
+    char *block;
+    indirect_block_t indir;
+    int indir_num;
+
+    total_written = 0;
+    req_left = len;
+
+    size = unpack_unsigned_int(file->data.size);
+    block_start = start / 4096;
+    byte_start = start % 4096;
+    block_size = size / 4096;
+    if (size % 4096 != 0) {
+        block_size ++;
+    }
+
+    if (block_start < DIRECT_BLOCKS) {
+        for (acc = block_start; acc < DIRECT_BLOCKS; acc++) {
+            if (req_left > (4096 - byte_start)) {
+                amt = (4096 - byte_start);
+                byte_start = 0;
+                req_left -= amt;
+            } else {
+                amt = req_left;
+                req_left = 0;
+            }
+
+            if (block_size == 0) {
+                block = get_free_data_block(&blockid);
+                if (!block) return -1;
+                pack_unsigned_int(file->data.direct_ptrs[acc], blockid);
+                write_block_blocking(file_num, (char *)file);
+            } else {
+                blockid = unpack_unsigned_int(file->data.direct_ptrs[acc]);
+                block = get_block_blocking(blockid);
+                if (!block) return -1;
+                block_size -= 1;
+            }
+
+            memcpy(block+byte_start, data+total_written, amt);
+            byte_start = 0;
+            total_written += amt;
+            free(block);
+
+            if (req_left == 0) {
+                return total_written;
+            }
+        }
+        next_start = 0;
+    } else {
+        next_start = start - (DIRECT_BLOCKS * 4096);
+        block_size -= DIRECT_BLOCKS;
+    }
+    if (block_size == 0) {
+        indir = get_free_data_block(&indir_num);
+        if (!indir) return -1;
+        pack_unsigned_int(file->data.indirect_ptr, indir_num);
+        write_block_blocking(file_num, (char *)file);
+    } else {
+        indir_num = unpack_unsigned_int(file->data.indirect_ptr);
+        indir = (indirect_block_t) get_block_blocking(indir_num);
+        if (!indir) return -1;
+    }
+
+    return file_write_indir(indir, indir_num, next_start, block_size, data, req_left, total_written);
+}
+
 int minifile_write(minifile_t file, char *data, int len) {
+    int write;
+    inode_t block;
+
+    block = (inode_t) get_block_blocking(file->inode_num);
+
+    write = file_write(block, file->inode_num, file->cursor, data, len);
+    if (read == -1) {
+        free(block);
+        return -1;
+    }
+    file->cursor += write;
+    free(block);
     return 0;
 }
 
