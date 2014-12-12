@@ -520,91 +520,127 @@ inode_t get_inode(char *path, int *inode_num) {
 }
 
 
-// int file_iterate_indir(indirect_block_t file, file_func_t f, void* arg, void* result, int cur_size) {
-//     int acc;
-//     int size;
-//     indirect_block_t indirect;
+int file_read_indir(indirect_block_t file, int start, int cur_size, int maxlen, char *data, int len) {
+    int acc;
+    int size;
+    indirect_block_t indir;
+    char *data_block;
+    int current_block;
+    int req_left;
+    int amt;
+    int block_start;
+    int block_size;
+    int total_copied;
 
-//     if (cur_size == 0) {
-//         free(file);
-//         return -1;
-//     }
+    total_copied = len;
+    current_block = start / 4096;
+    req_left = maxlen;
+    size = cur_size;
 
-//     size = cur_size;
-//     for (acc = 0; acc < DIRECT_PER_TABLE; acc++) {
-//         if (size == 0) {
-//             return -1;
-//         }
-//         if (f((file->data.direct_ptrs[acc]), arg, result) == 0) {
-//             return 0;
-//         }
-//         size = size - 1;
-//     }
+    block_start = start;
+    if (size == 0 || req_left == 0) return 0;
+    if (current_block < DIRECT_PER_TABLE) {
+        for (acc = current_block; current_block < DIRECT_PER_TABLE; current_block++) {
+            if (size > 4096) {
+                block_size = 4096 - block_start;
+            } else {
+                block_size = size;
+            }
+            if (req_left < block_size) {
+                amt = req_left;
+                req_left = 0;
+                size -= amt;
+            } else {
+                amt = block_size;
+                req_left -= (block_size - block_start);
+                size -= amt;
+            }
+            data_block = get_block_blocking(file->data.direct_ptrs[acc]);
+            if (!data_block) return -1;
+            memcpy(data+total_copied, data_block+block_start, amt);
+            total_copied += amt;
+            block_start = 0;
 
-//     indirect = (indirect_block_t) get_block_blocking(unpack_unsigned_int(file->data.indirect_ptr));
-//     free(file);
+            free(data_block);
+            if (size == 0 || req_left == 0) {
+                return total_copied;
+            }
 
-//     return file_iterate_indir(indirect, f, arg, result, size);
-// }
+        }
 
-int file_read(inode_t file, int start, int maxlen, char *data, int *new_cursor) {
-    return 0;
-    // int acc;
-    // int size;
+    } else {
+        block_start = block_start - (4096 * DIRECT_PER_TABLE);
+    }
+
+    indir = (indirect_block_t) get_block_blocking(unpack_unsigned_int(file->data.indirect_ptr));
+
+    return file_read_indir(indir, block_start, size, req_left, char *data, total_copied);
+
+}
+
+int file_read(inode_t file, int start, int maxlen, char *data) {
+    int acc;
+    int size;
     // int size_block;
-    // indirect_block_t indir;
-    // char *data_block;
-    // int current_block;
-    // int req_left;
-    // int amt;
-    // int block_start;
+    indirect_block_t indir;
+    char *data_block;
+    int current_block;
+    int req_left;
+    int amt;
+    int block_start;
+    int block_size;
+    int total_copied;
 
-    // current_block = start / 4096;
-    // req_left = maxlen;
-    // size = unpack_unsigned_int(file->data.size);
+    total_copied = 0;
+    current_block = start / 4096;
+    req_left = maxlen;
+    size = unpack_unsigned_int(file->data.size);
     // size_block = unpack_unsigned_int(file->data.size) / 4096;
 
     // if (unpack_unsigned_int(file->data.size) % 4096 != 0) {
     //     size_block = size_block + 1;
     // }
 
-    // size = size - start;
+    size = size - start;
     // size_block = size_block - current_block;
-    // block_start = start;
-    // if (size == 0) return 0;
-    // if (current_block < DIRECT_BLOCKS) {
-    //     for (acc = current_block; current_block < DIRECT_BLOCKS; current_block++) {
-    //         if (req_left < 4096 - block_start) {
-    //             amt = req_left;
-    //             block_start = 0;
-    //             req_left = 0;
-    //         } else {
-    //             amt = 4096 - block_start;
-    //             req_left -= (4096 - block_start);
-    //             block_start = 0;
-    //         }
-    //         data_block = get_block_blocking(file->data.direct_ptrs[acc]);
-    //     }
+    block_start = start;
+    if (size == 0 || req_left == 0) return 0;
+    if (current_block < DIRECT_BLOCKS) {
+        for (acc = current_block; current_block < DIRECT_BLOCKS; current_block++) {
+            if (size > 4096) {
+                block_size = 4096 - block_start;
+            } else {
+                block_size = size;
+            }
+            if (req_left < block_size) {
+                amt = req_left;
+                req_left = 0;
+                size -= amt;
+            } else {
+                amt = block_size;
+                req_left -= (block_size - block_start);
+                size -= amt;
+            }
+            data_block = get_block_blocking(file->data.direct_ptrs[acc]);
+            if (!data_block) return -1;
+            memcpy(data+total_copied, data_block+block_start, amt);
+            total_copied += amt;
+            block_start = 0;
 
-    // }
+            free(data_block);
+            if (size == 0 || req_left == 0) {
+                return total_copied;
+            }
 
+        }
 
+    } else {
+        block_start = block_start - (4096 * DIRECT_BLOCKS);
+    }
 
+    indir = (indirect_block_t) get_block_blocking(unpack_unsigned_int(file->data.indirect_ptr));
 
-    
-
-    // for (acc = 0; acc < DIRECT_BLOCKS; acc++) {
-    //     if (size == 0) {
-    //         return -1;
-    //     }
-    //     if (f(file->data.direct_ptrs[acc], arg, result) == 0) {
-    //         return 0;
-    //     }
-    //     size = size - 1;
-    // }
-    // indir = (indirect_block_t) get_block_blocking(unpack_unsigned_int(file->data.indirect_ptr));
-
-    // return file_iterate_indir(indir, f, arg, result, size);
+    return file_read_indir(indir, block_start, size, req_left, char *data, total_copied);
 }
 
 /* Handler for disk operations
@@ -687,7 +723,19 @@ minifile_t minifile_open(char *filename, char *mode) {
 }
 
 int minifile_read(minifile_t file, char *data, int maxlen) {
-    return 0;
+    int read;
+    inode_t block;
+
+    block = get_block_blocking(file->inode_num);
+
+    read = file_read(block, file->cursor, maxlen, data);
+    if (read == -1) {
+        free(block);
+        return -1;
+    }
+    file->cursor += read;
+    free(block);
+    return read;
 }
 
 int minifile_write(minifile_t file, char *data, int len) {
