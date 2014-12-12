@@ -149,8 +149,10 @@ thread_files_t minithread_directory() {
 int minithread_exit(int *i) {
     interrupt_level_t old_level;
 
-    minifile_clearpath(cur_thread->files);
-    free(cur_thread->files);
+    if (cur_thread->files) {
+        minifile_clearpath(cur_thread->files);
+        free(cur_thread->files);
+    }
     old_level = set_interrupt_level(DISABLED);
     cur_thread->status = ZOMBIE;
     queue_append(zombie_queue, cur_thread);
