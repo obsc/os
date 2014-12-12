@@ -665,7 +665,7 @@ int file_read_indir(indirect_block_t file, int start, int cur_size, int maxlen, 
                 req_left -= (block_size - block_start);
                 size -= amt;
             }
-            data_block = get_block_blocking(file->data.direct_ptrs[acc]);
+            data_block = get_block_blocking(unpack_unsigned_int(file->data.direct_ptrs[acc]));
             if (!data_block) return -1;
             memcpy(data+total_copied, data_block+block_start, amt);
             total_copied += amt;
@@ -684,7 +684,7 @@ int file_read_indir(indirect_block_t file, int start, int cur_size, int maxlen, 
 
     indir = (indirect_block_t) get_block_blocking(unpack_unsigned_int(file->data.indirect_ptr));
 
-    return file_read_indir(indir, block_start, size, req_left, char *data, total_copied);
+    return file_read_indir(indir, block_start, size, req_left, data, total_copied);
 
 }
 
@@ -731,7 +731,7 @@ int file_read(inode_t file, int start, int maxlen, char *data) {
                 req_left -= (block_size - block_start);
                 size -= amt;
             }
-            data_block = get_block_blocking(file->data.direct_ptrs[acc]);
+            data_block = get_block_blocking(unpack_unsigned_int(file->data.direct_ptrs[acc]));
             if (!data_block) return -1;
             memcpy(data+total_copied, data_block+block_start, amt);
             total_copied += amt;
@@ -750,7 +750,7 @@ int file_read(inode_t file, int start, int maxlen, char *data) {
 
     indir = (indirect_block_t) get_block_blocking(unpack_unsigned_int(file->data.indirect_ptr));
 
-    return file_read_indir(indir, block_start, size, req_left, char *data, total_copied);
+    return file_read_indir(indir, block_start, size, req_left, data, total_copied);
 }
 
 /* Initialize minifile globals */
@@ -818,7 +818,7 @@ int minifile_read(minifile_t file, char *data, int maxlen) {
     int read;
     inode_t block;
 
-    block = get_block_blocking(file->inode_num);
+    block = (inode_t) get_block_blocking(file->inode_num);
 
     read = file_read(block, file->cursor, maxlen, data);
     if (read == -1) {
