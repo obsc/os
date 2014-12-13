@@ -806,7 +806,7 @@ int file_read_indir(indirect_block_t file, int start, int cur_size, int maxlen, 
     current_block = start / DISK_BLOCK_SIZE;
     req_left = maxlen;
     size = cur_size;
-    block_start = start;
+    block_start = start % DISK_BLOCK_SIZE;
     if (size == 0 || req_left == 0) return 0;
     if (current_block < DIRECT_PER_TABLE) {
         for (acc = current_block; acc < DIRECT_PER_TABLE; acc++) {
@@ -838,7 +838,7 @@ int file_read_indir(indirect_block_t file, int start, int cur_size, int maxlen, 
         }
 
     } else {
-        block_start = block_start - (DISK_BLOCK_SIZE * DIRECT_PER_TABLE);
+        block_start = start - (DISK_BLOCK_SIZE * DIRECT_PER_TABLE);
     }
 
     indir = (indirect_block_t) get_block_blocking(unpack_unsigned_int(file->data.indirect_ptr));
@@ -872,7 +872,7 @@ int file_read(inode_t file, int start, int maxlen, char *data) {
 
     size = size - start;
     // size_block = size_block - current_block;
-    block_start = start;
+    block_start = start % DISK_BLOCK_SIZE;
     if (size == 0 || req_left == 0) return 0;
     if (current_block < DIRECT_BLOCKS) {
         for (acc = current_block; acc < DIRECT_BLOCKS; acc++) {
@@ -904,7 +904,7 @@ int file_read(inode_t file, int start, int maxlen, char *data) {
         }
 
     } else {
-        block_start = block_start - (DISK_BLOCK_SIZE * DIRECT_BLOCKS);
+        block_start = start - (DISK_BLOCK_SIZE * DIRECT_BLOCKS);
     }
 
     indir = (indirect_block_t) get_block_blocking(unpack_unsigned_int(file->data.indirect_ptr));
@@ -1025,7 +1025,7 @@ minifile_t minifile_open(char *filename, char *mode) {
     if (strcmp(mode, "r") == 0) {
         file->writeable = 0;
     } else {
-        file->readable = 1;
+        file->writeable = 1;
     }
 
     files = minithread_directory();
@@ -1038,7 +1038,6 @@ minifile_t minifile_open(char *filename, char *mode) {
 int minifile_read(minifile_t file, char *data, int maxlen) {
     int read;
     inode_t block;
-
     if (!file->readable) return -1;
     block = (inode_t) get_block_blocking(file->inode_num);
 
