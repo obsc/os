@@ -1028,8 +1028,6 @@ minifile_t minifile_open(char *filename, char *mode) {
         file->readable = 1;
     }
 
-    memcpy(file->mode, mode, strlen(mode)+1);
-
     files = minithread_directory();
     queue_append(files->open_files, file);
     start_access_file(inode_num);
