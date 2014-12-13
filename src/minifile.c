@@ -973,6 +973,7 @@ minifile_t minifile_open(char *filename, char *mode) {
 
     if (!mode) return NULL;
     inode = get_inode(filename, &inode_num);
+    if (inode && inode->data.inode_type == DIR_INODE) return NULL;
 
     if ((strcmp(mode, "r") == 0) || (strcmp(mode, "r+") == 0)) {
         if (!inode) return NULL;
@@ -980,7 +981,7 @@ minifile_t minifile_open(char *filename, char *mode) {
         file->cursor = 0;
     } else if ((strcmp(mode, "w") == 0) || (strcmp(mode, "w+") == 0)) {
         if (!inode) {
-            inode_num = make_inode(dirname, write_new_file);
+            inode_num = make_inode(filename, write_new_file);
             if (inode_num == -1) return NULL;
         } else {
             truncate_file(inode, inode_num);
@@ -989,7 +990,7 @@ minifile_t minifile_open(char *filename, char *mode) {
         file->cursor = 0;
     } else if ((strcmp(mode, "a") == 0) || (strcmp(mode, "a+") == 0)) {
         if (!inode) {
-            inode_num = make_inode(dirname, write_new_file);
+            inode_num = make_inode(filename, write_new_file);
             if (inode_num == -1) return NULL;
             file = (minifile_t) malloc (sizeof(struct minifile));
             file->cursor = 0;
