@@ -743,12 +743,14 @@ int make_inode(char *dirname, write_func_t f) {
 
     if (!name) { // Current directory
         name = dirname;
+        if (strlen(name) == 0 || strlen(name) > 256) return -1;
         files = minithread_directory();
         if (!files) return -1;
         prevdir = (inode_t) get_block_blocking(files->inode_num);
         prevdir_num = files->inode_num;
     } else {
         name++;
+        if (strlen(name) == 0 || strlen(name) > 256) return -1;
         dir = (char *) malloc (name - dirname + 1);
         memcpy(dir, dirname, name - dirname);
         memcpy(dir + (name - dirname), null_term, 1);
@@ -756,7 +758,6 @@ int make_inode(char *dirname, write_func_t f) {
         free(dir);
     }
 
-    if (strlen(name) == 0 || strlen(name) > 256) return -1;
     if (!prevdir || prevdir->data.inode_type == FILE_INODE) {
         free(prevdir);
         return -1;
