@@ -1478,6 +1478,7 @@ int minifile_write(minifile_t file, char *data, int len) {
         free(block);
         return -1;
     }
+    file->cursor = temp + write;
     free(block);
     return 0;
 }
