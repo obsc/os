@@ -1027,6 +1027,7 @@ int minifile_read(minifile_t file, char *data, int maxlen) {
 
     block = (inode_t) get_block_blocking(file->inode_num);
 
+    
     read = file_read(block, file->cursor, maxlen, data);
     if (read == -1) {
         free(block);
@@ -1161,6 +1162,7 @@ int file_write(inode_t file, int file_num, int start, char *data, int len) {
             }
 
             memcpy(block+byte_start, data+total_written, amt);
+            write_block_blocking(blockid, block);
             byte_start = 0;
             total_written += amt;
             free(block);
@@ -1513,7 +1515,6 @@ int minifile_stat(char *path) {
     if (block->data.inode_type == FILE_INODE) {
         size = unpack_unsigned_int(block->data.size);
         free(block);
-        printf("size %i\n", size);
         return size;
     } else {
         free(block);
