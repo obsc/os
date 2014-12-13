@@ -27,7 +27,8 @@ typedef struct file_access {
 struct minifile {
     int inode_num;
     int cursor;
-    char mode[3];
+    char readable;
+    char writeable;
 };
 
 /* Threads that have the directory at blocknum open */
@@ -1015,6 +1016,18 @@ minifile_t minifile_open(char *filename, char *mode) {
     }
 
     file->inode_num = inode_num;
+    if ((strcmp(mode, "w") == 0) || (strcmp(mode, "a") == 0)) {
+        file->readable = 0;
+    } else {
+        file->readable = 1;
+    }
+
+    if (strcmp(mode, "r") == 0) {
+        file->writeable = 0;
+    } else {
+        file->readable = 1;
+    }
+
     memcpy(file->mode, mode, strlen(mode)+1);
 
     files = minithread_directory();
@@ -1028,6 +1041,7 @@ int minifile_read(minifile_t file, char *data, int maxlen) {
     int read;
     inode_t block;
 
+    if (!file->readable) return -1;
     block = (inode_t) get_block_blocking(file->inode_num);
 
     read = file_read(block, file->cursor, maxlen, data);
@@ -1196,6 +1210,7 @@ int minifile_write(minifile_t file, char *data, int len) {
     inode_t block;
     int size;
 
+    if (!file->writeable) return -1;
     block = (inode_t) get_block_blocking(file->inode_num);
 
     write = file_write(block, file->inode_num, file->cursor, data, len);
