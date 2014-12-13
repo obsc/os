@@ -817,7 +817,7 @@ int file_read_indir(indirect_block_t file, int start, int cur_size, int maxlen, 
                 size -= amt;
             } else {
                 amt = block_size;
-                req_left -= (block_size - block_start);
+                req_left -= (block_size);
                 size -= amt;
             }
             data_block = get_block_blocking(unpack_unsigned_int(file->data.direct_ptrs[acc]));
@@ -883,7 +883,7 @@ int file_read(inode_t file, int start, int maxlen, char *data) {
                 size -= amt;
             } else {
                 amt = block_size;
-                req_left -= (block_size - block_start);
+                req_left -= (block_size);
                 size -= amt;
             }
             data_block = get_block_blocking(unpack_unsigned_int(file->data.direct_ptrs[acc]));
@@ -1191,6 +1191,7 @@ int file_write(inode_t file, int file_num, int start, char *data, int len) {
 int minifile_write(minifile_t file, char *data, int len) {
     int write;
     inode_t block;
+    int size;
 
     block = (inode_t) get_block_blocking(file->inode_num);
 
@@ -1199,7 +1200,13 @@ int minifile_write(minifile_t file, char *data, int len) {
         free(block);
         return -1;
     }
+    size = unpack_unsigned_int(block->data.size);
     file->cursor += write;
+    if (file->cursor > size) {
+        pack_unsigned_int(block->data.size, file->cursor);
+        write_block_blocking(file->inode_num, (char *)block);
+    }
+
     free(block);
     return 0;
 }
