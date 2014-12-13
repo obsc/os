@@ -635,7 +635,7 @@ int make_inode_helper(inode_t dir, int inode_num, char *name, write_func_t f) {
         }
         write_block_blocking(inode_num, (char *) dir);
         free(dir);
-        return 0;
+        return new_blocknum;
     }
 
     size -= DIRECT_BLOCKS * ENTRIES_PER_TABLE; // Remaining size
@@ -1208,8 +1208,7 @@ int minifile_write(minifile_t file, char *data, int len) {
     }
 
     free(block);
-    return 0;
-}
+    return 0;}
 
 int minifile_close(minifile_t file) {
     end_access_file(file->inode_num);
@@ -1514,6 +1513,7 @@ int minifile_stat(char *path) {
     if (block->data.inode_type == FILE_INODE) {
         size = unpack_unsigned_int(block->data.size);
         free(block);
+        printf("size %i\n", size);
         return size;
     } else {
         free(block);
