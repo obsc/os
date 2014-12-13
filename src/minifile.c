@@ -871,7 +871,7 @@ int file_read(inode_t file, int start, int maxlen, char *data) {
     block_start = start;
     if (size == 0 || req_left == 0) return 0;
     if (current_block < DIRECT_BLOCKS) {
-        for (acc = current_block; current_block < DIRECT_BLOCKS; current_block++) {
+        for (acc = current_block; current_block < DIRECT_BLOCKS; acc++) {
             if (size > 4096) {
                 block_size = 4096 - block_start;
             } else {
@@ -1161,13 +1161,11 @@ int file_write(inode_t file, int file_num, int start, char *data, int len) {
                 if (!block) return -1;
                 block_size -= 1;
             }
-
             memcpy(block+byte_start, data+total_written, amt);
             write_block_blocking(blockid, block);
             byte_start = 0;
             total_written += amt;
             free(block);
-
             if (req_left == 0) {
                 return total_written;
             }
