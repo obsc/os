@@ -765,6 +765,8 @@ int make_inode(char *dirname, write_func_t f) {
     return make_inode_helper(prevdir, prevdir_num, name, f);
 }
 
+int remove_inode(int dir_num, int item);
+
 int truncate_helper(char *item, void *arg, void *result) {
     char *data;
     int num;
@@ -1232,7 +1234,7 @@ int minifile_unlink(char *filename) {
     } else {
         name++;
         dir = (char *) malloc (name - filename + 1);
-        memcpy(dir, dirname, name - filename);
+        memcpy(dir, filename, name - filename);
         memcpy(dir + (name - filename), null_term, 1);
         prevdir = get_inode(dir, &prevdir_num);
         free(dir);
