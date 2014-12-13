@@ -95,9 +95,10 @@ char self[2] = ".";
 
 int lock_block(int blocknum) {
     inode_lock_t l;
-
+ 
     semaphore_P(inode_lock_lock);
     HASH_FIND_INT( inode_lock_map, &blocknum, l );
+    
     if (!l) {
         l = (inode_lock_t) malloc (sizeof(struct inode_lock));
         if (!l) {
@@ -111,6 +112,7 @@ int lock_block(int blocknum) {
             semaphore_V(inode_lock_lock);
             return -1;
         }
+        counter_initialize(l->mutex, 1);
         HASH_ADD_INT( inode_lock_map, blocknum, l );
     }
     semaphore_V(inode_lock_lock);
