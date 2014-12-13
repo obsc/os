@@ -784,7 +784,7 @@ int truncate_helper(char *item, void *arg, void *result) {
 }
 
 void truncate_file(inode_t file, int blocknum) {
-    file_iterate(file, truncate_helper, NULL, NULL);
+    truncate_iterate(file, truncate_helper, NULL, NULL);
     pack_unsigned_int(file->data.size, 0);
     write_block_blocking(blocknum, (char *) file);
 }
