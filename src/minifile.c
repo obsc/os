@@ -523,7 +523,7 @@ int file_iterate(inode_t file, file_func_t f, void* arg, void* result) {
     int size;
     indirect_block_t indir;
 
-    size = unpack_unsigned_int(file->data.size) / 4096;
+    size = unpack_unsigned_int(file->data.size) / DISK_BLOCK_SIZE;
 
     if (unpack_unsigned_int(file->data.size) % 4096 != 0) {
         size = size + 1;
@@ -798,16 +798,15 @@ int file_read_indir(indirect_block_t file, int start, int cur_size, int maxlen, 
     int total_copied;
 
     total_copied = len;
-    current_block = start / 4096;
+    current_block = start / DISK_BLOCK_SIZE;
     req_left = maxlen;
     size = cur_size;
-
     block_start = start;
     if (size == 0 || req_left == 0) return 0;
     if (current_block < DIRECT_PER_TABLE) {
-        for (acc = current_block; current_block < DIRECT_PER_TABLE; acc++) {
-            if (size > 4096) {
-                block_size = 4096 - block_start;
+        for (acc = current_block; acc < DIRECT_PER_TABLE; acc++) {
+            if (size > DISK_BLOCK_SIZE) {
+                block_size = DISK_BLOCK_SIZE - block_start;
             } else {
                 block_size = size;
             }
@@ -834,7 +833,7 @@ int file_read_indir(indirect_block_t file, int start, int cur_size, int maxlen, 
         }
 
     } else {
-        block_start = block_start - (4096 * DIRECT_PER_TABLE);
+        block_start = block_start - (DISK_BLOCK_SIZE * DIRECT_PER_TABLE);
     }
 
     indir = (indirect_block_t) get_block_blocking(unpack_unsigned_int(file->data.indirect_ptr));
@@ -857,12 +856,12 @@ int file_read(inode_t file, int start, int maxlen, char *data) {
     int total_copied;
 
     total_copied = 0;
-    current_block = start / 4096;
+    current_block = start / DISK_BLOCK_SIZE;
     req_left = maxlen;
     size = unpack_unsigned_int(file->data.size);
-    // size_block = unpack_unsigned_int(file->data.size) / 4096;
+    // size_block = unpack_unsigned_int(file->data.size) / DISK_BLOCK_SIZE;
 
-    // if (unpack_unsigned_int(file->data.size) % 4096 != 0) {
+    // if (unpack_unsigned_int(file->data.size) % DISK_BLOCK_SIZE != 0) {
     //     size_block = size_block + 1;
     // }
 
@@ -871,9 +870,9 @@ int file_read(inode_t file, int start, int maxlen, char *data) {
     block_start = start;
     if (size == 0 || req_left == 0) return 0;
     if (current_block < DIRECT_BLOCKS) {
-        for (acc = current_block; current_block < DIRECT_BLOCKS; acc++) {
-            if (size > 4096) {
-                block_size = 4096 - block_start;
+        for (acc = current_block; acc < DIRECT_BLOCKS; acc++) {
+            if (size > DISK_BLOCK_SIZE) {
+                block_size = DISK_BLOCK_SIZE - block_start;
             } else {
                 block_size = size;
             }
@@ -900,7 +899,7 @@ int file_read(inode_t file, int start, int maxlen, char *data) {
         }
 
     } else {
-        block_start = block_start - (4096 * DIRECT_BLOCKS);
+        block_start = block_start - (DISK_BLOCK_SIZE * DIRECT_BLOCKS);
     }
 
     indir = (indirect_block_t) get_block_blocking(unpack_unsigned_int(file->data.indirect_ptr));
@@ -1027,7 +1026,6 @@ int minifile_read(minifile_t file, char *data, int maxlen) {
 
     block = (inode_t) get_block_blocking(file->inode_num);
 
-    
     read = file_read(block, file->cursor, maxlen, data);
     if (read == -1) {
         free(block);
@@ -1055,14 +1053,14 @@ int file_write_indir(indirect_block_t file, int file_num, int start, int cur_siz
     total_written = written;
     req_left = len;
 
-    block_start = start / 4096;
-    byte_start = start % 4096;
+    block_start = start / DISK_BLOCK_SIZE;
+    byte_start = start % DISK_BLOCK_SIZE;
     block_size = cur_size;
 
     if (block_start < DIRECT_PER_TABLE) {
         for (acc = block_start; acc < DIRECT_PER_TABLE; acc++) {
-            if (req_left > (4096 - byte_start)) {
-                amt = (4096 - byte_start);
+            if (req_left > (DISK_BLOCK_SIZE - byte_start)) {
+                amt = (DISK_BLOCK_SIZE - byte_start);
                 byte_start = 0;
                 req_left -= amt;
             } else {
@@ -1094,7 +1092,7 @@ int file_write_indir(indirect_block_t file, int file_num, int start, int cur_siz
         }
         next_start = 0;
     } else {
-        next_start = start - (DIRECT_PER_TABLE * 4096);
+        next_start = start - (DIRECT_PER_TABLE * DISK_BLOCK_SIZE);
         block_size -= DIRECT_PER_TABLE;
     }
 
@@ -1132,17 +1130,17 @@ int file_write(inode_t file, int file_num, int start, char *data, int len) {
     req_left = len;
 
     size = unpack_unsigned_int(file->data.size);
-    block_start = start / 4096;
-    byte_start = start % 4096;
-    block_size = size / 4096;
-    if (size % 4096 != 0) {
+    block_start = start / DISK_BLOCK_SIZE;
+    byte_start = start % DISK_BLOCK_SIZE;
+    block_size = size / DISK_BLOCK_SIZE;
+    if (size % DISK_BLOCK_SIZE != 0) {
         block_size ++;
     }
 
     if (block_start < DIRECT_BLOCKS) {
         for (acc = block_start; acc < DIRECT_BLOCKS; acc++) {
-            if (req_left > (4096 - byte_start)) {
-                amt = (4096 - byte_start);
+            if (req_left > (DISK_BLOCK_SIZE - byte_start)) {
+                amt = (DISK_BLOCK_SIZE - byte_start);
                 byte_start = 0;
                 req_left -= amt;
             } else {
@@ -1172,7 +1170,7 @@ int file_write(inode_t file, int file_num, int start, char *data, int len) {
         }
         next_start = 0;
     } else {
-        next_start = start - (DIRECT_BLOCKS * 4096);
+        next_start = start - (DIRECT_BLOCKS * DISK_BLOCK_SIZE);
         block_size -= DIRECT_BLOCKS;
     }
     if (block_size == 0) {
