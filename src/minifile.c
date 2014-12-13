@@ -491,15 +491,17 @@ int dir_iterate(inode_t dir, dir_func_t f, void* arg, void* result) {
     return dir_iterate_indir(indir, f, arg, result, size);
 }
 
-int file_iterate_indir(indirect_block_t file, file_func_t f, void* arg, void* result, int cur_size) {
+int truncate_iterate_indir(indirect_block_t file, int indir_num, file_func_t f, void* arg, void* result, int cur_size) {
     int acc;
     int size;
     indirect_block_t indirect;
+    int temp;
 
     if (cur_size == 0) {
         free(file);
         return -1;
     }
+
 
     size = cur_size;
     for (acc = 0; acc < DIRECT_PER_TABLE; acc++) {
@@ -513,12 +515,14 @@ int file_iterate_indir(indirect_block_t file, file_func_t f, void* arg, void* re
     }
 
     indirect = (indirect_block_t) get_block_blocking(unpack_unsigned_int(file->data.indirect_ptr));
+    temp = unpack_unsigned_int(file->data.indirect_ptr);
+    set_free_data_block(indir_num, (char *)file);
     free(file);
 
-    return file_iterate_indir(indirect, f, arg, result, size);
+    return truncate_iterate_indir(indirect, temp, f, arg, result, size);
 }
 
-int file_iterate(inode_t file, file_func_t f, void* arg, void* result) {
+int truncate_iterate(inode_t file, file_func_t f, void* arg, void* result) {
     int acc;
     int size;
     indirect_block_t indir;
@@ -540,7 +544,7 @@ int file_iterate(inode_t file, file_func_t f, void* arg, void* result) {
     }
     indir = (indirect_block_t) get_block_blocking(unpack_unsigned_int(file->data.indirect_ptr));
 
-    return file_iterate_indir(indir, f, arg, result, size);
+    return truncate_iterate_indir(indir, unpack_unsigned_int(file->data.indirect_ptr), f, arg, result, size);
 }
 
 int get_inode_helper(char *item, char *inode_num, void *arg, void *result, int dummy, char *dummy2) {
