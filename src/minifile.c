@@ -805,7 +805,7 @@ int file_read_indir(indirect_block_t file, int start, int cur_size, int maxlen, 
     block_start = start;
     if (size == 0 || req_left == 0) return 0;
     if (current_block < DIRECT_PER_TABLE) {
-        for (acc = current_block; current_block < DIRECT_PER_TABLE; current_block++) {
+        for (acc = current_block; current_block < DIRECT_PER_TABLE; acc++) {
             if (size > 4096) {
                 block_size = 4096 - block_start;
             } else {
