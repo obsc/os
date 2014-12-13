@@ -1083,6 +1083,7 @@ int file_write_indir(indirect_block_t file, int file_num, int start, int cur_siz
             }
 
             memcpy(block+byte_start, data+total_written, amt);
+            write_block_blocking(blockid, block);
             byte_start = 0;
             total_written += amt;
             free(block);
