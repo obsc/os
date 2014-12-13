@@ -48,6 +48,14 @@ typedef struct waiting_request {
     UT_hash_handle hh;
 }* waiting_request_t;
 
+/*
+ * Strucutre denoting a blockid and block
+ */
+typedef struct num_struct {
+    char *num;
+    char *structure;
+}* num_struct_t;
+
 // iterator function for directories
 typedef int (*dir_func_t) (char*, char*, void*, void*, int, char*);
 // iterator function for files
@@ -1202,10 +1210,49 @@ int minifile_close(minifile_t file) {
 int minifile_unlink(char *filename) {
     inode_t file_inode;
     int blocknum;
+    thread_files_t files;
+    char *dir;
+    char *name;
+    inode_t prevdir;
+    int prevdir_num;
+    file_access_t file;
 
     file_inode = get_inode(filename, &blocknum);
     if (!file_inode || file_inode->data.inode_type == DIR_INODE) return -1;
 
+
+    name = strrchr(filename, '/');
+
+    if (!name) { // Current directory
+        name = filename;
+        files = minithread_directory();
+        if (!files) return -1;
+        prevdir = (inode_t) get_block_blocking(files->inode_num);
+        prevdir_num = files->inode_num;
+    } else {
+        name++;
+        dir = (char *) malloc (name - filename + 1);
+        memcpy(dir, dirname, name - filename);
+        memcpy(dir + (name - filename), null_term, 1);
+        prevdir = get_inode(dir, &prevdir_num);
+        free(dir);
+    }
+    if (!prevdir || prevdir->data.inode_type == FILE_INODE) {
+        free(prevdir);
+        return -1;
+    }
+    if (remove_inode(prevdir_num, blocknum) == -1)  return -1;
+
+    //removed from parent
+    HASH_FIND_INT( file_map, &blocknum, file );
+    if (!file) {
+        unlink_access_file(blocknum);
+    } else {
+        relink_file(blocknum);
+    }
+
+    free(file_inode);
+    free(prevdir);
     return 0;
 }
 
@@ -1366,10 +1413,6 @@ int rm_last(inode_t dir, int dir_num, char **result_num, char **result) {
     return 0;
 }
 
-typedef struct num_struct {
-    char *num;
-    char *structure;
-}* num_struct_t;
 
 int remove_inode_helper(char *item, char *inode_num, void *arg, void *result, int blockid, char *block) {
     int number;
