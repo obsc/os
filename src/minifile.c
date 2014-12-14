@@ -83,6 +83,8 @@ inode_lock_t inode_lock_map;
 semaphore_t file_lock;
 semaphore_t open_dir_lock;
 semaphore_t inode_lock_lock;
+semaphore_t free_data_lock;
+semaphore_t free_inode_lock;
 
 superblock_t disk_superblock;
 
@@ -323,6 +325,7 @@ char* get_free_inode_block(int *blocknum) {
     free_block_t freeblock;
     int nextblock;
 
+    semaphore_P(free_inode_lock);
     *blocknum = unpack_unsigned_int(disk_superblock->data.first_free_inode);
 
     if (*blocknum == 0) {
@@ -333,6 +336,7 @@ char* get_free_inode_block(int *blocknum) {
         pack_unsigned_int(disk_superblock->data.first_free_inode, nextblock);
         write_block_blocking(0, (char *) disk_superblock);
     }
+    semaphore_V(free_inode_lock);
     return (char *) freeblock;
 }
 
@@ -340,6 +344,7 @@ char* get_free_data_block(int *blocknum) {
     free_block_t freeblock;
     int nextblock;
 
+    semaphore_P(free_data_lock);
     *blocknum = unpack_unsigned_int(disk_superblock->data.first_free_data_block);
 
     if (*blocknum == 0) {
@@ -350,6 +355,7 @@ char* get_free_data_block(int *blocknum) {
         pack_unsigned_int(disk_superblock->data.first_free_data_block, nextblock);
         write_block_blocking(0, (char *) disk_superblock);
     }
+    semaphore_V(free_data_lock);
     return (char *) freeblock;
 }
 
@@ -985,9 +991,14 @@ void minifile_initialize() {
     file_lock = semaphore_create();
     open_dir_lock = semaphore_create();
     inode_lock_lock = semaphore_create();
+    free_data_lock = semaphore_create();
+    free_inode_lock = semaphore_create();
+
     semaphore_initialize(file_lock, 1);
     semaphore_initialize(open_dir_lock, 1);
     semaphore_initialize(inode_lock_lock, 1);
+    semaphore_initialize(free_data_lock, 1);
+    semaphore_initialize(free_inode_lock, 1);
 
     disk_superblock = (superblock_t) malloc (sizeof(struct superblock));
 }
