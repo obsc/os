@@ -71,7 +71,7 @@ typedef int (*dir_func_t) (char*, char*, void*, void*, int, char*);
 // iterator function for files
 typedef int (*file_func_t) (char*, void*, void*);
 // Function for constructing inodes
-typedef int (*write_func_t) (int, dir_data_block_t, int, int, char*);
+typedef int (*write_func_t) (inode_t, int);
 
 disk_t *disk;
 
@@ -678,6 +678,7 @@ int make_inode_helper(inode_t dir, int inode_num, char *name, write_func_t f) {
     indirect_block_t next_indir_block;
     int next_indir_blocknum;
     int new_blocknum;
+    inode_t new_block;
 
     size = unpack_unsigned_int(dir->data.size);
     pack_unsigned_int(dir->data.size, size + 1);
@@ -688,34 +689,44 @@ int make_inode_helper(inode_t dir, int inode_num, char *name, write_func_t f) {
         if (entry_num == 0) { // New direct block
             direct_block = (dir_data_block_t) get_free_data_block(&direct_blocknum);
             if (!direct_block) {
+                unlock_block(inode_num);
                 free(dir);
                 return -1;
             }
             pack_unsigned_int(dir->data.direct_ptrs[direct_ind], direct_blocknum);
         } else if (direct_blocknum == 0) {
+            unlock_block(inode_num);
             free(dir);
             return -1;
         } else {
             direct_block = (dir_data_block_t) get_block_blocking(direct_blocknum);
         }
-        new_blocknum = f(inode_num, direct_block, direct_blocknum, entry_num, name);
+
+        new_block = (inode_t) get_free_data_block(&new_blocknum);
         if (new_blocknum == -1) {
             if (entry_num == 0) {
                 set_free_data_block(direct_blocknum, (char *) direct_block);
             }
+            unlock_block(inode_num);
             free(direct_block);
             free(dir);
             return -1;
         }
+
+        strcpy(dir->data.dir_entries[entry_num], name);
+        pack_unsigned_int(dir->data.inode_ptrs[entry_num], new_blocknum);
         write_block_blocking(inode_num, (char *) dir);
+        unlock_block(inode_num);
         free(dir);
-        return new_blocknum;
+
+        return f(new_block, new_blocknum);
     }
 
     size -= DIRECT_BLOCKS * ENTRIES_PER_TABLE; // Remaining size
     if (size == 0) { // first entry in indirect
         indir_block = (indirect_block_t) get_free_data_block(&indir_blocknum);
         if (!indir_block) {
+            unlock_block(inode_num);
             free(dir);
             return -1;
         }
@@ -730,6 +741,7 @@ int make_inode_helper(inode_t dir, int inode_num, char *name, write_func_t f) {
         if (size == 0) { // first entry in indirect
             next_indir_block = (indirect_block_t) get_free_data_block(&next_indir_blocknum);
             if (!next_indir_block) {
+                unlock_block(inode_num);
                 free(dir);
                 return -1;
             }
@@ -755,6 +767,7 @@ int make_inode_helper(inode_t dir, int inode_num, char *name, write_func_t f) {
             if (size == 0) {
                 set_free_data_block(indir_blocknum, (char *) indir_block);
             }
+            unlock_block(inode_num);
             free(indir_block);
             free(dir);
             return -1;
@@ -764,13 +777,15 @@ int make_inode_helper(inode_t dir, int inode_num, char *name, write_func_t f) {
         if (size == 0) {
             set_free_data_block(indir_blocknum, (char *) indir_block);
         }
+        unlock_block(inode_num);
         free(indir_block);
         free(dir);
         return -1;
     } else {
         direct_block = (dir_data_block_t) get_block_blocking(direct_blocknum);
     }
-    new_blocknum = f(inode_num, direct_block, direct_blocknum, entry_num, name);
+    
+    new_block = (inode_t) get_free_data_block(&new_blocknum);
     if (new_blocknum == -1) {
         if (entry_num == 0) {
             set_free_data_block(direct_blocknum, (char *) direct_block);
@@ -778,14 +793,20 @@ int make_inode_helper(inode_t dir, int inode_num, char *name, write_func_t f) {
         if (size == 0) {
             set_free_data_block(indir_blocknum, (char *) indir_block);
         }
+        unlock_block(inode_num);
         free(direct_block);
         free(dir);
         return -1;
     }
+
+    strcpy(dir->data.dir_entries[entry_num], name);
+    pack_unsigned_int(dir->data.inode_ptrs[entry_num], new_blocknum);
     write_block_blocking(indir_blocknum, (char *) indir_block);
     write_block_blocking(inode_num, (char *) dir);
+    unlock_block(inode_num);
     free(dir);
-    return new_blocknum;
+
+    return f(new_block, new_blocknum);
 }
 
 int make_inode(char *dirname, write_func_t f) {
@@ -820,7 +841,6 @@ int make_inode(char *dirname, write_func_t f) {
         if (strlen(name) == 0 || strlen(name) > 256) return -1;
         files = minithread_directory();
         if (!files) return -1;
-        prevdir = (inode_t) get_block_blocking(files->inode_num);
         prevdir_num = files->inode_num;
     } else {
         name++;
@@ -829,10 +849,14 @@ int make_inode(char *dirname, write_func_t f) {
         memcpy(dir, dirname, name - dirname);
         memcpy(dir + (name - dirname), null_term, 1);
         prevdir = get_inode(dir, &prevdir_num);
+        free(prevdir);
         free(dir);
     }
 
+    lock_block(prevdir_num);
+    prevdir = (inode_t) get_block_blocking(files->inode_num);
     if (!prevdir || prevdir->data.inode_type == FILE_INODE) {
+        unlock_block(prevdir_num);
         free(prevdir);
         return -1;
     }
@@ -1022,18 +1046,8 @@ int minifile_get_root_num() {
     return unpack_unsigned_int(disk_superblock->data.root_inode);
 }
 
-int write_new_file(int prevdir, dir_data_block_t dir, int dir_num, int entry_num, char *name) {
-    inode_t newfile;
-    int newfile_num;
+int write_new_file(inode_t newfile, int newfile_num) {
     int i;
-
-    newfile = (inode_t) get_free_inode_block(&newfile_num);
-
-    if (!newfile) {
-        set_free_inode_block(newfile_num, (char *) newfile);
-        free(newfile);
-        return -1;
-    }
 
     newfile->data.inode_type = FILE_INODE;
     pack_unsigned_int(newfile->data.size, 0);
@@ -1042,13 +1056,8 @@ int write_new_file(int prevdir, dir_data_block_t dir, int dir_num, int entry_num
     }
     pack_unsigned_int(newfile->data.indirect_ptr, 0);
 
-    strcpy(dir->data.dir_entries[entry_num], name);
-    pack_unsigned_int(dir->data.inode_ptrs[entry_num], newfile_num);
-
     write_block_blocking(newfile_num, (char *) newfile);
-    write_block_blocking(dir_num, (char *) dir);
 
-    free(newfile);
     return newfile_num;
 }
 
@@ -1485,7 +1494,6 @@ int minifile_unlink(char *filename) {
     file_inode = get_inode(filename, &blocknum);
     if (!file_inode || file_inode->data.inode_type == DIR_INODE) return -1;
 
-
     name = strrchr(filename, '/');
 
     if (!name) { // Current directory
@@ -1530,20 +1538,15 @@ int minifile_unlink(char *filename) {
     return 0;
 }
 
-int write_new_dir(int prevdir, dir_data_block_t dir, int dir_num, int entry_num, char *name) {
-    inode_t newdir;
+int write_new_dir(inode_t newdir, int newdir_num) {
     dir_data_block_t newdir_data;
-    int newdir_num;
     int newdir_data_num;
     int i;
 
-    newdir = (inode_t) get_free_inode_block(&newdir_num);
     newdir_data = (dir_data_block_t) get_free_data_block(&newdir_data_num);
 
-    if (!newdir || !newdir_data) {
-        set_free_inode_block(newdir_num, (char *) newdir);
+    if (!newdir_data) {
         set_free_data_block(newdir_data_num, (char *) newdir_data);
-        free(newdir);
         free(newdir_data);
         return -1;
     }
@@ -1564,14 +1567,9 @@ int write_new_dir(int prevdir, dir_data_block_t dir, int dir_num, int entry_num,
     }
     pack_unsigned_int(newdir->data.indirect_ptr, 0);
 
-    strcpy(dir->data.dir_entries[entry_num], name);
-    pack_unsigned_int(dir->data.inode_ptrs[entry_num], newdir_num);
-
     write_block_blocking(newdir_data_num, (char *) newdir_data);
     write_block_blocking(newdir_num, (char *) newdir);
-    write_block_blocking(dir_num, (char *) dir);
 
-    free(newdir);
     free(newdir_data);
     return newdir_num;
 }
