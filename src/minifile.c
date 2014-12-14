@@ -1810,8 +1810,13 @@ int minifile_stat(char *path) {
     inode_t block;
     int dummy;
     int size;
+    char *path_copy;
 
-    block = get_inode(path, &dummy);
+    path_copy = (char *) malloc (strlen(path) + 1);
+    if (!path_copy) return -1;
+    memcpy(path_copy, path, strlen(path) + 1);
+
+    block = get_inode(path_copy, &dummy);
     if (!block) return -1;
     if (block->data.inode_type == FILE_INODE) {
         size = unpack_unsigned_int(block->data.size);
@@ -1935,7 +1940,7 @@ char **minifile_ls(char *path) {
         if (!files || files->valid == 0) return NULL;
         block = (inode_t) get_block_blocking(files->inode_num);
     } else {
-        block = get_inode(path, &dummy);
+        block = get_inode(path_copy, &dummy);
     }
     free(path_copy);
 
