@@ -120,7 +120,7 @@ int lock_block(int blocknum) {
 }
 
 int unlock_block(int blocknum) {
-    inode_lock_t lock_struct;
+    inode_lock_t l;
 
     semaphore_P(inode_lock_lock);
     HASH_FIND_INT( inode_lock_map, &blocknum, l );
@@ -134,10 +134,11 @@ int unlock_block(int blocknum) {
         counter_destroy(l->mutex);
         free(l);
     } else { // Someone else waiting
-        counter_V(req->mutex, 1);
+        counter_V(l->mutex, 1);
     }
 
     semaphore_V(inode_lock_lock);
+    return 0;
 }
 
 /* -----------------------Current Directory Logic---------------------------- */
