@@ -859,7 +859,7 @@ int make_inode(char *dirname, write_func_t f) {
     }
 
     lock_block(prevdir_num);
-    prevdir = (inode_t) get_block_blocking(files->inode_num);
+    prevdir = (inode_t) get_block_blocking(prevdir_num);
     if (!prevdir || prevdir->data.inode_type == FILE_INODE) {
         unlock_block(prevdir_num);
         free(prevdir);
@@ -1077,9 +1077,16 @@ minifile_t minifile_open(char *filename, char *mode) {
     inode_t inode;
     minifile_t file;
     thread_files_t files;
+    char *filename_copy;
 
     if (!mode) return NULL;
-    inode = get_inode(filename, &inode_num);
+
+    filename_copy = (char *) malloc (strlen(filename) + 1);
+    if (!filename_copy) return NULL;
+    memcpy(filename_copy, filename, strlen(filename) + 1);
+
+    inode = get_inode(filename_copy, &inode_num);
+    free(filename_copy);
     if (inode && inode->data.inode_type == DIR_INODE) return NULL;
 
     if ((strcmp(mode, "r") == 0) || (strcmp(mode, "r+") == 0)) {
@@ -1498,8 +1505,14 @@ int minifile_unlink(char *filename) {
     inode_t prevdir;
     int prevdir_num;
     file_access_t file;
+    char *filename_copy;
 
-    file_inode = get_inode(filename, &blocknum);
+    filename_copy = (char *) malloc (strlen(filename) + 1);
+    if (!filename_copy) return -1;
+    memcpy(filename_copy, filename, strlen(filename) + 1);
+
+    file_inode = get_inode(filename_copy, &blocknum);
+    free(filename_copy);
     if (!file_inode || file_inode->data.inode_type == DIR_INODE) return -1;
 
     name = strrchr(filename, '/');
@@ -1749,11 +1762,18 @@ int minifile_rmdir(char *dirname) {
     int size;
     int parent_num;
     dir_data_block_t freed_data;
+    char *dirname_copy;
 
-    if ((strcmp(dirname, "..") == 0) || (strcmp(dirname, ".") == 0)) {
+    dirname_copy = (char *) malloc (strlen(dirname) + 1);
+    if (!dirname_copy) return -1;
+    memcpy(dirname_copy, dirname, strlen(dirname) + 1);
+
+    if ((strcmp(dirname_copy, "..") == 0) || (strcmp(dirname_copy, ".") == 0)) {
+        free(dirname_copy);
         return -1;
     }
-    block = get_inode(dirname, &blockid);
+    block = get_inode(dirname_copy, &blockid);
+    free(dirname_copy);
 
     if (!block) return -1;
     size = unpack_unsigned_int(block->data.size);
@@ -1818,10 +1838,14 @@ int minifile_cd(char *path) {
 
     path_len = strlen(path);
     path_copy = (char *) malloc (path_len+1);
+    if (!path_copy) return -1;
     memcpy(path_copy, path, path_len+1);
-    block = get_inode(path, &inode_num);
+
+    block = get_inode(path_copy, &inode_num);
+    memcpy(path_copy, path, path_len+1);
     if (!block || block->data.inode_type == FILE_INODE) {
         free(block);
+        free(path_copy);
         return -1;
     }
     free(block);
@@ -1900,6 +1924,11 @@ char **minifile_ls(char *path) {
     char **file_list;
     char **ptr;
     int dummy;
+    char *path_copy;
+
+    path_copy = (char *) malloc (strlen(path) + 1);
+    if (!path_copy) return NULL;
+    memcpy(path_copy, path, strlen(path) + 1);
 
     if (!path || strlen(path) == 0) {
         files = minithread_directory();
@@ -1908,6 +1937,7 @@ char **minifile_ls(char *path) {
     } else {
         block = get_inode(path, &dummy);
     }
+    free(path_copy);
 
     if (!block || block->data.inode_type == FILE_INODE) {
         free(block);
