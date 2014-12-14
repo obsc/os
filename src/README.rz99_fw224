@@ -1,83 +1,21 @@
 Rene Zhang - rz99
 Fukang Wen - fw224
 
-Implementation details of Project 5 for CS4411 - Fall 2014
+Implementation details of Project 6 for CS4411 - Fall 2014
+================================================================================
+DID NOT IMPLEMENT
+  - 
 ================================================================================
 Important Design Decisions
-  - The cache is implemented as a FIFO cache. This is chosen over alternatives
-  like LRU cache because FIFO lends itself better to our case of getting rid
-  of paths that are "stale" (in the cache for more than 3 seconds).
-  - We double the amount of "buckets" in the hashtable than the max amount
-  specified by the user to reduce collision for small numbers.
-  - We use timestamps in miniroute to check if the path is still valid by checking
-  elapsed time when we get the paths. Because of this, we don't use timers
-  for evicting stale paths. Instead, paths are only evicted and freed when we go
-  over the max size of cache. Otherwise, they are just considered stale.
-  - We cache the found path backwards as well in order to avoid the network
-  handler blocking on finding a route (path always guaranteed to be valid)
-  - Our messenger application specifies the hosts when creating the application.
+  - 
 
 ================================================================================
-Miniroute
-  - network interrupt handler calls miniroute handler first, which then handles
-  discovery and reply packets. If the packet is a data packet, then it
-  will call the respective handlers for minimsg and minisocket.
-  - When sending discovery packets, new broadcasts are not made if the node
-  is already in the path.
-  - Upon finding a path, we update the cache of paths with this found path
-  in addition to directly providing it to the waiting threads. This is to make
-  sure that the paths don't become stale in the 3 second interview before the
-  waiting threads are all scheduled and run
-  - Routing between locations is done by checking the path information and
-  updating it before forwarding to the next location in the path.
-  - TTL is modified just before sending, so the first node to send a message
-  will be sending with a TTL value of max - 1.
-  - We use timestamps to check if a path is still valid, this is to avoid 
-  the potential problems alarms can bring (such as route becomes invalid
-  due to the alarm in the middle of using it)
-  - We always cache the path found backwards as well, this is because the 
-  network interrupt is in charge of sending the reply packet and it should
-  not block (will not block because we always give it a valid route).
-  - We create structures to hold the path information and pass these pointers
-  to be cached and also free them when we are done with them (timed out) inside
-  miniroute.
-  - We decided to use three 12 second timers for timing out the discovery
+MKFS
+  - 
 
 ================================================================================
-Cache
-  - A cache implemented using a doubly linked list and a hashtable.
-  - The cache associates network_address_t with a void * (pointer to some struct)
-  that the user specifies.
-  - We introduce a tuple holding (key, value, list node, hashtable node) so that
-  the doubly linked list has a direct pointer to the item in the hashtable and
-  vice versa. This is so we can perform all the necessary constant time
-  operations in the cache.
-  - The hashtable is a fixed sized array holding a specified number of doubly
-  linked lists. We use chaining to deal with collisions.
-  - We create twice as many "buckets" in the hashtable as the size given by the user 
-  in order to reduce collision for small numbers.
+Minifile
+  - 
+================================================================================
 
-================================================================================
-Messenger
-  - A chat program that talks between two connections. The syntax is
-    ./messenger
-  on the first connection and
-    ./messenger <host name>
-  on the second connection where <host name> is the host name of the first
-  connection.
-  - The application detects keyboard interrupts and sends on every endline (press
-  enter to send). The application also receives data and displays it.
-  - We interpret "being able to specify host" as being able to choose a host
-  to connect to when running the application.
-================================================================================
-List
-  - A doubly linked list implementation
-  - This is private use for the cache, because we need a list implementation
-  that performs delete in O(1) (which the current queue does not support)
-================================================================================
-Test cases
-
-cache_test
-  - Unit test for cache interface
-================================================================================
 
