@@ -1,3 +1,4 @@
 changed gets(arg) to fgets(arg, BUFFER_SIZE, stdin) in shell.c
+changed input in shell.c to end with ^A and ^D
 didn't use data_interrupt_t
 mkfs fails if size < 10
