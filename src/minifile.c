@@ -29,6 +29,7 @@ struct minifile {
     int cursor;
     char readable;
     char writeable;
+    char append;
 };
 
 /* Threads that have the directory at blocknum open */
@@ -992,8 +993,6 @@ minifile_t minifile_open(char *filename, char *mode) {
 
     if ((strcmp(mode, "r") == 0) || (strcmp(mode, "r+") == 0)) {
         if (!inode) return NULL;
-        file = (minifile_t) malloc (sizeof(struct minifile));
-        file->cursor = 0;
     } else if ((strcmp(mode, "w") == 0) || (strcmp(mode, "w+") == 0)) {
         if (!inode) {
             inode_num = make_inode(filename, write_new_file);
@@ -1001,20 +1000,14 @@ minifile_t minifile_open(char *filename, char *mode) {
         } else {
             truncate_file(inode, inode_num);
         }
-        file = (minifile_t) malloc (sizeof(struct minifile));
-        file->cursor = 0;
     } else if ((strcmp(mode, "a") == 0) || (strcmp(mode, "a+") == 0)) {
         if (!inode) {
             inode_num = make_inode(filename, write_new_file);
             if (inode_num == -1) return NULL;
-            file = (minifile_t) malloc (sizeof(struct minifile));
-            file->cursor = 0;
-        } else {
-            file = (minifile_t) malloc (sizeof(struct minifile));
-            file->cursor = unpack_unsigned_int(inode->data.size);
         }
     }
 
+    file = (minifile_t) malloc (sizeof(struct minifile));
     file->inode_num = inode_num;
     if ((strcmp(mode, "w") == 0) || (strcmp(mode, "a") == 0)) {
         file->readable = 0;
@@ -1027,6 +1020,14 @@ minifile_t minifile_open(char *filename, char *mode) {
     } else {
         file->writeable = 1;
     }
+
+    if ((strcmp(mode, "a") == 0) || (strcmp(mode, "a+") == 0)) {
+        file->append = 1;
+    } else {
+        file->append = 0;
+    }
+
+    file->cursor = 0;
 
     files = minithread_directory();
     queue_append(files->open_files, file);
@@ -1208,7 +1209,11 @@ int minifile_write(minifile_t file, char *data, int len) {
     int size;
 
     if (!file->writeable) return -1;
+
     block = (inode_t) get_block_blocking(file->inode_num);
+    if (file->append) {
+        file->cursor = unpack_unsigned_int(block->data.size);
+    }
 
     write = file_write(block, file->inode_num, file->cursor, data, len);
     if (write == -1) {
