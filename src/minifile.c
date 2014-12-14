@@ -1426,12 +1426,13 @@ int minifile_write(minifile_t file, char *data, int len) {
         file->cursor = unpack_unsigned_int(block->data.size);
     }
     if (lock_block(file->inode_num) == -1) {
+        unlock_block(file->inode_num);
         free(block);
         return -1;
     }
     write = file_write_blocks(block, file->inode_num, file->cursor, len);
     if (write == -1) {
-        //unlock
+        unlock_block(file->inode_num);
         free(block);
         return -1;
     }
@@ -1477,7 +1478,10 @@ int minifile_unlink(char *filename) {
     if (!name) { // Current directory
         name = filename;
         files = minithread_directory();
-        if (!files) return -1;
+        if (!files) {
+            free(file_inode);
+            return -1;
+        }
         prevdir = (inode_t) get_block_blocking(files->inode_num);
         prevdir_num = files->inode_num;
     } else {
@@ -1489,10 +1493,16 @@ int minifile_unlink(char *filename) {
         free(dir);
     }
     if (!prevdir || prevdir->data.inode_type == FILE_INODE) {
+        free(file_inode);
         free(prevdir);
         return -1;
     }
-    if (remove_inode(prevdir_num, blocknum) == -1)  return -1;
+    lock_block(prevdir_num);
+    if (remove_inode(prevdir_num, blocknum) == -1)  {
+        unlock_block(prevdir_num);
+        return -1;
+    }
+    unlock_block(prevdir_num);
 
     //removed from parent
     HASH_FIND_INT( file_map, &blocknum, file );
@@ -1734,13 +1744,23 @@ int minifile_rmdir(char *dirname) {
     freed_data = (dir_data_block_t) get_block_blocking(unpack_unsigned_int(block->data.direct_ptrs[0]));
 
     parent_num = unpack_unsigned_int(freed_data->data.inode_ptrs[0]);
+    lock_block(parent_num);
+    if (remove_inode(parent_num, blockid) == -1) {
+        unlock_block(parent_num);
+        free(block);
+        free(freed_data);
+        return -1;
+    }
+    unlock_block(parent_num);
+
+    invalidate_dir(blockid);
 
     set_free_data_block(unpack_unsigned_int(block->data.direct_ptrs[0]), (char *)freed_data);
     set_free_inode_block(blockid, (char *)block);
 
-    if (remove_inode(parent_num, blockid) == -1) return -1;
+    free(block);
+    free(freed_data);
 
-    invalidate_dir(blockid);
 
     return 0;
 }
