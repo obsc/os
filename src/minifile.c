@@ -9,11 +9,19 @@
 #include "uthash.h"
 #include "counter.h"
 
+/* Structure for locking access to an inode
+ */
+typedef struct inode_lock {
+    int blocknum; // key
+    counter_t mutex;
+    UT_hash_handle hh;
+}* inode_lock_t;
+
 /*
  * System wide-structure represnting a file.
  */
 typedef struct file_access {
-    int blocknum;
+    int blocknum; // key
     char unlinked;
     int num;
     UT_hash_handle hh;
@@ -70,9 +78,11 @@ disk_t *disk;
 waiting_request_t req_map;
 file_access_t file_map;
 dir_list_t open_dir_map;
+inode_lock_t inode_lock_map;
 
 semaphore_t file_lock;
 semaphore_t open_dir_lock;
+semaphore_t inode_lock_lock;
 
 superblock_t disk_superblock;
 
@@ -80,6 +90,55 @@ char delim[1] = "/";
 char null_term[1] = "\0";
 char parent[3] = "..";
 char self[2] = ".";
+
+/* -----------------------Inode Lock Logic----------------------------------- */
+
+int lock_block(int blocknum) {
+    inode_lock_t l;
+
+    semaphore_P(inode_lock_lock);
+    HASH_FIND_INT( inode_lock_map, &blocknum, l );
+    if (!l) {
+        l = (inode_lock_t) malloc (sizeof(struct inode_lock));
+        if (!l) {
+            semaphore_V(inode_lock_lock);
+            return -1;
+        }
+
+        l->mutex = counter_new();
+        if (!l->mutex) {
+            free(l);
+            semaphore_V(inode_lock_lock);
+            return -1;
+        }
+        HASH_ADD_INT( inode_lock_map, blocknum, l );
+    }
+    semaphore_V(inode_lock_lock);
+
+    counter_P(l->mutex, 1);
+    return 0;
+}
+
+int unlock_block(int blocknum) {
+    inode_lock_t lock_struct;
+
+    semaphore_P(inode_lock_lock);
+    HASH_FIND_INT( inode_lock_map, &blocknum, l );
+    if (!l) {
+        semaphore_V(inode_lock_lock);
+        return -1;
+    }
+
+    if (counter_get_count(l->mutex) <= 0) {
+        HASH_DEL( inode_lock_map, l );
+        counter_destroy(l->mutex);
+        free(l);
+    } else { // Someone else waiting
+        counter_V(req->mutex, 1);
+    }
+
+    semaphore_V(inode_lock_lock);
+}
 
 /* -----------------------Current Directory Logic---------------------------- */
 
@@ -918,11 +977,14 @@ void minifile_initialize() {
     file_map = NULL;
     req_map = NULL;
     open_dir_map = NULL;
+    inode_lock_map = NULL;
 
     file_lock = semaphore_create();
     open_dir_lock = semaphore_create();
+    inode_lock_lock = semaphore_create();
     semaphore_initialize(file_lock, 1);
     semaphore_initialize(open_dir_lock, 1);
+    semaphore_initialize(inode_lock_lock, 1);
 
     disk_superblock = (superblock_t) malloc (sizeof(struct superblock));
 }
