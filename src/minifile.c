@@ -71,7 +71,7 @@ typedef int (*dir_func_t) (char*, char*, void*, void*, int, char*);
 // iterator function for files
 typedef int (*file_func_t) (char*, void*, void*);
 // Function for constructing inodes
-typedef int (*write_func_t) (inode_t, int);
+typedef int (*write_func_t) (inode_t, int, int);
 
 disk_t *disk;
 
@@ -97,10 +97,10 @@ char self[2] = ".";
 
 int lock_block(int blocknum) {
     inode_lock_t l;
- 
+
     semaphore_P(inode_lock_lock);
     HASH_FIND_INT( inode_lock_map, &blocknum, l );
-    
+
     if (!l) {
         l = (inode_lock_t) malloc (sizeof(struct inode_lock));
         if (!l) {
@@ -713,13 +713,15 @@ int make_inode_helper(inode_t dir, int inode_num, char *name, write_func_t f) {
             return -1;
         }
 
-        strcpy(dir->data.dir_entries[entry_num], name);
-        pack_unsigned_int(dir->data.inode_ptrs[entry_num], new_blocknum);
+        strcpy(direct_block->data.dir_entries[entry_num], name);
+        pack_unsigned_int(direct_block->data.inode_ptrs[entry_num], new_blocknum);
+        write_block_blocking(direct_blocknum, (char *) direct_block);
         write_block_blocking(inode_num, (char *) dir);
         unlock_block(inode_num);
+        free(direct_block);
         free(dir);
 
-        return f(new_block, new_blocknum);
+        return f(new_block, new_blocknum, inode_num);
     }
 
     size -= DIRECT_BLOCKS * ENTRIES_PER_TABLE; // Remaining size
@@ -784,7 +786,7 @@ int make_inode_helper(inode_t dir, int inode_num, char *name, write_func_t f) {
     } else {
         direct_block = (dir_data_block_t) get_block_blocking(direct_blocknum);
     }
-    
+
     new_block = (inode_t) get_free_data_block(&new_blocknum);
     if (new_blocknum == -1) {
         if (entry_num == 0) {
@@ -799,14 +801,17 @@ int make_inode_helper(inode_t dir, int inode_num, char *name, write_func_t f) {
         return -1;
     }
 
-    strcpy(dir->data.dir_entries[entry_num], name);
-    pack_unsigned_int(dir->data.inode_ptrs[entry_num], new_blocknum);
+    strcpy(direct_block->data.dir_entries[entry_num], name);
+    pack_unsigned_int(direct_block->data.inode_ptrs[entry_num], new_blocknum);
     write_block_blocking(indir_blocknum, (char *) indir_block);
+    write_block_blocking(direct_blocknum, (char *) direct_block);
     write_block_blocking(inode_num, (char *) dir);
     unlock_block(inode_num);
+    free(indir_block);
+    free(direct_block);
     free(dir);
 
-    return f(new_block, new_blocknum);
+    return f(new_block, new_blocknum, inode_num);
 }
 
 int make_inode(char *dirname, write_func_t f) {
@@ -1046,7 +1051,7 @@ int minifile_get_root_num() {
     return unpack_unsigned_int(disk_superblock->data.root_inode);
 }
 
-int write_new_file(inode_t newfile, int newfile_num) {
+int write_new_file(inode_t newfile, int newfile_num, int prevdir) {
     int i;
 
     newfile->data.inode_type = FILE_INODE;
@@ -1058,6 +1063,7 @@ int write_new_file(inode_t newfile, int newfile_num) {
 
     write_block_blocking(newfile_num, (char *) newfile);
 
+    free(newfile);
     return newfile_num;
 }
 
@@ -1336,6 +1342,7 @@ int file_write_blocks_indir(indirect_block_t file, int file_num, int start, int 
             free(block);
 
             if (req_left == 0) {
+                write_block_blocking(file_num, (char *)file);
                 return total_written;
             }
         }
@@ -1412,6 +1419,7 @@ int file_write_blocks(inode_t file, int file_num, int start, int len) {
             total_written += amt;
             free(block);
             if (req_left == 0) {
+                write_block_blocking(file_num, (char *)file);
                 return total_written;
             }
         }
@@ -1439,7 +1447,6 @@ int minifile_write(minifile_t file, char *data, int len) {
     inode_t block;
     int size;
     int temp;
-
     if (!file->writeable) return -1;
 
     block = (inode_t) get_block_blocking(file->inode_num);
@@ -1538,7 +1545,7 @@ int minifile_unlink(char *filename) {
     return 0;
 }
 
-int write_new_dir(inode_t newdir, int newdir_num) {
+int write_new_dir(inode_t newdir, int newdir_num, int prevdir) {
     dir_data_block_t newdir_data;
     int newdir_data_num;
     int i;
@@ -1548,6 +1555,7 @@ int write_new_dir(inode_t newdir, int newdir_num) {
     if (!newdir_data) {
         set_free_data_block(newdir_data_num, (char *) newdir_data);
         free(newdir_data);
+        free(newdir);
         return -1;
     }
 
@@ -1571,6 +1579,7 @@ int write_new_dir(inode_t newdir, int newdir_num) {
     write_block_blocking(newdir_num, (char *) newdir);
 
     free(newdir_data);
+    free(newdir);
     return newdir_num;
 }
 
